@@ -96,3 +96,17 @@ PATCH_*.py
 patch_*.py
 _rebuild_*.py
 config.py
+# Generated Discogs reports
+data/*.txt
+data/**/*.txt
+
+# Experimental Discogs matching tests
+discogs/_match/
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Temporary Discogs experiments / search output
+discogs_match_engine_test*.py
+discogs_search.txt
