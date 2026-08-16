@@ -1,0 +1,97 @@
+﻿# =========================
+# PYTHON
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# =========================
+# VIRTUAL ENVIRONMENTS
+# =========================
+.venv/
+venv/
+env/
+
+# =========================
+# DATABASES / LOCAL DATA
+# =========================
+*.db
+*.sqlite
+*.sqlite3
+
+# =========================
+# MEDIA
+# =========================
+*.mp3
+*.wav
+*.flac
+
+# =========================
+# COVERS
+# =========================
+covers/
+
+# =========================
+# SECRETS / CONFIG
+# =========================
+config.ini
+.env
+*.token
+
+# =========================
+# BACKUPS
+# =========================
+*.backup
+*.backup_*
+*.bak
+*.old
+*.orig
+*BACKUP*
+*BEFORE_*
+*BESCHADIGD*
+*before_*
+
+# =========================
+# TEMPORARY / LOG FILES
+# =========================
+*.log
+*.tmp
+*.temp
+*_output.txt
+
+# =========================
+# LOCAL DISCOGS DATA
+# =========================
+data/discogs_public_collection.json
+data/discogs_vinyl_definitive.csv
+data/discogs/
+data/exports/
+
+# =========================
+# LOCAL DISCogs PUBLIC DATA
+# =========================
+discogs/public_data/
+
+# =========================
+# DEVELOPMENT SCRATCH FILES
+# =========================
+temp_check.py
+release_detail_page_UPLOAD.txt
+release_detail_page_source.txt
+repair_mp3_analysis.txt
+
+# =========================
+# TEST FILES
+# =========================
+test/
+test_*.py
+TEST_*.py
+*_test.py
+*_TEST.py
+
+# =========================
+# PATCH / EXPERIMENT FILES
+# =========================
+PATCH_*.py
+patch_*.py
+_rebuild_*.py
