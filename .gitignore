@@ -95,3 +95,4 @@ TEST_*.py
 PATCH_*.py
 patch_*.py
 _rebuild_*.py
+config.py
