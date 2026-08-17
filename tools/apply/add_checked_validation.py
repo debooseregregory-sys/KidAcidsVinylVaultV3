@@ -47,17 +47,44 @@ new_block = '''    # ========================================================
                     f"{label} ontbreekt"
                 )
 
+        year_text = str(
+            release["year"] or ""
+        ).strip()
+
+        if year_text:
+            try:
+                year_value = int(year_text)
+                if year_value < 1900 or year_value > 2100:
+                    missing.append(
+                        "Jaar is ongeldig (gebruik 1900-2100)"
+                    )
+            except ValueError:
+                missing.append(
+                    "Jaar is niet numeriek"
+                )
+
+        discogs_text = str(
+            release["discogs"] or ""
+        ).strip()
+
+        if discogs_text and not discogs_text.isdigit():
+            missing.append(
+                "Discogs ID is ongeldig"
+            )
+
         if not tracks:
             missing.append(
                 "Geen tracks aanwezig"
             )
+
+        positions = set()
 
         for index, track_data in enumerate(tracks, 1):
 
             track = track_data["track"]
             position = str(
                 track["position"] or ""
-            ).strip()
+            ).strip().upper()
             title = str(
                 track["title"] or ""
             ).strip()
@@ -72,8 +99,14 @@ new_block = '''    # ========================================================
 
             if not position:
                 missing.append(
-                    f"{track_name}: positie ontbreekt"
+                    f"Track {index}: positie ontbreekt"
                 )
+            elif position in positions:
+                missing.append(
+                    f"{position}: dubbele trackpositie"
+                )
+            else:
+                positions.add(position)
 
             if not title:
                 missing.append(
@@ -113,8 +146,6 @@ new_block = '''    # ========================================================
                     row[0] or 0
                 ) if row else 0
 
-                # Een reeds gecontroleerde release mag altijd
-                # weer teruggezet worden.
                 if current:
                     new_value = 0
 
@@ -132,8 +163,7 @@ new_block = '''    # ========================================================
                             self,
                             "RELEASE NIET COMPLEET",
                             (
-                                "Deze release kan nog niet als KLAAR "
-                                "worden gemarkeerd.\\n\\n"
+                                "Deze release kan nog niet als KLAAR worden gemarkeerd.\\n\\n"
                                 f"{details}\\n\\n"
                                 "Vul de ontbrekende gegevens eerst in."
                             )
@@ -177,4 +207,4 @@ new_block = '''    # ========================================================
 
 text = text[:start] + new_block + text[end:]
 PATH.write_text(text, encoding="utf-8-sig")
-print("KLAAR-CONTROLE TOEGEVOEGD")
+print("KLAAR-CONTROLE VERSTEVIGD")
