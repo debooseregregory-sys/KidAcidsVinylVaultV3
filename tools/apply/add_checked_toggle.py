@@ -23,17 +23,21 @@ replace_once(
     """                notes,\n                storage_code,\n                checked\n            FROM releases\n""",
 )
 
-# Also expose it in library/search rows so the UI can use the status later.
-replace_once(
-    db,
-    """                r.notes,\n                r.storage_code,\n\n                COUNT(DISTINCT t.id) AS track_count,\n""",
-    """                r.notes,\n                r.storage_code,\n                r.checked,\n\n                COUNT(DISTINCT t.id) AS track_count,\n""",
-)
+# Expose checked in the release-library rows as well.
+old_library = """                r.notes,\n                r.storage_code,\n\n                COUNT(DISTINCT t.id) AS track_count,\n"""
+new_library = """                r.notes,\n                r.storage_code,\n                r.checked,\n\n                COUNT(DISTINCT t.id) AS track_count,\n"""
 
-replace_once(
-    db,
-    """                r.notes,\n                r.storage_code,\n\n                COUNT(DISTINCT t.id) AS track_count,\n""",
-    """                r.notes,\n                r.storage_code,\n                r.checked,\n\n                COUNT(DISTINCT t.id) AS track_count,\n""",
+text = db.read_text(encoding="utf-8-sig")
+count = text.count(old_library)
+if count != 2:
+    raise RuntimeError(
+        "database.py: expected the library/search SELECT block twice, "
+        f"found {count}"
+    )
+
+db.write_text(
+    text.replace(old_library, new_library),
+    encoding="utf-8"
 )
 
 
@@ -61,12 +65,14 @@ replace_once(
     """        self.info_label.setText(\n            "  -  ".join(\n                info\n            )\n        )\n\n        self.update_checked_button(\n            release\n        )\n\n        # ----------------------------------------------------\n        # EDITOR\n""",
 )
 
-# Replace the old one-way function with a toggle that also refreshes the button.
+# Replace the old one-way function with a toggle.
 start = """    # ========================================================\n    # MARK RELEASE AS CHECKED\n    # ========================================================\n\n    def mark_release_checked(self):\n"""
 end = """    # ========================================================\n    # SAVE RELEASE\n    # ========================================================\n"""
+
 text = detail.read_text(encoding="utf-8-sig")
 start_pos = text.find(start)
 end_pos = text.find(end, start_pos)
+
 if start_pos < 0 or end_pos < 0:
     raise RuntimeError("Could not find KLAAR function block")
 
