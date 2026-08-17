@@ -62,18 +62,21 @@ method = '''    # ========================================================
             )
         )
 
-        self.review_status_label.setStyleSheet(
-            """
-            QLabel {
-                color: #dddddd;
-                background-color: #18181d;
-                border: 1px solid #383842;
-                border-radius: 7px;
-                padding: 9px 12px;
-                font-size: 13px;
-                font-weight: bold;
-            }
-            """
+    def refresh_review_status(self):
+
+        if self.release_id is None:
+            return
+
+        data = get_release_details(
+            self.release_id
+        )
+
+        if not data:
+            return
+
+        self.update_review_status(
+            data["release"],
+            data["tracks"]
         )
 
 '''
@@ -87,7 +90,7 @@ if "def update_review_status(self, release, tracks):" not in text:
     )
 
 ui_block = '''        self.review_status_label = QLabel(
-            "✓ KASTCODE    ✓ MP3    ✓ DISCOGS    ✓ TRACKS    ✓ KLAAR"
+            "REVIEW STATUS"
         )
 
         self.review_status_label.setWordWrap(
@@ -134,7 +137,7 @@ load_anchor = '''        self.info_label.setText(
 
 '''
 
-if "self.update_review_status(" not in text:
+if "        self.update_review_status(\n            release,\n            data[\"tracks\"]" not in text:
     text = replace_once(
         text,
         load_anchor,
@@ -142,12 +145,15 @@ if "self.update_review_status(" not in text:
         "review status laden"
     )
 
-checked_anchor = '''        self.update_checked_button(new_value)
-'''
+checked_anchor = "        self.update_checked_button(new_value)\n"
 
-# Refresh the status bar immediately after changing KLAAR.
-if "self.update_review_status(" in text and "self.update_review_status(release" not in text:
-    pass
+if "        self.refresh_review_status()\n" not in text:
+    text = replace_once(
+        text,
+        checked_anchor,
+        checked_anchor + "        self.refresh_review_status()\n",
+        "review status na klaar"
+    )
 
 PATH.write_text(text, encoding="utf-8-sig")
 print("REVIEW STATUS BAR TOEGEVOEGD")
