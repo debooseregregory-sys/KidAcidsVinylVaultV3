@@ -3,7 +3,7 @@
 # RELEASE LIBRARY
 # ============================================================
 
-from PySide6.QtCore import Signal, Qt
+from PySide6.QtCore import Signal, Qt, QTimer
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import (
     QWidget,
@@ -210,6 +210,12 @@ class ReleaseLibraryPage(QWidget):
 
         self.status_filter = "all"
 
+        self.search_timer = QTimer(self)
+        self.search_timer.setSingleShot(True)
+        self.search_timer.setInterval(180)
+        self.search_timer.timeout.connect(self._run_pending_search)
+        self._pending_search_text = ""
+
         self.build_ui()
 
         self.load_releases()
@@ -298,7 +304,7 @@ class ReleaseLibraryPage(QWidget):
         )
 
         self.search_input.textChanged.connect(
-            self.filter_releases
+            self._schedule_search
         )
 
         search_layout.addWidget(
@@ -362,7 +368,7 @@ class ReleaseLibraryPage(QWidget):
         )
 
         self.todo_button = QPushButton(
-            "[ ALLEEN NIET KLAAR ]"
+            "[ NOG TE DOEN ]"
         )
 
         self.checked_button = QPushButton(
@@ -394,8 +400,6 @@ class ReleaseLibraryPage(QWidget):
         )
 
         status_filter_layout.addStretch()
-
-        self.update_status_filter_buttons()
 
         layout.addLayout(
             status_filter_layout
@@ -720,8 +724,8 @@ class ReleaseLibraryPage(QWidget):
 
         self.all_releases = rows
 
-        self.filter_releases(
-            self.search_input.text()
+        self.display_releases(
+            rows
         )
 
     # ========================================================
@@ -919,44 +923,30 @@ class ReleaseLibraryPage(QWidget):
 
         self.status_filter = status
 
-        self.update_status_filter_buttons()
-
         self.filter_releases(
             self.search_input.text()
         )
 
     # ========================================================
-    # STATUS FILTER BUTTONS
+    # SMOOTH SEARCH
     # ========================================================
 
-    def update_status_filter_buttons(self):
+    def _schedule_search(
+        self,
+        text
+    ):
 
-        active_style = (
-            "QPushButton {"
-            " background-color: #d84b91;"
-            " color: #ffffff;"
-            " border: 1px solid #f05ca4;"
-            "}"
+        self._pending_search_text = text
+
+        self.search_timer.start()
+
+    def _run_pending_search(
+        self
+    ):
+
+        self.filter_releases(
+            self._pending_search_text
         )
-
-        normal_style = (
-            "QPushButton {"
-            " background-color: #222222;"
-            " color: #ffffff;"
-            " border: 1px solid #3a3a3a;"
-            "}"
-        )
-
-        buttons = {
-            "all": self.all_button,
-            "todo": self.todo_button,
-            "checked": self.checked_button,
-        }
-
-        for name, button in buttons.items():
-            button.setStyleSheet(
-                active_style if self.status_filter == name else normal_style
-            )
 
     # ========================================================
     # FILTER RELEASES

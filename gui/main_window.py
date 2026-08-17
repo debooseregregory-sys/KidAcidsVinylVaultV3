@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # KID ACID'S VINYLVAULT V3
 # MAIN WINDOW
 #
@@ -1046,8 +1046,9 @@ class VinylVaultWindow(QMainWindow):
         self
     ):
 
-        self.library_page.load_releases()
-
+        # Navigeren moet direct zijn. De volledige database wordt
+        # alleen opnieuw geladen via de knop VERWIEUW of na een
+        # expliciete databasewijziging.
         self.pages.setCurrentWidget(
             self.library_page
         )
@@ -1250,7 +1251,7 @@ class VinylVaultWindow(QMainWindow):
 
             QPushButton#navButton {
                 background-color: transparent;
-                color: #a8a8b3;
+                color: #ffffff;
                 border: 1px solid transparent;
                 border-radius: 8px;
                 text-align: left;
@@ -1282,7 +1283,7 @@ class VinylVaultWindow(QMainWindow):
 
             QLabel#navText {
                 background: transparent;
-                color: inherit;
+                color: #ffffff;
                 font-size: 13px;
                 font-weight: 600;
             }
