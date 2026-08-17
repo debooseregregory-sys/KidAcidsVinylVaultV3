@@ -1,17 +1,19 @@
 from pathlib import Path
 import sqlite3
 import unicodedata
+import re
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = BASE_DIR / "data" / "vinylvault.db"
 MP3_ROOT = Path(r"D:\01. MP3's")
-
 TARGET_LINK_ID = 3245
 
 
 def norm(value):
-    value = unicodedata.normalize("NFKC", value or "")
-    return " ".join(value.replace("–", "-").replace("—", "-").split()).casefold()
+    value = unicodedata.normalize("NFKD", value or "").encode("ascii", "ignore").decode("ascii")
+    value = value.replace("–", "-").replace("—", "-")
+    value = re.sub(r"[^a-z0-9]+", " ", value.casefold())
+    return " ".join(value.split())
 
 
 def main():
@@ -54,31 +56,43 @@ def main():
         print(f"Track   : {row['track_id']} | {row['position']} {row['track_title']}")
         print(f"MP3     : {row['filename']}")
         print(f"Pad     : {row['path']}")
-        print(f"Duur    : {row['duration']}")
+        print(f"Duur    : {row['duration'] or 0}")
         print()
+
+        target_filename = norm(row['filename'])
+        target_title = norm(row['track_title'])
+        target_artist = norm(row['track_artist'] or row['release_artist'])
 
         candidates = []
         for path in MP3_ROOT.rglob("*.mp3"):
             if not path.is_file():
                 continue
-            filename = path.name
-            if norm(filename) == norm(row['filename']):
-                candidates.append((path, "EXACTE BESTANDSNAAM"))
-                continue
-            if norm(row['title']) and norm(row['title']) in norm(filename):
-                candidates.append((path, "TITEL IN BESTANDSNAAM"))
+            n = norm(path.name)
+            score = 0
+            reason = []
+            if n == target_filename:
+                score = 100
+                reason.append("EXACTE BESTANDSNAAM")
+            else:
+                if target_title and target_title in n:
+                    score += 55
+                    reason.append("TITEL")
+                if target_artist and target_artist in n:
+                    score += 35
+                    reason.append("ARTIST")
+                title_tokens = [x for x in target_title.split() if len(x) >= 3]
+                hits = sum(1 for x in title_tokens if x in n)
+                if hits:
+                    score += min(10, hits * 2)
+                    reason.append(f"{hits} TITELTOKENS")
+            if score > 0:
+                candidates.append((score, ", ".join(reason), path))
 
-        unique = []
-        seen = set()
-        for path, reason in candidates:
-            key = str(path).casefold()
-            if key not in seen:
-                seen.add(key)
-                unique.append((path, reason))
+        candidates.sort(key=lambda x: (-x[0], str(x[2]).lower()))
 
-        print("KANDIDATEN OP SCHIJF:", len(unique))
-        for path, reason in unique[:100]:
-            print(f"  {reason}: {path}")
+        print("KANDIDATEN OP SCHIJF:", len(candidates))
+        for score, reason, path in candidates[:100]:
+            print(f"  SCORE {score:3d} | {reason:25s} | {path}")
 
         print()
         print("DATABASE GEWIJZIGD : NEE")
