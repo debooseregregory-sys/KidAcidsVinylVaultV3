@@ -1083,12 +1083,12 @@ class VinylVaultWindow(QMainWindow):
 
             release_ids = self.library_page.visible_release_ids()
 
-        self.detail_page.set_navigation_ids(
-            release_ids
-        )
-
         self.detail_page.load_release(
             release_id
+        )
+
+        self.detail_page.set_navigation_ids(
+            release_ids
         )
 
         self.pages.setCurrentWidget(

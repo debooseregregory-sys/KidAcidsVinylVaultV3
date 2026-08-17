@@ -1467,6 +1467,9 @@ class ReleaseDetailPage(QWidget):
 
         self.release_id = None
 
+        self.navigation_ids = []
+        self.navigation_index = -1
+
         self.editing = False
 
         self.discogs_data = None
@@ -1483,12 +1486,106 @@ class ReleaseDetailPage(QWidget):
 
     def set_navigation_ids(self, release_ids):
 
-        self.navigation_ids = list(release_ids or [])
+        self.navigation_ids = list(
+            release_ids or []
+        )
 
         if self.release_id in self.navigation_ids:
-            self.navigation_index = self.navigation_ids.index(self.release_id)
+
+            self.navigation_index = (
+                self.navigation_ids.index(
+                    self.release_id
+                )
+            )
+
         else:
+
             self.navigation_index = -1
+
+        self.update_navigation_buttons()
+
+    # ========================================================
+    # NAVIGATION BUTTON STATE
+    # ========================================================
+
+    def update_navigation_buttons(self):
+
+        if not hasattr(
+            self,
+            "previous_button"
+        ):
+            return
+
+        has_previous = (
+            self.navigation_index > 0
+        )
+
+        has_next = (
+            self.navigation_index >= 0
+            and
+            self.navigation_index
+            < len(self.navigation_ids) - 1
+        )
+
+        self.previous_button.setEnabled(
+            has_previous
+        )
+
+        self.next_button.setEnabled(
+            has_next
+        )
+
+    # ========================================================
+    # PREVIOUS RELEASE
+    # ========================================================
+
+    def go_previous_release(self):
+
+        if self.navigation_index <= 0:
+            return
+
+        self.navigation_index -= 1
+
+        release_id = (
+            self.navigation_ids[
+                self.navigation_index
+            ]
+        )
+
+        self.load_release(
+            release_id
+        )
+
+        self.update_navigation_buttons()
+
+    # ========================================================
+    # NEXT RELEASE
+    # ========================================================
+
+    def go_next_release(self):
+
+        if self.navigation_index < 0:
+            return
+
+        if (
+            self.navigation_index
+            >= len(self.navigation_ids) - 1
+        ):
+            return
+
+        self.navigation_index += 1
+
+        release_id = (
+            self.navigation_ids[
+                self.navigation_index
+            ]
+        )
+
+        self.load_release(
+            release_id
+        )
+
+        self.update_navigation_buttons()
 
     def build_ui(self):
 
@@ -1600,6 +1697,38 @@ class ReleaseDetailPage(QWidget):
 
         top.addWidget(
             self.back_button
+        )
+
+        self.previous_button = QPushButton(
+            "[ ◀ VORIGE ]"
+        )
+
+        self.previous_button.setMinimumHeight(
+            38
+        )
+
+        self.previous_button.clicked.connect(
+            self.go_previous_release
+        )
+
+        top.addWidget(
+            self.previous_button
+        )
+
+        self.next_button = QPushButton(
+            "[ VOLGENDE ▶ ]"
+        )
+
+        self.next_button.setMinimumHeight(
+            38
+        )
+
+        self.next_button.clicked.connect(
+            self.go_next_release
+        )
+
+        top.addWidget(
+            self.next_button
         )
 
         top.addStretch()
