@@ -362,7 +362,7 @@ class ReleaseLibraryPage(QWidget):
         )
 
         self.todo_button = QPushButton(
-            "[ NOG TE DOEN ]"
+            "[ ALLEEN NIET KLAAR ]"
         )
 
         self.checked_button = QPushButton(
@@ -394,6 +394,8 @@ class ReleaseLibraryPage(QWidget):
         )
 
         status_filter_layout.addStretch()
+
+        self.update_status_filter_buttons()
 
         layout.addLayout(
             status_filter_layout
@@ -718,8 +720,8 @@ class ReleaseLibraryPage(QWidget):
 
         self.all_releases = rows
 
-        self.display_releases(
-            rows
+        self.filter_releases(
+            self.search_input.text()
         )
 
     # ========================================================
@@ -917,9 +919,44 @@ class ReleaseLibraryPage(QWidget):
 
         self.status_filter = status
 
+        self.update_status_filter_buttons()
+
         self.filter_releases(
             self.search_input.text()
         )
+
+    # ========================================================
+    # STATUS FILTER BUTTONS
+    # ========================================================
+
+    def update_status_filter_buttons(self):
+
+        active_style = (
+            "QPushButton {"
+            " background-color: #d84b91;"
+            " color: #ffffff;"
+            " border: 1px solid #f05ca4;"
+            "}"
+        )
+
+        normal_style = (
+            "QPushButton {"
+            " background-color: #222222;"
+            " color: #ffffff;"
+            " border: 1px solid #3a3a3a;"
+            "}"
+        )
+
+        buttons = {
+            "all": self.all_button,
+            "todo": self.todo_button,
+            "checked": self.checked_button,
+        }
+
+        for name, button in buttons.items():
+            button.setStyleSheet(
+                active_style if self.status_filter == name else normal_style
+            )
 
     # ========================================================
     # FILTER RELEASES

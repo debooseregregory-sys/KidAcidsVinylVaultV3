@@ -1587,6 +1587,67 @@ class ReleaseDetailPage(QWidget):
 
         self.update_navigation_buttons()
 
+    # ========================================================
+    # NEXT NIET-KLAAR RELEASE
+    # ========================================================
+
+    def go_next_todo_release(self):
+
+        if self.navigation_index < 0:
+            return
+
+        if not self.navigation_ids:
+            return
+
+        try:
+
+            from database.database import get_connection
+
+            connection = get_connection()
+
+            try:
+
+                for index in range(
+                    self.navigation_index + 1,
+                    len(self.navigation_ids)
+                ):
+
+                    candidate_id = self.navigation_ids[index]
+
+                    row = connection.execute(
+                        "SELECT checked FROM releases WHERE id = ?",
+                        (candidate_id,)
+                    ).fetchone()
+
+                    checked = int(row[0] or 0) if row else 0
+
+                    if checked == 0:
+
+                        self.navigation_index = index
+
+                        self.load_release(
+                            candidate_id
+                        )
+
+                        self.update_navigation_buttons()
+
+                        return
+
+            finally:
+
+                connection.close()
+
+        except Exception as error:
+
+            QMessageBox.critical(
+                self,
+                "Volgende niet-klaar release",
+                (
+                    "De volgende niet-klaar release kon niet worden geopend.\n\n"
+                    f"{error}"
+                )
+            )
+
     def build_ui(self):
 
         main_layout = QVBoxLayout(
@@ -1729,6 +1790,22 @@ class ReleaseDetailPage(QWidget):
 
         top.addWidget(
             self.next_button
+        )
+
+        self.next_todo_button = QPushButton(
+            "[ VOLGENDE NIET-KLAAR ▶ ]"
+        )
+
+        self.next_todo_button.setMinimumHeight(
+            38
+        )
+
+        self.next_todo_button.clicked.connect(
+            self.go_next_todo_release
+        )
+
+        top.addWidget(
+            self.next_todo_button
         )
 
         top.addStretch()
@@ -2176,6 +2253,38 @@ class ReleaseDetailPage(QWidget):
         )
 
         # ====================================================
+        # REVIEW CHECKLIST
+        # ====================================================
+
+        self.review_checklist = QLabel()
+
+        self.review_checklist.setWordWrap(
+            True
+        )
+
+        self.review_checklist.setMinimumHeight(
+            38
+        )
+
+        self.review_checklist.setStyleSheet(
+            """
+            QLabel {
+                color: #f2f2f2;
+                background-color: #18181d;
+                border: 1px solid #383842;
+                border-radius: 7px;
+                padding: 9px 12px;
+                font-size: 13px;
+                font-weight: bold;
+            }
+            """
+        )
+
+        main_layout.addWidget(
+            self.review_checklist
+        )
+
+        # ====================================================
         # SEPARATOR
         # ====================================================
 
@@ -2265,6 +2374,110 @@ class ReleaseDetailPage(QWidget):
         )
 
     # ========================================================
+    # REVIEW CHECKLIST
+    # ========================================================
+
+    def update_review_checklist(self, data):
+
+        if not hasattr(self, "review_checklist"):
+            return
+
+        release = data.get("release", {})
+        tracks = data.get("tracks", []) or []
+
+        checks = []
+
+        def add_check(label, ok, detail=""):
+
+            mark = "✓" if ok else "✗"
+            suffix = f" ({detail})" if detail else ""
+            color = "#7CFF9B" if ok else "#FF9A9A"
+
+            checks.append(
+                f'<span style="color:{color};">{mark} {label}{suffix}</span>'
+            )
+
+        add_check(
+            "Artist",
+            bool(str(release["artist"] or "").strip())
+        )
+        add_check(
+            "Titel",
+            bool(str(release["title"] or "").strip())
+        )
+        add_check(
+            "Label",
+            bool(str(release["label"] or "").strip())
+        )
+        add_check(
+            "Catalogus",
+            bool(str(release["catalog"] or "").strip())
+        )
+        add_check(
+            "Jaar",
+            bool(str(release["year"] or "").strip())
+        )
+        add_check(
+            "Kastcode",
+            bool(str(release["storage_code"] or "").strip())
+        )
+        add_check(
+            "Discogs",
+            bool(str(release["discogs"] or "").strip())
+        )
+        add_check(
+            "Cover",
+            bool(str(release["cover"] or "").strip())
+        )
+        add_check(
+            "Tracks",
+            bool(tracks),
+            str(len(tracks))
+        )
+
+        missing_positions = 0
+        missing_titles = 0
+        missing_mp3 = 0
+        positions = set()
+        duplicate_positions = 0
+
+        for track_data in tracks:
+
+            track = track_data["track"]
+            position = str(track["position"] or "").strip().upper()
+
+            if not position:
+                missing_positions += 1
+            elif position in positions:
+                duplicate_positions += 1
+            else:
+                positions.add(position)
+
+            if not str(track["title"] or "").strip():
+                missing_titles += 1
+
+            if not (track_data.get("mp3s", []) or []):
+                missing_mp3 += 1
+
+        add_check(
+            "Trackposities",
+            bool(tracks) and missing_positions == 0 and duplicate_positions == 0
+        )
+        add_check(
+            "Tracktitels",
+            bool(tracks) and missing_titles == 0
+        )
+        add_check(
+            "MP3 koppelingen",
+            bool(tracks) and missing_mp3 == 0
+        )
+
+        self.review_checklist.setText(
+            "&nbsp;&nbsp;&nbsp;".join(checks)
+        )
+
+
+    # ========================================================
     # LOAD RELEASE
     # ========================================================
 
@@ -2308,6 +2521,15 @@ class ReleaseDetailPage(QWidget):
             return
 
         release = data["release"]
+
+        self.update_review_checklist(
+            data
+        )
+
+        # Restore the saved KLAAR state whenever a release is opened.
+        self.update_checked_button(
+            int(release["checked"] or 0)
+        )
 
         self.artist_label.setText(
             str(
@@ -2979,6 +3201,193 @@ class ReleaseDetailPage(QWidget):
         )
 
     # ========================================================
+    # VALIDATE RELEASE BEFORE CHECKED
+    # ========================================================
+
+    def validate_release_before_checked(self):
+
+        data = get_release_details(
+            self.release_id
+        )
+
+        if not data:
+            return [
+                "Releasegegevens konden niet worden geladen."
+            ]
+
+        release = data["release"]
+        tracks = data.get("tracks", []) or []
+        missing = []
+
+        required_release_fields = [
+            ("Artist", "artist"),
+            ("Titel", "title"),
+            ("Label", "label"),
+            ("Catalogusnummer", "catalog"),
+            ("Jaar", "year"),
+            ("Kastcode", "storage_code"),
+            ("Discogs", "discogs"),
+            ("Cover", "cover"),
+        ]
+
+        for label, key in required_release_fields:
+            value = release[key]
+            if value is None or not str(value).strip():
+                missing.append(
+                    f"{label} ontbreekt"
+                )
+
+        if not tracks:
+            missing.append(
+                "Geen tracks aanwezig"
+            )
+
+        for index, track_data in enumerate(tracks, 1):
+
+            track = track_data["track"]
+            position = str(
+                track["position"] or ""
+            ).strip()
+            title = str(
+                track["title"] or ""
+            ).strip()
+            mp3s = track_data.get(
+                "mp3s", []
+            ) or []
+
+            track_name = (
+                position
+                or f"Track {index}"
+            )
+
+            if not position:
+                missing.append(
+                    f"{track_name}: positie ontbreekt"
+                )
+
+            if not title:
+                missing.append(
+                    f"{track_name}: titel ontbreekt"
+                )
+
+            if not mp3s:
+                missing.append(
+                    f"{track_name}: geen MP3 gekoppeld"
+                )
+
+        return missing
+
+    # ========================================================
+    # VALIDATE RELEASE BEFORE CHECKED
+    # ========================================================
+
+    def validate_release_before_checked(self):
+
+        data = get_release_details(
+            self.release_id
+        )
+
+        if not data:
+            return [
+                "Releasegegevens konden niet worden geladen."
+            ]
+
+        release = data["release"]
+        tracks = data.get("tracks", []) or []
+        missing = []
+
+        required_release_fields = [
+            ("Artist", "artist"),
+            ("Titel", "title"),
+            ("Label", "label"),
+            ("Catalogusnummer", "catalog"),
+            ("Jaar", "year"),
+            ("Kastcode", "storage_code"),
+            ("Discogs", "discogs"),
+            ("Cover", "cover"),
+        ]
+
+        for label, key in required_release_fields:
+            value = release[key]
+            if value is None or not str(value).strip():
+                missing.append(
+                    f"{label} ontbreekt"
+                )
+
+        year_text = str(
+            release["year"] or ""
+        ).strip()
+
+        if year_text:
+            try:
+                year_value = int(year_text)
+                if year_value < 1900 or year_value > 2100:
+                    missing.append(
+                        "Jaar is ongeldig (gebruik 1900-2100)"
+                    )
+            except ValueError:
+                missing.append(
+                    "Jaar is niet numeriek"
+                )
+
+        discogs_text = str(
+            release["discogs"] or ""
+        ).strip()
+
+        if discogs_text and not discogs_text.isdigit():
+            missing.append(
+                "Discogs ID is ongeldig"
+            )
+
+        if not tracks:
+            missing.append(
+                "Geen tracks aanwezig"
+            )
+
+        positions = set()
+
+        for index, track_data in enumerate(tracks, 1):
+
+            track = track_data["track"]
+            position = str(
+                track["position"] or ""
+            ).strip().upper()
+            title = str(
+                track["title"] or ""
+            ).strip()
+            mp3s = track_data.get(
+                "mp3s", []
+            ) or []
+
+            track_name = (
+                position
+                or f"Track {index}"
+            )
+
+            if not position:
+                missing.append(
+                    f"Track {index}: positie ontbreekt"
+                )
+            elif position in positions:
+                missing.append(
+                    f"{position}: dubbele trackpositie"
+                )
+            else:
+                positions.add(position)
+
+            if not title:
+                missing.append(
+                    f"{track_name}: titel ontbreekt"
+                )
+
+            if not mp3s:
+                missing.append(
+                    f"{track_name}: geen MP3 gekoppeld"
+                )
+
+        return missing
+
+    # ========================================================
     # MARK RELEASE AS CHECKED
     # ========================================================
 
@@ -3000,9 +3409,36 @@ class ReleaseDetailPage(QWidget):
                     (self.release_id,)
                 ).fetchone()
 
-                current = int(row[0] or 0) if row else 0
+                current = int(
+                    row[0] or 0
+                ) if row else 0
 
-                new_value = 0 if current else 1
+                if current:
+                    new_value = 0
+
+                else:
+                    missing = self.validate_release_before_checked()
+
+                    if missing:
+
+                        details = "\n".join(
+                            f"✗ {item}"
+                            for item in missing
+                        )
+
+                        QMessageBox.warning(
+                            self,
+                            "RELEASE NIET COMPLEET",
+                            (
+                                "Deze release kan nog niet als KLAAR worden gemarkeerd.\n\n"
+                                f"{details}\n\n"
+                                "Vul de ontbrekende gegevens eerst in."
+                            )
+                        )
+
+                        return
+
+                    new_value = 1
 
                 connection.execute(
                     "UPDATE releases SET checked = ? WHERE id = ?",
@@ -3030,7 +3466,9 @@ class ReleaseDetailPage(QWidget):
             )
             return
 
-        self.update_checked_button(new_value)
+        self.update_checked_button(
+            new_value
+        )
 
     # ========================================================
     # UPDATE KLAAR BUTTON
