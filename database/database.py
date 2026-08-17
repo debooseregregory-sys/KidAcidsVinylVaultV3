@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # KID ACID'S VINYLVAULT V3
 # DATABASE ENGINE
 # ============================================================
@@ -139,6 +139,13 @@ def migrate_database():
             "releases",
             "notes",
             "TEXT DEFAULT ''"
+        )
+
+        _ensure_column(
+            connection,
+            "releases",
+            "checked",
+            "INTEGER DEFAULT 0"
         )
 
         # ----------------------------------------------------
@@ -293,6 +300,7 @@ def get_all_releases():
                 r.cover,
                 r.notes,
                 r.storage_code,
+                r.checked,
 
                 COUNT(DISTINCT t.id) AS track_count,
 
@@ -352,7 +360,8 @@ def get_release_by_id(
                 discogs_link,
                 cover,
                 notes,
-                storage_code
+                storage_code,
+                checked
             FROM releases
             WHERE id = ?
             """,
@@ -484,6 +493,7 @@ def search_releases(
                 r.cover,
                 r.notes,
                 r.storage_code,
+                r.checked,
 
                 COUNT(DISTINCT t.id) AS track_count,
 

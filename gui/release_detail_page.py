@@ -1477,6 +1477,19 @@ class ReleaseDetailPage(QWidget):
     # BUILD UI
     # ========================================================
 
+    # ========================================================
+    # RELEASE NAVIGATION
+    # ========================================================
+
+    def set_navigation_ids(self, release_ids):
+
+        self.navigation_ids = list(release_ids or [])
+
+        if self.release_id in self.navigation_ids:
+            self.navigation_index = self.navigation_ids.index(self.release_id)
+        else:
+            self.navigation_index = -1
+
     def build_ui(self):
 
         main_layout = QVBoxLayout(
@@ -2843,27 +2856,30 @@ class ReleaseDetailPage(QWidget):
     def mark_release_checked(self):
 
         if self.release_id is None:
-
             return
 
         try:
 
-            from database.database import (
-                get_connection
-            )
+            from database.database import get_connection
 
             connection = get_connection()
 
             try:
 
+                row = connection.execute(
+                    "SELECT checked FROM releases WHERE id = ?",
+                    (self.release_id,)
+                ).fetchone()
+
+                current = int(row[0] or 0) if row else 0
+
+                new_value = 0 if current else 1
+
                 connection.execute(
-                    """
-                    UPDATE releases
-                    SET checked = 1
-                    WHERE id = ?
-                    """,
+                    "UPDATE releases SET checked = ? WHERE id = ?",
                     (
-                        self.release_id,
+                        new_value,
+                        self.release_id
                     )
                 )
 
@@ -2883,18 +2899,27 @@ class ReleaseDetailPage(QWidget):
                     f"{error}"
                 )
             )
-
             return
 
-        self.load_release(
-            self.release_id
-        )
+        self.update_checked_button(new_value)
 
-        QMessageBox.information(
-            self,
-            "KLAAR",
-            "Deze release is als KLAAR gemarkeerd."
-        )
+    # ========================================================
+    # UPDATE KLAAR BUTTON
+    # ========================================================
+
+    def update_checked_button(self, checked):
+
+        if checked:
+
+            self.checked_button.setText(
+                "[ ✓ KLAAR - TERUGZETTEN ]"
+            )
+
+        else:
+
+            self.checked_button.setText(
+                "[ KLAAR - MARKEREN ]"
+            )
 
     # ========================================================
     # SAVE RELEASE

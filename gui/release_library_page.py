@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # KID ACID'S VINYLVAULT V3
 # RELEASE LIBRARY
 # ============================================================
@@ -191,7 +191,7 @@ class ReleaseItemDelegate(QStyledItemDelegate):
 
 class ReleaseLibraryPage(QWidget):
 
-    release_selected = Signal(int)
+    release_selected = Signal(int, object)
 
     # ========================================================
     # INIT
@@ -207,6 +207,8 @@ class ReleaseLibraryPage(QWidget):
         )
 
         self.all_releases = []
+
+        self.status_filter = "all"
 
         self.build_ui()
 
@@ -347,6 +349,54 @@ class ReleaseLibraryPage(QWidget):
 
         layout.addWidget(
             self.status_label
+        )
+
+        # ====================================================
+        # STATUS FILTER
+        # ====================================================
+
+        status_filter_layout = QHBoxLayout()
+
+        self.all_button = QPushButton(
+            "[ ALLES ]"
+        )
+
+        self.todo_button = QPushButton(
+            "[ NOG TE DOEN ]"
+        )
+
+        self.checked_button = QPushButton(
+            "[ ✓ KLAAR ]"
+        )
+
+        self.all_button.clicked.connect(
+            lambda: self.set_status_filter("all")
+        )
+
+        self.todo_button.clicked.connect(
+            lambda: self.set_status_filter("todo")
+        )
+
+        self.checked_button.clicked.connect(
+            lambda: self.set_status_filter("checked")
+        )
+
+        status_filter_layout.addWidget(
+            self.all_button
+        )
+
+        status_filter_layout.addWidget(
+            self.todo_button
+        )
+
+        status_filter_layout.addWidget(
+            self.checked_button
+        )
+
+        status_filter_layout.addStretch()
+
+        layout.addLayout(
+            status_filter_layout
         )
 
         # ====================================================
@@ -860,6 +910,21 @@ class ReleaseLibraryPage(QWidget):
     # FILTER
     # ========================================================
 
+    def set_status_filter(
+        self,
+        status
+    ):
+
+        self.status_filter = status
+
+        self.filter_releases(
+            self.search_input.text()
+        )
+
+    # ========================================================
+    # FILTER RELEASES
+    # ========================================================
+
     def filter_releases(
         self,
         text
@@ -871,41 +936,59 @@ class ReleaseLibraryPage(QWidget):
             .lower()
         )
 
-        if not search:
-
-            self.display_releases(
-                self.all_releases
-            )
-
-            return
-
         filtered = []
 
         for row in self.all_releases:
 
-            values = [
-                row["id"],
-                row["artist"],
-                row["title"],
-                row["label"],
-                row["catalog"],
-                row["year"],
-                row["storage_code"],
-                row["discogs"],
-                row["genre"],
-            ]
+            checked = False
 
-            combined = " ".join(
-                "" if value is None
-                else str(value)
-                for value in values
-            ).lower()
+            try:
+                checked = int(
+                    row["checked"] or 0
+                ) == 1
+            except Exception:
+                checked = False
 
-            if search in combined:
+            # ------------------------------------------------
+            # STATUS FILTER
+            # ------------------------------------------------
 
-                filtered.append(
-                    row
-                )
+            if self.status_filter == "todo" and checked:
+                continue
+
+            if self.status_filter == "checked" and not checked:
+                continue
+
+            # ------------------------------------------------
+            # TEXT SEARCH
+            # ------------------------------------------------
+
+            if search:
+
+                values = [
+                    row["id"],
+                    row["artist"],
+                    row["title"],
+                    row["label"],
+                    row["catalog"],
+                    row["year"],
+                    row["storage_code"],
+                    row["discogs"],
+                    row["genre"],
+                ]
+
+                combined = " ".join(
+                    "" if value is None
+                    else str(value)
+                    for value in values
+                ).lower()
+
+                if search not in combined:
+                    continue
+
+            filtered.append(
+                row
+            )
 
         self.display_releases(
             filtered
@@ -941,7 +1024,8 @@ class ReleaseLibraryPage(QWidget):
             return
 
         self.release_selected.emit(
-            release_id
+            release_id,
+            self.visible_release_ids()
         )
 
     # ========================================================
@@ -998,8 +1082,42 @@ class ReleaseLibraryPage(QWidget):
             return
 
         self.release_selected.emit(
-            release_id
+            release_id,
+            self.visible_release_ids()
         )
+
+    # ========================================================
+    # VISIBLE RELEASE IDS
+    # ========================================================
+
+    def visible_release_ids(self):
+
+        release_ids = []
+
+        for row in range(
+            self.table.rowCount()
+        ):
+
+            item = self.table.item(
+                row,
+                0
+            )
+
+            if item is None:
+
+                continue
+
+            try:
+
+                release_ids.append(
+                    int(item.text())
+                )
+
+            except Exception:
+
+                continue
+
+        return release_ids
 
     # ========================================================
     # REFRESH

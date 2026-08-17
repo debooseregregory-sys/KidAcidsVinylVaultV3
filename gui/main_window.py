@@ -1052,6 +1052,15 @@ class VinylVaultWindow(QMainWindow):
             self.library_page
         )
 
+        search_text = (
+            self.library_page.search_input.text()
+        )
+
+        if search_text:
+            self.library_page.filter_releases(
+                search_text
+            )
+
         self.page_title.setText(
             "Release Library"
         )
@@ -1066,8 +1075,17 @@ class VinylVaultWindow(QMainWindow):
 
     def open_release(
         self,
-        release_id
+        release_id,
+        release_ids=None
     ):
+
+        if release_ids is None:
+
+            release_ids = self.library_page.visible_release_ids()
+
+        self.detail_page.set_navigation_ids(
+            release_ids
+        )
 
         self.detail_page.load_release(
             release_id
