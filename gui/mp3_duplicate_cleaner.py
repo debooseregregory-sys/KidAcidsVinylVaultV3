@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-import hashlib
+import re
+from collections import defaultdict
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, Signal
@@ -13,17 +14,51 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMessageBox,
-    QCheckBox,
     QProgressBar,
 )
 
 from database.database import get_connection
 
 
+_COPY_SUFFIX_RE = re.compile(r"\s*(?:\([0-9]+\)|\[[0-9]+\]|[_-](?:copy|kopie|[0-9]+))\s*$", re.I)
+
+
+def normalize_text(value: str) -> str:
+    value = str(value or "").casefold().strip()
+    value = value.replace("_", " ")
+    value = re.sub(r"\s+", " ", value)
+    return value.strip()
+
+
+def normalize_copy_suffix(value: str) -> str:
+    value = normalize_text(value)
+    while True:
+        cleaned = _COPY_SUFFIX_RE.sub("", value).strip(" -_")
+        if cleaned == value:
+            return value
+        value = cleaned
+
+
+def track_key(artist: str, title: str) -> str:
+    artist_n = normalize_text(artist)
+    title_n = normalize_copy_suffix(title)
+    if not artist_n or not title_n:
+        return ""
+    return f"{artist_n}|||{title_n}"
+
+
 class HashWorker(QThread):
     progress = Signal(int, int)
     finished_scan = Signal(list)
     failed = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._stop_requested = False
+
+    def request_stop(self):
+        self._stop_requested = True
+        self.requestInterruption()
 
     def run(self):
         try:
@@ -40,72 +75,86 @@ class HashWorker(QThread):
                         m.year,
                         COALESCE(m.metadata_checked, 0),
                         EXISTS(
-                            SELECT 1 FROM track_mp3 tm WHERE tm.mp3_id = m.id
+                            SELECT 1
+                            FROM track_mp3 tm
+                            WHERE tm.mp3_id = m.id
                         )
                     FROM mp3_files m
-                    ORDER BY m.path COLLATE NOCASE
+                    WHERE m.path IS NOT NULL
+                    ORDER BY
+                        m.artist COLLATE NOCASE,
+                        m.title COLLATE NOCASE,
+                        m.path COLLATE NOCASE
                     """
                 ).fetchall()
             finally:
                 conn.close()
 
-            files = []
             total = len(rows)
             processed = 0
-            by_size = {}
+            by_track = defaultdict(list)
 
             for row in rows:
+                if self._stop_requested or self.isInterruptionRequested():
+                    return
+
                 mp3_id, path, artist, title, album, year, checked, linked = row
-                path_obj = Path(str(path or ""))
-                if not path_obj.is_file():
+                path = str(path or "")
+                if not path:
                     processed += 1
                     self.progress.emit(processed, total)
                     continue
 
-                try:
-                    size = path_obj.stat().st_size
-                except OSError:
-                    processed += 1
-                    self.progress.emit(processed, total)
-                    continue
+                key = track_key(artist, title)
+                if key:
+                    by_track[key].append(
+                        {
+                            "id": int(mp3_id),
+                            "path": path,
+                            "artist": str(artist or "").strip(),
+                            "title": str(title or "").strip(),
+                            "album": str(album or "").strip(),
+                            "year": year,
+                            "checked": int(checked or 0),
+                            "linked": int(linked or 0),
+                        }
+                    )
 
-                by_size.setdefault(size, []).append(
-                    (mp3_id, str(path_obj), artist, title, album, year, checked, linked)
-                )
                 processed += 1
-                self.progress.emit(processed, total)
+                if processed == total or processed % 250 == 0:
+                    self.progress.emit(processed, total)
 
             groups = []
-            for size, candidates in by_size.items():
-                if len(candidates) < 2:
+            for key, members in by_track.items():
+                if self._stop_requested or self.isInterruptionRequested():
+                    return
+
+                if len(members) < 2:
                     continue
 
-                hashed = {}
-                for item in candidates:
-                    path = item[1]
-                    h = hashlib.sha256()
-                    try:
-                        with open(path, "rb") as fh:
-                            while True:
-                                chunk = fh.read(1024 * 1024)
-                                if not chunk:
-                                    break
-                                h.update(chunk)
-                    except OSError:
-                        continue
-                    hashed.setdefault(h.hexdigest(), []).append(item)
+                # Same normalized artist/title. Version names such as
+                # Remix, Club Mix, Rap Version, Instrumental, etc. are
+                # deliberately NOT stripped, so different versions remain
+                # separate tracks.
+                groups.append(
+                    {
+                        "kind": "track",
+                        "key": key,
+                        "files": members,
+                    }
+                )
 
-                for sha256, members in hashed.items():
-                    if len(members) > 1:
-                        groups.append(
-                            {
-                                "sha256": sha256,
-                                "size": size,
-                                "files": members,
-                            }
-                        )
+            # Sort biggest groups first, then artist/title.
+            groups.sort(
+                key=lambda group: (
+                    -len(group["files"]),
+                    group["files"][0]["artist"].casefold(),
+                    group["files"][0]["title"].casefold(),
+                )
+            )
 
             self.finished_scan.emit(groups)
+
         except Exception as exc:
             self.failed.emit(str(exc))
 
@@ -113,21 +162,24 @@ class HashWorker(QThread):
 class MP3DuplicateCleaner(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("MP3 DUBBELE BESTANDEN")
-        self.resize(980, 720)
+        self.setWindowTitle("MP3 DUBBELE TRACKS")
+        self.resize(1100, 760)
         self.groups = []
         self.worker = None
+        self._closing = False
 
         root = QVBoxLayout(self)
         root.setSpacing(10)
 
-        title = QLabel("MP3 DUBBELE BESTANDEN")
+        title = QLabel("MP3 DUBBELE TRACKS")
         title.setStyleSheet("font-size:24px;font-weight:900;color:#fff;")
         root.addWidget(title)
 
         info = QLabel(
-            "Identieke MP3-inhoud wordt op SHA-256 gevonden. "
-            "Verwijderen gebeurt pas nadat jij een bestand hebt geselecteerd."
+            "Deze scan zoekt dezelfde artiest + titel. Duidelijke versies zoals "
+            "Remix, Club Mix, Rap Version, Instrumental, Live, enz. blijven "
+            "afzonderlijk zichtbaar. Een kopie zoals '(1)' wordt wel als dezelfde "
+            "track herkend. Er wordt niets automatisch verwijderd."
         )
         info.setWordWrap(True)
         info.setStyleSheet("color:#aaaab3;")
@@ -150,6 +202,7 @@ class MP3DuplicateCleaner(QDialog):
         self.delete_button = QPushButton("[ GESELECTEERDE DUBBELE VERWIJDEREN ]")
         self.delete_button.setEnabled(False)
         self.close_button = QPushButton("[ SLUITEN ]")
+
         actions.addWidget(self.scan_button)
         actions.addWidget(self.delete_button)
         actions.addStretch()
@@ -175,11 +228,14 @@ class MP3DuplicateCleaner(QDialog):
         )
 
     def scan(self):
-        if self.worker and self.worker.isRunning():
+        if self.worker is not None and self.worker.isRunning():
             return
+
+        self._closing = False
+        self.groups = []
         self.list.clear()
-        self.summary.setText("Scannen van MP3's...")
         self.progress.setValue(0)
+        self.summary.setText("Scannen van MP3's...")
         self.scan_button.setEnabled(False)
         self.delete_button.setEnabled(False)
 
@@ -187,111 +243,185 @@ class MP3DuplicateCleaner(QDialog):
         self.worker.progress.connect(self.on_progress)
         self.worker.finished_scan.connect(self.on_finished)
         self.worker.failed.connect(self.on_failed)
+        self.worker.finished.connect(self.on_worker_finished)
         self.worker.start()
 
     def on_progress(self, processed, total):
         value = int((processed / total) * 100) if total else 0
         self.progress.setValue(value)
-        self.summary.setText(f"Scannen: {processed} / {total} MP3's")
+        self.summary.setText(
+            f"Scannen: {processed:,} / {total:,} MP3's"
+        )
 
     def on_failed(self, message):
         self.scan_button.setEnabled(True)
-        QMessageBox.critical(self, "Dubbel-scan mislukt", message)
+        if not self._closing:
+            QMessageBox.critical(
+                self,
+                "Dubbel-scan mislukt",
+                message,
+            )
+
+    def on_worker_finished(self):
+        if self.worker is not None and not self.worker.isRunning():
+            self.scan_button.setEnabled(True)
 
     def on_finished(self, groups):
-        self.groups = groups
-        self.scan_button.setEnabled(True)
+        if self._closing:
+            return
+
+        self.groups = groups or []
         self.progress.setValue(100)
         self.list.clear()
+        self.scan_button.setEnabled(True)
+        self.delete_button.setEnabled(False)
 
-        duplicate_files = 0
-        for group_index, group in enumerate(groups, 1):
-            members = group["files"]
-            duplicate_files += len(members) - 1
-
-            # First item is only a preview; no automatic delete decision is made.
-            header = QListWidgetItem(
-                f"DUBBEL GROEP {group_index}  •  {len(members)} IDENTIEKE BESTANDEN  •  {group['size']:,} bytes"
+        if not self.groups:
+            self.summary.setText(
+                "Geen dubbele tracks gevonden."
             )
-            header.setData(Qt.ItemDataRole.UserRole, {"kind": "header", "group": group_index - 1})
+            return
+
+        duplicate_files = sum(
+            max(0, len(group["files"]) - 1)
+            for group in self.groups
+        )
+
+        for group_index, group in enumerate(self.groups, 1):
+            members = group["files"]
+            first = members[0]
+            artist = first["artist"] or "Onbekende artiest"
+            title = first["title"] or "Onbekende titel"
+
+            header = QListWidgetItem(
+                f"DUBBEL GROEP {group_index}  •  "
+                f"{artist} — {title}  •  {len(members)} BESTANDEN"
+            )
+            header.setData(
+                Qt.ItemDataRole.UserRole,
+                {"kind": "header", "group": group_index - 1},
+            )
             self.list.addItem(header)
 
-            for member_index, item in enumerate(members):
-                mp3_id, path, artist, title, album, year, checked, linked = item
+            for member_index, member in enumerate(members):
                 flags = []
-                if linked:
+                if member["linked"]:
                     flags.append("VINYL GEKOPPELD")
-                if checked:
+                if member["checked"]:
                     flags.append("METADATA KLAAR")
-                flag_text = "  •  ".join(flags) if flags else ""
-                label = f"    {'★' if member_index == 0 else '•'}  {Path(path).name}"
-                if artist or title:
-                    label += f"  —  {artist or ''} — {title or ''}".rstrip(" —")
-                if flag_text:
-                    label += f"  [{flag_text}]"
 
-                widget_item = QListWidgetItem(label)
-                widget_item.setToolTip(path)
-                widget_item.setData(
+                label = (
+                    f"    {'★' if member_index == 0 else '•'}  "
+                    f"{Path(member['path']).name}"
+                )
+
+                if member["album"]:
+                    label += f"  |  {member['album']}"
+                if member["year"]:
+                    label += f"  |  {member['year']}"
+                if flags:
+                    label += "  [" + " • ".join(flags) + "]"
+
+                item = QListWidgetItem(label)
+                item.setToolTip(member["path"])
+                item.setData(
                     Qt.ItemDataRole.UserRole,
                     {
                         "kind": "file",
                         "group": group_index - 1,
                         "member": member_index,
-                        "path": path,
-                        "id": mp3_id,
-                        "linked": linked,
+                        "path": member["path"],
+                        "id": member["id"],
+                        "linked": member["linked"],
                     },
                 )
-                self.list.addItem(widget_item)
+                self.list.addItem(item)
 
         self.summary.setText(
-            f"{len(groups)} dubbele groepen gevonden • {duplicate_files} overtollige bestanden"
+            f"{len(self.groups):,} dubbele trackgroepen gevonden  •  "
+            f"{duplicate_files:,} overtollige kopieën"
         )
 
     def on_selection_changed(self):
         selected = self.list.currentItem()
-        data = selected.data(Qt.ItemDataRole.UserRole) if selected else None
+        data = (
+            selected.data(Qt.ItemDataRole.UserRole)
+            if selected
+            else None
+        )
         self.delete_button.setEnabled(
-            bool(data and data.get("kind") == "file" and not data.get("linked"))
+            bool(
+                data
+                and data.get("kind") == "file"
+                and not data.get("linked")
+            )
         )
 
     def delete_selected(self):
         selected = self.list.currentItem()
-        data = selected.data(Qt.ItemDataRole.UserRole) if selected else None
+        data = (
+            selected.data(Qt.ItemDataRole.UserRole)
+            if selected
+            else None
+        )
+
         if not data or data.get("kind") != "file":
             return
 
-        path = str(data.get("path") or "")
-        mp3_id = int(data.get("id"))
         if data.get("linked"):
             QMessageBox.warning(
                 self,
                 "Beschermd bestand",
-                "Dit MP3-bestand is aan een VinylVault-track gekoppeld en wordt niet verwijderd."
+                "Dit MP3-bestand is aan een VinylVault-track gekoppeld "
+                "en wordt niet verwijderd."
             )
             return
 
+        path = str(data.get("path") or "")
+        mp3_id = int(data.get("id"))
+
         answer = QMessageBox.question(
             self,
-            "Dubbel bestand verwijderen",
-            f"Verwijder dit dubbele MP3-bestand?\n\n{path}",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            "Dubbele MP3 verwijderen",
+            f"Verwijder deze dubbele MP3?\n\n{path}",
+            QMessageBox.StandardButton.Yes
+            | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
+
         if answer != QMessageBox.StandardButton.Yes:
             return
 
         try:
             Path(path).unlink()
+
             conn = get_connection()
             try:
-                conn.execute("DELETE FROM mp3_files WHERE id=?", (mp3_id,))
+                conn.execute(
+                    "DELETE FROM mp3_files WHERE id=?",
+                    (mp3_id,),
+                )
                 conn.commit()
             finally:
                 conn.close()
+
         except Exception as exc:
-            QMessageBox.critical(self, "Verwijderen mislukt", str(exc))
+            QMessageBox.critical(
+                self,
+                "Verwijderen mislukt",
+                str(exc),
+            )
             return
 
         self.scan()
+
+    def closeEvent(self, event):
+        self._closing = True
+        worker = self.worker
+
+        if worker is not None and worker.isRunning():
+            worker.request_stop()
+            worker.wait()
+
+        self.worker = None
+        event.accept()
