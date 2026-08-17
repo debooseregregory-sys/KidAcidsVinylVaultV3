@@ -21,9 +21,7 @@ def main():
         )
 
     if not new_dir.exists():
-        raise SystemExit(
-            f"STOP: nieuwe map niet gevonden: {new_dir}"
-        )
+        raise SystemExit(f"STOP: nieuwe map niet gevonden: {new_dir}")
 
     if not DB_PATH.exists():
         raise SystemExit(f"Database niet gevonden: {DB_PATH}")
@@ -46,8 +44,8 @@ def main():
         print("VINYLVAULT - MP3 PADEN 23 -> 21")
         print("=" * 72)
         print(f"Oude databasepaden : {len(rows)}")
-        print(f"Oude map bestaat   : NEE")
-        print(f"Nieuwe map bestaat : JA")
+        print("Oude map bestaat   : NEE")
+        print("Nieuwe map bestaat : JA")
         print()
 
         if not rows:
@@ -96,10 +94,9 @@ def main():
         ).fetchone()[0]
 
         print()
-        print(f"Database aangepast      : {updates}")
-        print(f"Oude paden over         : {remaining}")
-        print(f"Backup                   : {backup_path}
-")
+        print(f"Database aangepast          : {updates}")
+        print(f"Oude paden over             : {remaining}")
+        print(f"Backup                      : {backup_path}")
         print("Koppelingstabellen gewijzigd: NEE")
         print("track_mp3 scores gewijzigd  : NEE")
         print("preferred-status gewijzigd  : NEE")
