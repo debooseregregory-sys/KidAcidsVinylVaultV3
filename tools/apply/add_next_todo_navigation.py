@@ -15,6 +15,18 @@ def replace_once(text, old, new, label):
 
 text = PATH.read_text(encoding="utf-8-sig")
 
+# ------------------------------------------------------------
+# Werk uitsluitend binnen ReleaseDetailPage.
+# Dit bestand bevat meerdere build_ui()-methodes.
+# ------------------------------------------------------------
+
+marker = "class ReleaseDetailPage(QWidget):"
+
+if marker not in text:
+    raise RuntimeError("ReleaseDetailPage: class niet gevonden")
+
+prefix, detail = text.split(marker, 1)
+
 method = '''    # ========================================================
     # NEXT NIET-KLAAR RELEASE
     # ========================================================
@@ -76,15 +88,11 @@ method = '''    # ========================================================
                 )
             )
 
-    # ========================================================
-    # BUILD UI
-    # ========================================================
-
 '''
 
-if "def go_next_todo_release(self):" not in text:
-    text = replace_once(
-        text,
+if "def go_next_todo_release(self):" not in detail:
+    detail = replace_once(
+        detail,
         "    def build_ui(self):\n",
         method + "    def build_ui(self):\n",
         "methode next niet-klaar"
@@ -108,9 +116,9 @@ button_block = '''        self.next_todo_button = QPushButton(
 
 '''
 
-if "self.next_todo_button = QPushButton(" not in text:
-    text = replace_once(
-        text,
+if "self.next_todo_button = QPushButton(" not in detail:
+    detail = replace_once(
+        detail,
         '''        top.addWidget(
             self.next_button
         )
@@ -126,6 +134,6 @@ if "self.next_todo_button = QPushButton(" not in text:
         "knop volgende niet-klaar"
     )
 
-PATH.write_text(text, encoding="utf-8-sig")
+PATH.write_text(prefix + marker + detail, encoding="utf-8-sig")
 
 print("VOLGENDE NIET-KLAAR NAVIGATIE TOEGEVOEGD")
