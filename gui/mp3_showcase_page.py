@@ -7,7 +7,8 @@ from PySide6.QtCore import Qt, QTimer, Signal, QPointF, QRectF
 from PySide6.QtGui import QPixmap, QPainter, QPen, QBrush, QColor, QFont
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QListWidget, QListWidgetItem, QFrame, QScrollArea, QSizePolicy,
+    QListWidget, QListWidgetItem, QTableWidget, QTableWidgetItem,
+    QHeaderView, QFrame, QScrollArea, QSizePolicy,
 )
 
 from database.database import get_connection
@@ -39,15 +40,15 @@ class VinylDeckWidget(QWidget):
         self.artist = "KID ACID"
         self.title = "VINYL PLAYER"
         self.playing = False
-        self.power_on = True
         self.angle = 0.0
-        self.arm_angle = -28.0
+        self.arm_angle = -22.0
         self.pitch = 0.0
-        self.setMinimumSize(620, 610)
+        self.setMinimumSize(680, 620)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.timer = QTimer(self)
-        self.timer.setInterval(30)
+        self.timer.setInterval(28)
         self.timer.timeout.connect(self._tick)
+        self.setStyleSheet("background:#111117;border:1px solid #39313d;border-radius:18px;")
 
     def set_track(self, artist="", title=""):
         self.artist = str(artist or "Onbekende artiest")
@@ -55,142 +56,85 @@ class VinylDeckWidget(QWidget):
         self.update()
 
     def set_playing(self, playing):
-        self.playing = bool(playing) and self.power_on
+        self.playing = bool(playing)
         if self.playing:
             self.timer.start()
         else:
             self.timer.stop()
         self.update()
 
-    def set_power(self, on):
-        self.power_on = bool(on)
-        if not self.power_on:
-            self.set_playing(False)
-        self.update()
-
     def _tick(self):
-        if self.playing:
-            self.angle = (self.angle + 2.6) % 360.0
-        target = 18.0 if self.playing else -28.0
-        self.arm_angle += (target - self.arm_angle) * 0.08
+        self.angle = (self.angle + 2.6) % 360.0
+        target = 15.0 if self.playing else -22.0
+        self.arm_angle += (target - self.arm_angle) * 0.075
         self.update()
 
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         w, h = float(self.width()), float(self.height())
-        pink = QColor("#d84b91")
-        p.fillRect(self.rect(), QColor("#0a0a0e"))
-        p.setPen(QPen(QColor("#3d3943"), 1))
-        p.setBrush(QBrush(QColor("#17171d")))
-        p.drawRoundedRect(QRectF(10, 10, w - 20, h - 20), 20, 20)
+        p.fillRect(self.rect(), QColor("#111117"))
+        p.setPen(QPen(QColor("#4a414d"), 1))
+        p.setBrush(QBrush(QColor("#191920")))
+        p.drawRoundedRect(QRectF(12, 12, w - 24, h - 24), 18, 18)
 
-        p.setPen(pink)
-        p.setFont(QFont("Segoe UI", 13, QFont.Weight.Black))
-        p.drawText(QRectF(28, 24, 300, 24), Qt.AlignmentFlag.AlignLeft, "KID ACID'S VINYL VAULT")
-        p.setPen(QColor("#8d8792"))
-        p.setFont(QFont("Segoe UI", 9))
-        p.drawText(QRectF(28, 48, 300, 20), Qt.AlignmentFlag.AlignLeft, "MP3 SHOWCASE • VINYL DECK")
+        p.setPen(QColor("#d84b91")); p.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        p.drawText(QRectF(28, 26, 250, 24), Qt.AlignmentFlag.AlignLeft, "KID ACID'S VINYL VAULT")
 
-        size = max(330.0, min(w - 150.0, h - 235.0))
-        r = size / 2.0
-        cx, cy = w * 0.43, 80 + r
-        p.setPen(QPen(QColor("#4b4650"), 2))
-        p.setBrush(QBrush(QColor("#28262c")))
-        p.drawEllipse(QPointF(cx, cy), r + 24, r + 24)
-        p.setPen(QPen(QColor("#55505a"), 2))
-        p.setBrush(QBrush(QColor("#101015")))
-        p.drawEllipse(QPointF(cx, cy), r + 10, r + 10)
-        p.setPen(QPen(QColor("#24232a"), 1))
-        p.setBrush(QBrush(QColor("#050507")))
+        size = max(300, min(w - 180, h - 260))
+        r = size / 2
+        cx, cy = w * .43, 92 + r
+        p.setPen(QPen(QColor("#5c5660"), 2)); p.setBrush(QBrush(QColor("#29272e")))
+        p.drawEllipse(QPointF(cx, cy), r + 18, r + 18)
+        p.setPen(QPen(QColor("#35323a"), 2)); p.setBrush(QBrush(QColor("#0d0d11")))
+        p.drawEllipse(QPointF(cx, cy), r + 7, r + 7)
+        p.setPen(QPen(QColor("#26242b"), 1)); p.setBrush(QBrush(QColor("#050508")))
         p.drawEllipse(QPointF(cx, cy), r, r)
-
-        p.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        for f in (0.97, .94, .91, .88, .85, .82, .79, .76, .73, .70, .67, .64, .61, .58, .55):
-            rr = r * f
-            p.setPen(QPen(QColor("#17171c"), 1))
-            p.drawEllipse(QPointF(cx, cy), rr, rr)
-
-        p.save()
-        p.translate(cx, cy)
-        p.rotate(self.angle)
-        p.setPen(QPen(QColor(216, 75, 145, 130), 3))
-        p.drawArc(QRectF(-r * .86, -r * .86, r * 1.72, r * 1.72), 18 * 16, 62 * 16)
-        p.setPen(QPen(QColor(255, 255, 255, 32), 2))
-        p.drawLine(QPointF(-r * .12, -r * .2), QPointF(r * .83, -r * .2))
+        p.save(); p.translate(cx, cy); p.rotate(self.angle)
+        for f in (.95,.90,.85,.80,.75,.70,.65,.60,.55,.50):
+            rr = r * f; p.setPen(QPen(QColor("#16161c"), 1)); p.drawEllipse(QPointF(0,0), rr, rr)
+        p.setPen(QPen(QColor(216,75,145,120), 3)); p.drawArc(QRectF(-r*.82,-r*.82,r*1.64,r*1.64),20*16,75*16)
         p.restore()
-
-        lr = min(72.0, r * .25)
-        p.setPen(QPen(QColor("#ed9fc2"), 2))
-        p.setBrush(QBrush(QColor("#68183f")))
+        lr = min(68, r * .25)
+        p.setPen(QPen(QColor("#ee9fc2"), 2)); p.setBrush(QBrush(QColor("#68183f")))
         p.drawEllipse(QPointF(cx, cy), lr, lr)
-        p.setPen(QColor("#f7e6ee"))
-        p.setFont(QFont("Segoe UI", max(10, int(lr / 3.8)), QFont.Weight.Bold))
-        p.drawText(QRectF(cx - lr, cy - 10, lr * 2, 20), Qt.AlignmentFlag.AlignCenter, "KID ACID")
-        p.setPen(QPen(QColor("#bbb5bd"), 1))
-        p.setBrush(QBrush(QColor("#d1cbd1")))
+        p.setPen(QColor("#f7e6ee")); p.setFont(QFont("Segoe UI", max(10, int(lr/3.6)), QFont.Weight.Bold))
+        p.drawText(QRectF(cx-lr, cy-10, lr*2, 20), Qt.AlignmentFlag.AlignCenter, "KID ACID")
+        p.setPen(QPen(QColor("#c8c2ca"), 1)); p.setBrush(QBrush(QColor("#d1cbd1")))
         p.drawEllipse(QPointF(cx, cy), 5, 5)
 
-        pivot = QPointF(w * 0.80, 135)
-        p.setPen(QPen(QColor("#08080a"), 5))
-        p.setBrush(QBrush(QColor("#343139")))
-        p.drawEllipse(pivot, 28, 28)
-        p.setPen(QPen(QColor("#817a84"), 2))
-        p.drawEllipse(pivot, 16, 16)
+        # Realistic tonearm: pivot at upper right, stylus reaches the outer groove area.
+        pivot = QPointF(w * .79, h * .235)
+        p.setPen(QPen(QColor("#09090b"), 5)); p.setBrush(QBrush(QColor("#35333a")))
+        p.drawEllipse(pivot, 24, 24)
         a = radians(self.arm_angle)
-        reach = r * 1.02
-        elbow = QPointF(pivot.x() - cos(a) * reach * .43, pivot.y() + sin(a) * reach * .43)
-        end = QPointF(cx + r * (.88 if self.playing else .62), cy - r * (.18 if self.playing else .54))
-        bend = QPointF((elbow.x() + end.x()) / 2 - sin(a) * 22, (elbow.y() + end.y()) / 2 - cos(a) * 22)
-        p.setPen(QPen(QColor("#c3bec5"), 9, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-        p.drawLine(pivot, elbow)
-        p.drawLine(elbow, bend)
-        p.drawLine(bend, end)
-        p.setPen(QPen(QColor("#69636d"), 3))
-        p.drawLine(pivot, elbow)
-        p.drawLine(elbow, bend)
-        p.save()
-        p.translate(end)
-        p.rotate(-self.arm_angle)
-        p.setPen(QPen(QColor("#222126"), 2))
-        p.setBrush(QBrush(QColor("#d6d1d7")))
-        p.drawRoundedRect(QRectF(-35, -10, 42, 20), 4, 4)
-        p.setBrush(QBrush(pink))
-        p.drawRoundedRect(QRectF(-24, -7, 25, 14), 3, 3)
-        p.setPen(QPen(QColor("#eeeeee"), 2))
-        p.drawLine(QPointF(-18, 8), QPointF(-15, 28))
-        p.restore()
+        reach = r * .90
+        elbow = QPointF(pivot.x() - cos(a)*reach*.42, pivot.y() + sin(a)*reach*.42)
+        bend = QPointF(elbow.x()-sin(a)*24, elbow.y()-cos(a)*24)
+        head = QPointF(cx + r*.78, cy - r*.05) if self.playing else QPointF(cx + r*.72, cy - r*.40)
+        p.setPen(QPen(QColor("#b9b2bc"), 8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.drawLine(pivot, elbow); p.drawLine(elbow, bend); p.drawLine(bend, head)
+        p.setPen(QPen(QColor("#eee"), 2)); p.drawLine(head, QPointF(head.x()-4, head.y()+22))
+        p.setPen(QPen(QColor("#29272d"), 2)); p.setBrush(QBrush(QColor("#d7d2d7")))
+        p.drawRoundedRect(QRectF(head.x()-28, head.y()+2, 42, 18), 4, 4)
 
-        pitch_x = w - 74
-        top = 225
-        bottom = h - 205
-        p.setPen(QPen(QColor("#57515b"), 3))
-        p.drawLine(QPointF(pitch_x, top), QPointF(pitch_x, bottom))
-        for i in range(-8, 9):
-            y = (top + bottom) / 2 - i * 15
-            length = 16 if i % 4 == 0 else 9
-            p.drawLine(QPointF(pitch_x - length, y), QPointF(pitch_x, y))
-        knob_y = (top + bottom) / 2 - self.pitch * 15
-        p.setPen(QPen(QColor("#1a181e"), 2))
-        p.setBrush(QBrush(QColor("#d0cbd1")))
-        p.drawRoundedRect(QRectF(pitch_x - 18, knob_y - 7, 36, 14), 4, 4)
-        p.setPen(QColor("#aaa4ad"))
-        p.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
-        p.drawText(QRectF(pitch_x - 28, bottom + 18, 56, 18), Qt.AlignmentFlag.AlignCenter, "PITCH")
-        p.drawText(QRectF(pitch_x - 28, (top + bottom) / 2 - 9, 56, 18), Qt.AlignmentFlag.AlignCenter, "0")
-        p.drawText(QRectF(pitch_x - 28, top - 22, 56, 18), Qt.AlignmentFlag.AlignCenter, "+8")
-        p.drawText(QRectF(pitch_x - 28, bottom + 38, 56, 18), Qt.AlignmentFlag.AlignCenter, "-8")
+        # Pitch control: visually separate from the platter.
+        px, py = w*.82, h*.60
+        p.setPen(QPen(QColor("#57515b"), 2)); p.setBrush(QBrush(QColor("#242229")))
+        p.drawRoundedRect(QRectF(px-20, py-95, 40, 190), 10, 10)
+        p.setPen(QColor("#aaa3ad")); p.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        p.drawText(QRectF(px-55, py-125, 110, 20), Qt.AlignmentFlag.AlignCenter, "PITCH")
+        knob_y = py - 10 - self.pitch * 2
+        p.setBrush(QBrush(QColor("#d84b91"))); p.setPen(QPen(QColor("#f0bfd5"), 1))
+        p.drawRoundedRect(QRectF(px-13, knob_y-8, 26, 16), 4, 4)
+        p.setPen(QColor("#77727c")); p.drawText(QRectF(px-55, py+105, 110, 20), Qt.AlignmentFlag.AlignCenter, f"{self.pitch:+.1f}%")
 
-        p.setPen(QColor("#77717c"))
-        p.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-        p.drawText(QRectF(28, h - 116, 200, 20), Qt.AlignmentFlag.AlignLeft, "33⅓ RPM   •   DIRECT DRIVE")
-        p.setPen(pink if self.power_on else QColor("#55515a"))
-        p.drawText(QRectF(28, h - 88, 180, 20), Qt.AlignmentFlag.AlignLeft, "● POWER ON" if self.power_on else "● POWER OFF")
-        p.setPen(QColor("#ffffff"))
-        p.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
-        p.drawText(QRectF(28, h - 60, w - 56, 24), Qt.AlignmentFlag.AlignLeft, self.artist)
-        p.setFont(QFont("Segoe UI", 18, QFont.Weight.Black))
-        p.drawText(QRectF(28, h - 37, w - 56, 25), Qt.AlignmentFlag.AlignLeft, self.title)
+        p.setPen(QColor("#d84b91")); p.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        p.drawText(QRectF(25, h-112, w-50, 24), Qt.AlignmentFlag.AlignCenter, self.artist)
+        p.setPen(QColor("#fff")); p.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+        p.drawText(QRectF(25, h-82, w-50, 28), Qt.AlignmentFlag.AlignCenter, self.title)
+        p.setPen(QColor("#78727c")); p.setFont(QFont("Segoe UI", 9))
+        p.drawText(QRectF(25, h-50, w-50, 20), Qt.AlignmentFlag.AlignCenter, "KID ACID'S VINYL VAULT")
         p.end()
 
 
@@ -207,83 +151,86 @@ class MP3ShowcasePage(QWidget):
         self.load_files()
 
     def build_ui(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(22, 18, 22, 18)
-        root.setSpacing(12)
-        title = QLabel("MP3 SHOWCASE")
-        title.setStyleSheet("font-size:26px;font-weight:900;color:#fff;")
+        root = QVBoxLayout(self); root.setSpacing(12)
+        title = QLabel("MP3 SHOWCASE"); title.setStyleSheet("font-size:26px;font-weight:900;color:#fff;")
         root.addWidget(title)
         search = QHBoxLayout()
-        self.search = QLineEdit()
-        self.search.setPlaceholderText("Zoek artiest, titel, album, genre, release of bestand...")
-        search.addWidget(self.search, 1)
-        self.refresh = QPushButton("VERVERS")
-        search.addWidget(self.refresh)
-        root.addLayout(search)
-        self.status = QLabel("0 MP3's")
-        self.status.setStyleSheet("color:#9b9ba6;")
-        root.addWidget(self.status)
+        self.search = QLineEdit(); self.search.setPlaceholderText("Zoek artiest, titel, album, genre, release of bestand...")
+        search.addWidget(self.search); root.addLayout(search)
+        self.status = QLabel("Laden..."); self.status.setStyleSheet("color:#9b9ba6;"); root.addWidget(self.status)
 
-        body = QHBoxLayout()
-        body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(18)
-        self.list = QListWidget()
-        self.list.setMinimumWidth(500)
-        self.list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.list.currentRowChanged.connect(self.select_index)
-        body.addWidget(self.list, 5)
+        body = QHBoxLayout(); body.setContentsMargins(0,0,0,0); body.setSpacing(14)
 
-        right = QVBoxLayout()
-        right.setSpacing(12)
-        self.vinyl_deck = VinylDeckWidget(self)
-        right.addWidget(self.vinyl_deck, 7)
+        self.list = QTableWidget(0, 2)
+        self.list.setHorizontalHeaderLabels(["ARTIEST", "TRACK"])
+        self.list.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.list.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.list.setAlternatingRowColors(True)
+        self.list.setMinimumWidth(520)
+        self.list.setMaximumWidth(620)
+        header = self.list.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.list.verticalHeader().setDefaultSectionSize(34)
+        self.list.itemSelectionChanged.connect(self._table_selection_changed)
+        body.addWidget(self.list, 4)
 
+        self.vinyl_deck = VinylDeckWidget(self); self.vinyl_deck.set_track("Onbekende artiest", "-")
+        body.addWidget(self.vinyl_deck, 6)
+
+        right = QFrame(); right.setMinimumWidth(320); right.setMaximumWidth(430)
+        cl = QVBoxLayout(right); cl.setContentsMargins(14,14,14,14); cl.setSpacing(10)
+        self.cover = QLabel(); self.cover.setAlignment(Qt.AlignmentFlag.AlignCenter); self.cover.setMinimumHeight(170); cl.addWidget(self.cover)
+        self.info = QLabel("Geen track geselecteerd"); self.info.setWordWrap(True); cl.addWidget(self.info)
+        tracks_title = QLabel("VINYLVAULT TRACKS"); tracks_title.setStyleSheet("font-weight:900;color:#d84b91;"); cl.addWidget(tracks_title)
+        self.track_list = QListWidget(); self.track_list.setMinimumHeight(150); self.track_list.itemDoubleClicked.connect(self.play_track_item); cl.addWidget(self.track_list, 1)
         controls = QHBoxLayout()
-        self.previous = QPushButton("VORIGE")
-        self.play = QPushButton("PLAY")
-        self.next = QPushButton("VOLGENDE")
-        self.power = QPushButton("POWER")
-        controls.addWidget(self.previous)
-        controls.addWidget(self.play, 1)
-        controls.addWidget(self.next)
-        controls.addWidget(self.power)
-        right.addLayout(controls)
-        body.addLayout(right, 7)
+        self.previous = QPushButton("VORIGE"); self.play = QPushButton("PLAY"); self.next = QPushButton("VOLGENDE"); self.power = QPushButton("POWER")
+        controls.addWidget(self.previous); controls.addWidget(self.play,1); controls.addWidget(self.next); controls.addWidget(self.power); cl.addLayout(controls)
+        body.addWidget(right, 3)
         root.addLayout(body, 1)
 
-        self.previous.clicked.connect(self.previous_track)
-        self.next.clicked.connect(self.next_track)
-        self.play.clicked.connect(self.play_current)
-        self.power.clicked.connect(lambda: self.vinyl_deck.set_power(not self.vinyl_deck.power_on))
         self.search.textChanged.connect(self.populate_list)
-        self.refresh.clicked.connect(self.load_files)
+        self.previous.clicked.connect(self.previous_track); self.next.clicked.connect(self.next_track); self.play.clicked.connect(self.play_current)
+        self.power.clicked.connect(lambda: self.vinyl_deck.set_playing(False))
 
         self.setStyleSheet("""
-            QWidget{background:#0b0b0f;color:#f2f2f5;}
-            QLineEdit,QPushButton,QListWidget{background:#18181f;color:#fff;border:1px solid #30303a;border-radius:6px;padding:8px 10px;}
-            QPushButton:hover{border-color:#d84b91;background:#24242c;}
-            QListWidget{background:#0f0f14;}
-            QListWidget::item{padding:10px;border-bottom:1px solid #24242d;}
-            QListWidget::item:selected{background:#271522;border:1px solid #5d2947;}
+        QWidget{background:#0b0b0f;color:#f2f2f5;}
+        QLineEdit,QPushButton,QTableWidget,QListWidget{background:#18181f;color:#fff;border:1px solid #30303a;border-radius:6px;padding:7px;}
+        QTableWidget{background:#0f0f14;gridline-color:#24242d;}
+        QTableWidget::item{padding:7px;border-bottom:1px solid #24242d;}
+        QTableWidget::item:selected{background:#271522;color:#fff;}
+        QListWidget{background:#0f0f14;}
+        QListWidget::item{padding:8px;border-bottom:1px solid #24242d;}
+        QPushButton:hover{border-color:#d84b91;background:#24242c;}
         """)
+
+    def load_files(self):
+        conn = get_connection()
+        try:
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(mp3_files)").fetchall()}
+            optional = [c for c in ("release_id", "discogs_id", "discogs_link", "cover") if c in cols]
+            select = "path, artist, title, album, genre" + (", " + ", ".join(optional) if optional else "")
+            rows = conn.execute(f"SELECT {select} FROM mp3_files ORDER BY artist, title").fetchall()
+            self.items = [tuple(row) for row in rows]
+        finally:
+            conn.close()
+        self.populate_list()
 
     def populate_list(self):
         q = self.search.text().strip().casefold()
         self.visible_items = [row for row in self.items if not q or q in " ".join(str(x or "") for x in row).casefold()]
-        self.list.blockSignals(True)
-        self.list.clear()
+        self.list.blockSignals(True); self.list.setRowCount(0)
         for row in self.visible_items:
-            name = Path(str(row[0])).name
-            artist = str(row[1] or "").strip()
-            title = str(row[2] or "").strip()
-            text = f"{artist}\n{title}" if artist and title else (artist or title or name)
-            item = QListWidgetItem(text)
-            item.setToolTip(str(row[0]))
-            self.list.addItem(item)
+            r = self.list.rowCount(); self.list.insertRow(r)
+            self.list.setItem(r,0,QTableWidgetItem(str(row[1] or "Onbekende artiest")))
+            self.list.setItem(r,1,QTableWidgetItem(str(row[2] or Path(str(row[0])).stem)))
         self.list.blockSignals(False)
         self.status.setText(f"{len(self.visible_items)} van {len(self.items)} MP3's")
-        if self.visible_items:
-            self.list.setCurrentRow(0)
+        if self.visible_items: self.list.selectRow(0)
+
+    def _table_selection_changed(self):
+        row = self.list.currentRow(); self.select_index(row)
 
     def select_index(self, index):
         self.current_index = index
@@ -294,60 +241,25 @@ class MP3ShowcasePage(QWidget):
             self.show_item(row)
 
     def show_item(self, row):
-        artist = str(row[1] or "Onbekende artiest")
-        title = str(row[2] or Path(str(row[0])).stem)
-        self.vinyl_deck.set_track(artist, title)
-        self.previous.setEnabled(self.current_index > 0)
-        self.next.setEnabled(self.current_index + 1 < len(self.visible_items))
-        self.play.setEnabled(True)
-
-    def load_files(self):
-        conn = get_connection()
-        try:
-            # mp3_files in the current V3 database does NOT have release_id.
-            # Keep this query aligned with the actual schema and only select
-            # columns maintained by the MP3 subsystem.
-            self.items = conn.execute(
-                """
-                SELECT
-                    path,
-                    artist,
-                    title,
-                    album,
-                    genre,
-                    discogs_id,
-                    discogs_link,
-                    cover
-                FROM mp3_files
-                ORDER BY artist COLLATE NOCASE, title COLLATE NOCASE
-                """
-            ).fetchall()
-        finally:
-            conn.close()
-        self.populate_list()
+        artist = str(row[1] or "Onbekende artiest"); title = str(row[2] or Path(str(row[0])).stem)
+        self.info.setText(f"<b>{artist}</b><br>{title}<br><br>{Path(str(row[0])).name}")
+        self.track_list.clear()
+        self.previous.setEnabled(self.current_index > 0); self.next.setEnabled(self.current_index + 1 < len(self.visible_items)); self.play.setEnabled(True)
 
     def play_current(self):
         if 0 <= self.current_index < len(self.visible_items):
             path = str(self.visible_items[self.current_index][0] or "")
             if Path(path).exists():
-                self.play_mp3.emit(path)
-                self.vinyl_deck.set_playing(True)
-
-    def previous_track(self):
-        if self.current_index > 0:
-            self.list.setCurrentRow(self.current_index - 1)
-            self.play_current()
-
-    def next_track(self):
-        if self.current_index + 1 < len(self.visible_items):
-            self.list.setCurrentRow(self.current_index + 1)
-            self.play_current()
+                self.play_mp3.emit(path); self.vinyl_deck.set_playing(True)
 
     def play_track_item(self, item):
         path = item.data(Qt.ItemDataRole.UserRole)
-        if path:
-            self.play_mp3.emit(str(path))
+        if path and Path(path).exists(): self.play_mp3.emit(str(path))
 
-    def clear_showcase(self):
-        self.vinyl_deck.set_track("Onbekende artiest", "-")
-        self.vinyl_deck.set_playing(False)
+    def previous_track(self):
+        if self.current_index > 0:
+            self.list.selectRow(self.current_index - 1); self.play_current()
+
+    def next_track(self):
+        if self.current_index + 1 < len(self.visible_items):
+            self.list.selectRow(self.current_index + 1); self.play_current()
