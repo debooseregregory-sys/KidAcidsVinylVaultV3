@@ -85,7 +85,6 @@ class VinylDeckWidget(QWidget):
         p.setBrush(QBrush(QColor("#17171d")))
         p.drawRoundedRect(QRectF(10, 10, w - 20, h - 20), 20, 20)
 
-        # Branding, deliberately kept in the upper-left corner.
         p.setPen(pink)
         p.setFont(QFont("Segoe UI", 13, QFont.Weight.Black))
         p.drawText(QRectF(28, 24, 300, 24), Qt.AlignmentFlag.AlignLeft, "KID ACID'S VINYL VAULT")
@@ -93,7 +92,6 @@ class VinylDeckWidget(QWidget):
         p.setFont(QFont("Segoe UI", 9))
         p.drawText(QRectF(28, 48, 300, 20), Qt.AlignmentFlag.AlignLeft, "MP3 SHOWCASE • VINYL DECK")
 
-        # Platter: leave a generous rim and keep the label completely clear.
         size = max(330.0, min(w - 150.0, h - 235.0))
         r = size / 2.0
         cx, cy = w * 0.43, 80 + r
@@ -107,14 +105,12 @@ class VinylDeckWidget(QWidget):
         p.setBrush(QBrush(QColor("#050507")))
         p.drawEllipse(QPointF(cx, cy), r, r)
 
-        # Groove rings.
         p.setBrush(QBrush(Qt.BrushStyle.NoBrush))
         for f in (0.97, .94, .91, .88, .85, .82, .79, .76, .73, .70, .67, .64, .61, .58, .55):
             rr = r * f
             p.setPen(QPen(QColor("#17171c"), 1))
             p.drawEllipse(QPointF(cx, cy), rr, rr)
 
-        # Moving reflections make rotation visible without ugly text.
         p.save()
         p.translate(cx, cy)
         p.rotate(self.angle)
@@ -124,7 +120,6 @@ class VinylDeckWidget(QWidget):
         p.drawLine(QPointF(-r * .12, -r * .2), QPointF(r * .83, -r * .2))
         p.restore()
 
-        # Label.
         lr = min(72.0, r * .25)
         p.setPen(QPen(QColor("#ed9fc2"), 2))
         p.setBrush(QBrush(QColor("#68183f")))
@@ -136,9 +131,7 @@ class VinylDeckWidget(QWidget):
         p.setBrush(QBrush(QColor("#d1cbd1")))
         p.drawEllipse(QPointF(cx, cy), 5, 5)
 
-        # Realistic pivot and S-shaped tonearm. The playing endpoint is only
-        # about 88% of the platter radius, safely on the outer playing area.
-        pivot = QPointF(w * .80, 135)
+        pivot = QPointF(w * 0.80, 135)
         p.setPen(QPen(QColor("#08080a"), 5))
         p.setBrush(QBrush(QColor("#343139")))
         p.drawEllipse(pivot, 28, 28)
@@ -156,7 +149,6 @@ class VinylDeckWidget(QWidget):
         p.setPen(QPen(QColor("#69636d"), 3))
         p.drawLine(pivot, elbow)
         p.drawLine(elbow, bend)
-        # Headshell and stylus, sitting on the outer groove area.
         p.save()
         p.translate(end)
         p.rotate(-self.arm_angle)
@@ -169,7 +161,6 @@ class VinylDeckWidget(QWidget):
         p.drawLine(QPointF(-18, 8), QPointF(-15, 28))
         p.restore()
 
-        # Pitch control, no text crossing the platter.
         pitch_x = w - 74
         top = 225
         bottom = h - 205
@@ -190,7 +181,6 @@ class VinylDeckWidget(QWidget):
         p.drawText(QRectF(pitch_x - 28, top - 22, 56, 18), Qt.AlignmentFlag.AlignCenter, "+8")
         p.drawText(QRectF(pitch_x - 28, bottom + 38, 56, 18), Qt.AlignmentFlag.AlignCenter, "-8")
 
-        # Bottom status and transport.
         p.setPen(QColor("#77717c"))
         p.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
         p.drawText(QRectF(28, h - 116, 200, 20), Qt.AlignmentFlag.AlignLeft, "33⅓ RPM   •   DIRECT DRIVE")
@@ -314,7 +304,24 @@ class MP3ShowcasePage(QWidget):
     def load_files(self):
         conn = get_connection()
         try:
-            self.items = conn.execute("SELECT path, artist, title, album, genre, release_id, discogs_id, discogs_link, cover FROM mp3_files ORDER BY artist, title").fetchall()
+            # mp3_files in the current V3 database does NOT have release_id.
+            # Keep this query aligned with the actual schema and only select
+            # columns maintained by the MP3 subsystem.
+            self.items = conn.execute(
+                """
+                SELECT
+                    path,
+                    artist,
+                    title,
+                    album,
+                    genre,
+                    discogs_id,
+                    discogs_link,
+                    cover
+                FROM mp3_files
+                ORDER BY artist COLLATE NOCASE, title COLLATE NOCASE
+                """
+            ).fetchall()
         finally:
             conn.close()
         self.populate_list()
