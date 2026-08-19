@@ -2,7 +2,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Signal, QUrl, Qt
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QSlider
+from PySide6.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QSlider
 
 
 class MP3Player(QWidget):
@@ -37,6 +37,30 @@ class MP3Player(QWidget):
                 widget = widget.parentWidget()
             except AttributeError:
                 widget = None
+
+        # MP3 Showcase can be created outside the normal parent chain.
+        # In that case use the application's existing central player.
+        try:
+            active = QApplication.activeWindow()
+            while active is not None:
+                candidate = getattr(active, "mp3_player", None)
+                if isinstance(candidate, MP3Player) and candidate is not active:
+                    return candidate
+                try:
+                    active = active.parentWidget()
+                except AttributeError:
+                    active = None
+        except RuntimeError:
+            pass
+
+        # Last resort: locate an existing MP3Player among live widgets.
+        try:
+            for widget in QApplication.allWidgets():
+                if isinstance(widget, MP3Player) and widget is not parent:
+                    return widget
+        except RuntimeError:
+            pass
+
         return None
 
     def _player_error(self, error, error_string):
