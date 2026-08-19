@@ -79,7 +79,8 @@ class VinylDeckWidget(QWidget):
         w, h = float(self.width()), float(self.height())
         r = max(145.0, min((w - 250.0) * 0.46, (h - 150.0) * 0.45))
         cx = min(w * 0.46, w - r - 100)
-        cy = 300 + max(0.0, h - 610.0) * 0.12
+        # Lower the platter so the deck has a visually balanced top section.
+        cy = 345 + max(0.0, h - 610.0) * 0.10
         return w, h, cx, cy, r
 
     def _text(self, p, rect, text, size=9, color=MUTED, weight=QFont.Weight.Bold,
@@ -105,7 +106,7 @@ class VinylDeckWidget(QWidget):
         p.setBrush(QBrush(QColor("#121318")))
         p.drawRoundedRect(QRectF(25, 25, w - 50, h - 50), 10, 10)
         self._text(p, QRectF(34, 31, 330, 22), "KID ACID'S VINYL VAULT", 12, PINK, QFont.Weight.Black)
-        self._text(p, QRectF(34, 53, 380, 18), "MP3 SHOWCASE  /  PROFESSIONAL DIRECT DRIVE", 8)
+        self._text(p, QRectF(34, 53, 380, 18), "MP3 SHOWCASE / PROFESSIONAL DIRECT DRIVE", 8)
 
         # PLATTER
         p.setPen(QPen(QColor("#050507"), 3))
@@ -159,9 +160,10 @@ class VinylDeckWidget(QWidget):
         p.setBrush(QBrush(QColor("#202126")))
         p.drawEllipse(QPointF(cx, cy), 2, 2)
 
-        # STRAIGHT TONEARM. No elbow, no kink, one physical line.
+        # TONEARM ON THE RIGHT: resting in its cradle beside the platter.
+        # The pitch fader is deliberately moved to the opposite (left) side.
         pivot = QPointF(w - 105, 120)
-        rest_stylus = QPointF(cx + r * 1.03, cy - r * .28)
+        rest_stylus = QPointF(cx + r + 48, cy - r * .36)
         play_stylus = QPointF(cx + r * .74, cy + r * .10)
         stylus = QPointF(
             rest_stylus.x() + (play_stylus.x() - rest_stylus.x()) * self.arm_progress,
@@ -172,6 +174,15 @@ class VinylDeckWidget(QWidget):
         length = max(1.0, hypot(dx, dy))
         ux, uy = dx / length, dy / length
         arm_angle = degrees(atan2(dy, dx))
+
+        # Rest/cradle for the cartridge when not playing.
+        cradle = QPointF(rest_stylus.x() + 16, rest_stylus.y() + 4)
+        p.setPen(QPen(QColor("#050607"), 3))
+        p.setBrush(QBrush(QColor("#202228")))
+        p.drawRoundedRect(QRectF(cradle.x() - 16, cradle.y() - 11, 32, 22), 5, 5)
+        p.setPen(QPen(QColor("#666973"), 2))
+        p.drawLine(QPointF(cradle.x() - 9, cradle.y() - 5), QPointF(cradle.x() + 9, cradle.y() - 5))
+        p.drawLine(QPointF(cradle.x() - 9, cradle.y() + 5), QPointF(cradle.x() + 9, cradle.y() + 5))
 
         # Counterweight is collinear with the arm.
         counter = QPointF(pivot.x() - ux * 54, pivot.y() - uy * 54)
@@ -233,8 +244,8 @@ class VinylDeckWidget(QWidget):
         p.setPen(QPen(QColor("#a0a2a9"), 2))
         p.drawLine(QPointF(pivot.x() + 38, pivot.y() - 12), QPointF(pivot.x() + 48, pivot.y() - 12))
 
-        # REAL PITCH FADER: recessed slot, scale, metal knob.
-        pitch_x = w - 43
+        # PITCH FADER ON THE LEFT - opposite the tonearm.
+        pitch_x = 43
         top = 210
         bottom = h - 145
         center = (top + bottom) / 2
@@ -271,12 +282,12 @@ class VinylDeckWidget(QWidget):
         p.drawLine(QPointF(power.x(), power.y() - 14), QPointF(power.x(), power.y() + 1))
         self._text(p, QRectF(power.x() - 40, power.y() + 28, 80, 18), "POWER", 7, PINK if self.power_on else MUTED, QFont.Weight.Black, Qt.AlignmentFlag.AlignCenter)
 
-        # CLEAN TECHNICAL DISPLAY STRIP.
+        # CLEAN TECHNICAL DISPLAY STRIP - ASCII only to avoid glyph rendering problems.
         strip = QRectF(120, h - 92, max(250.0, w - 205), 58)
         p.setPen(QPen(QColor("#2d2f36"), 1))
         p.setBrush(QBrush(QColor("#0d0e12")))
         p.drawRoundedRect(strip, 7, 7)
-        self._text(p, QRectF(strip.x() + 12, strip.y() + 7, strip.width() - 24, 17), "33⅓ RPM   •   DIRECT DRIVE   •   STABLE PLATTER", 8)
+        self._text(p, QRectF(strip.x() + 12, strip.y() + 7, strip.width() - 24, 17), "33 RPM | DIRECT DRIVE | STABLE PLATTER", 8)
         self._text(p, QRectF(strip.x() + 12, strip.y() + 28, strip.width() * .45, 20), self.artist, 10, TEXT, QFont.Weight.Bold)
         self._text(p, QRectF(strip.x() + strip.width() * .46, strip.y() + 28, strip.width() * .52 - 12, 20), self.title, 10, PINK, QFont.Weight.Black, Qt.AlignmentFlag.AlignRight)
         p.end()
@@ -290,7 +301,7 @@ class VinylDeckWidget(QWidget):
         if hypot(pos.x() - power.x(), pos.y() - power.y()) <= 32:
             self.set_power(not self.power_on)
             return
-        pitch_x = w - 43
+        pitch_x = 43
         top, bottom = 210, h - 145
         if abs(pos.x() - pitch_x) <= 35 and top <= pos.y() <= bottom:
             center = (top + bottom) / 2
@@ -395,7 +406,7 @@ class MP3ShowcasePage(QWidget):
         rl.addWidget(self.track_list, 1)
         controls = QHBoxLayout()
         self.previous = QPushButton("VORIGE")
-        self.play = QPushButton("▶ PLAY")
+        self.play = QPushButton("PLAY")
         self.next = QPushButton("VOLGENDE")
         self.power = QPushButton("POWER")
         controls.addWidget(self.previous)
@@ -476,7 +487,7 @@ class MP3ShowcasePage(QWidget):
             self.vinyl_deck.set_playing(False)
             self.info.setText(f"<b>{artist}</b><br><span style='color:#d84b91;font-size:16px'>{title}</span><br><br>{row[3] or ''}<br>{row[4] or ''}")
             self.track_list.clear()
-            item = QListWidgetItem(f"{artist} — {title}")
+            item = QListWidgetItem(f"{artist} - {title}")
             item.setData(Qt.ItemDataRole.UserRole, str(row[0] or ""))
             self.track_list.addItem(item)
             cover = str(row[7] or "")
