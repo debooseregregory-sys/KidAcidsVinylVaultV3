@@ -26,9 +26,10 @@ class ReleaseBoardTile(QFrame):
 
         self.data = data
         self.setObjectName("releaseBoardTile")
-        self.setMinimumWidth(250)
-        self.setMaximumWidth(310)
-        self.setMinimumHeight(390)
+        # De kaart blijft altijd exact even groot.
+        # Alleen het aantal kolommen verandert bij resize.
+        self.setFixedWidth(250)
+        self.setFixedHeight(390)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 14, 14, 12)
@@ -82,6 +83,8 @@ class ReleaseBoardTile(QFrame):
             info_bits.append(str(data["catalog"]))
         if data.get("year"):
             info_bits.append(str(data["year"]))
+        if data.get("storage_code"):
+            info_bits.append(f"Kast: {data['storage_code']}")
 
         info = QLabel("  •  ".join(info_bits) if info_bits else "")
         info.setObjectName("boardInfo")

@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # KID ACID'S VINYLVAULT V3
 # DATABASE ENGINE
 # ============================================================
@@ -30,13 +30,29 @@ def get_connection():
     )
 
     connection = sqlite3.connect(
-        DB_PATH
+        DB_PATH,
+        timeout=30.0
     )
 
     connection.row_factory = sqlite3.Row
 
     connection.execute(
         "PRAGMA foreign_keys = ON"
+    )
+
+    connection.execute(
+        "PRAGMA busy_timeout = 30000"
+    )
+
+    try:
+        connection.execute(
+            "PRAGMA journal_mode = WAL"
+        )
+    except sqlite3.DatabaseError:
+        pass
+
+    connection.execute(
+        "PRAGMA synchronous = NORMAL"
     )
 
     return connection

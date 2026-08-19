@@ -122,3 +122,20 @@ def release_format(release: dict) -> str:
         if isinstance(item, dict) and item.get("name"):
             values.append(str(item["name"]).strip())
     return ", ".join(dict.fromkeys(values))
+
+
+def composer_text(release: dict, track: dict | None = None) -> str:
+    names = []
+
+    def collect(items):
+        for item in items or []:
+            if not isinstance(item, dict):
+                continue
+            role = str(item.get("role") or "").strip().lower()
+            name = str(item.get("name") or "").strip()
+            if name and "composer" in role:
+                names.append(name)
+
+    collect((track or {}).get("extraartists") or [])
+    collect(release.get("extraartists") or [])
+    return ", ".join(dict.fromkeys(names))

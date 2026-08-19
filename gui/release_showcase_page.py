@@ -164,6 +164,8 @@ class ReleaseShowcasePage(QWidget):
         if release[4]: meta.append(str(release[4]))
         if release[5]: meta.append(str(release[5]))
         if release[6]: meta.append(str(release[6]))
+        if release[11]:
+            meta.append(f"KAST: {release[11]}")
         meta_label = QLabel(" • ".join(meta))
         meta_label.setObjectName("showcaseMeta")
         meta_label.setWordWrap(True)
@@ -175,7 +177,10 @@ class ReleaseShowcasePage(QWidget):
             info.addWidget(discogs_label)
             if release[8]:
                 discogs_button = QPushButton("OPEN DISCOGS")
-                discogs_button.clicked.connect(lambda url=str(release[8]): QDesktopServices.openUrl(QUrl(url)))
+                discogs_url = str(release[8])
+                discogs_button.clicked.connect(
+                    lambda _checked=False, url=discogs_url: QDesktopServices.openUrl(QUrl(url))
+                )
                 info.addWidget(discogs_button, 0, Qt.AlignmentFlag.AlignLeft)
 
         if release[10]:
@@ -235,7 +240,10 @@ class ReleaseShowcasePage(QWidget):
             play.setObjectName("showcasePlay")
             play.setEnabled(bool(path) and Path(path).exists())
             if path:
-                play.clicked.connect(lambda p=path: self.play_mp3.emit(p))
+                # QPushButton.clicked emits a bool; keep the MP3 path as the second/default argument.
+                play.clicked.connect(
+                    lambda checked=False, p=path: self.play_mp3.emit(p)
+                )
             row.addWidget(play)
             self.content_layout.addWidget(card)
 

@@ -30,6 +30,9 @@ class ReleaseBoardPage(QWidget):
 
         self.all_releases = []
         self._last_columns = 0
+        self._visible_rows = []
+        self._render_index = 0
+        self._page_size = 30
 
         self.search_timer = QTimer(self)
         self.search_timer.setSingleShot(True)
@@ -37,7 +40,7 @@ class ReleaseBoardPage(QWidget):
         self.search_timer.timeout.connect(self.apply_search)
 
         self.build_ui()
-        self.load_releases()
+        QTimer.singleShot(120, self.load_releases)
 
     def build_ui(self):
         layout = QVBoxLayout(self)
@@ -96,6 +99,12 @@ class ReleaseBoardPage(QWidget):
 
         self.scroll.setWidget(self.container)
         layout.addWidget(self.scroll, 1)
+
+        self.load_more_button = QPushButton("MEER RELEASES LADEN")
+        self.load_more_button.setMinimumHeight(42)
+        self.load_more_button.clicked.connect(self.load_more)
+        self.load_more_button.setVisible(False)
+        layout.addWidget(self.load_more_button)
 
         self.setStyleSheet(
             """
@@ -246,6 +255,7 @@ class ReleaseBoardPage(QWidget):
                     r.label,
                     r.catalog,
                     r.year,
+                    r.storage_code,
                     r.checked,
                     r.cover,
                     (
@@ -277,6 +287,40 @@ class ReleaseBoardPage(QWidget):
 
         self.apply_search()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+
+        # Bij de eerste opening is de sidebar/layout soms nog niet volledig
+        # uitgewerkt. Qt berekent dan tijdelijk een te kleine viewport, waardoor
+        # de Board als een smal raster verschijnt. Na het tonen forceren we
+        # alleen een nieuwe kolomberekening en herschikken we de reeds geladen
+        # kaarten. Er worden geen nieuwe releases geladen.
+        QTimer.singleShot(0, self.refresh_initial_layout)
+        QTimer.singleShot(120, self.refresh_initial_layout)
+
+    def refresh_initial_layout(self):
+        if not hasattr(self, "scroll"):
+            return
+
+        columns = self.calculate_columns()
+        if columns == self._last_columns:
+            return
+
+        self._last_columns = 0
+
+        if hasattr(self, "_visible_rows"):
+            rows = list(self._visible_rows)
+        else:
+            rows = self.filtered_rows() if hasattr(self, "all_releases") else []
+
+        if rows:
+            self.populate(rows)
+        else:
+            self.grid.invalidate()
+            self.grid.activate()
+            self.container.adjustSize()
+            self.scroll.viewport().update()
+
     def schedule_search(self, _text=""):
         self.search_timer.start()
 
@@ -300,23 +344,56 @@ class ReleaseBoardPage(QWidget):
 
         self.populate(rows)
 
-    def populate(self, rows):
+    def clear_tiles(self):
         while self.grid.count():
             item = self.grid.takeAt(0)
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
 
-        self.count_label.setText(f"{len(rows)} releases")
+    def start_population(self, rows):
+        self.clear_tiles()
+        self._visible_rows = list(rows)
+        self._render_index = 0
+        self.count_label.setText(f"{len(self._visible_rows)} releases")
+        self.load_more_button.setVisible(bool(self._visible_rows))
+        self.load_more(initial=True)
+
+    def load_more(self, initial=False):
+        if not self._visible_rows:
+            self.load_more_button.setVisible(False)
+            return
 
         columns = max(1, self.calculate_columns())
         self._last_columns = columns
 
-        for index, row in enumerate(rows):
+        end = min(
+            self._render_index + self._page_size,
+            len(self._visible_rows),
+        )
+
+        for index in range(self._render_index, end):
+            row = self._visible_rows[index]
             tile = ReleaseBoardTile(row)
             tile.open_release.connect(self.open_release.emit)
             tile.play_mp3.connect(self.play_mp3.emit)
             self.grid.addWidget(tile, index // columns, index % columns)
+
+        self._render_index = end
+        self.load_more_button.setVisible(
+            self._render_index < len(self._visible_rows)
+        )
+
+        if not initial and self._render_index >= len(self._visible_rows):
+            self.load_more_button.setText("ALLES GELADEN")
+        elif self._render_index < len(self._visible_rows):
+            remaining = len(self._visible_rows) - self._render_index
+            self.load_more_button.setText(
+                f"MEER RELEASES LADEN  ({remaining} over)"
+            )
+
+    def populate(self, rows):
+        self.start_population(rows)
 
     def calculate_columns(self):
         width = max(520, self.scroll.viewport().width() - 20)
@@ -325,10 +402,10 @@ class ReleaseBoardPage(QWidget):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         columns = self.calculate_columns()
-        if columns != self._last_columns:
-            self._last_columns = columns
-            if hasattr(self, "all_releases"):
-                self.populate(self.filtered_rows())
+        if columns != self._last_columns and hasattr(self, "_visible_rows"):
+            rows_to_keep = self._visible_rows[:self._render_index]
+            if rows_to_keep:
+                self.start_population(self._visible_rows)
 
     def filtered_rows(self):
         text = self.search_input.text().strip().casefold()

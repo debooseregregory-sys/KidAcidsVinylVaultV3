@@ -1,4 +1,4 @@
-from pathlib import Path
+﻿from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -61,7 +61,7 @@ replace_once(
 replace_once(
     detail,
     """        top.addWidget(\n            self.back_button\n        )\n\n        top.addStretch()\n\n        self.edit_button = QPushButton(\n""",
-    """        top.addWidget(\n            self.back_button\n        )\n\n        self.previous_button = QPushButton(\n            "[ ← VORIGE ]"\n        )\n\n        self.previous_button.setMinimumHeight(\n            38\n        )\n\n        self.previous_button.clicked.connect(\n            self.previous_release\n        )\n\n        top.addWidget(\n            self.previous_button\n        )\n\n        self.next_button = QPushButton(\n            "[ VOLGENDE → ]"\n        )\n\n        self.next_button.setMinimumHeight(\n            38\n        )\n\n        self.next_button.clicked.connect(\n            self.next_release\n        )\n\n        top.addWidget(\n            self.next_button\n        )\n\n        top.addStretch()\n\n        self.edit_button = QPushButton(\n""",
+    """        top.addWidget(\n            self.back_button\n        )\n\n        self.previous_button = QPushButton(\n            "[ ÔåÉ VORIGE ]"\n        )\n\n        self.previous_button.setMinimumHeight(\n            38\n        )\n\n        self.previous_button.clicked.connect(\n            self.previous_release\n        )\n\n        top.addWidget(\n            self.previous_button\n        )\n\n        self.next_button = QPushButton(\n            "[ VOLGENDE ÔåÆ ]"\n        )\n\n        self.next_button.setMinimumHeight(\n            38\n        )\n\n        self.next_button.clicked.connect(\n            self.next_release\n        )\n\n        top.addWidget(\n            self.next_button\n        )\n\n        top.addStretch()\n\n        self.edit_button = QPushButton(\n""",
 )
 
 replace_once(

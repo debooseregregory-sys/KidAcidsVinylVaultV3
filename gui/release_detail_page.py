@@ -1,4 +1,4 @@
-﻿import urllib.request
+import urllib.request
 import os
 
 # ============================================================
@@ -695,7 +695,7 @@ class TrackCard(QFrame):
                 )
 
         # ----------------------------------------------------
-        # TRACK EDIT
+        # TRACK ACTIONS
         # ----------------------------------------------------
 
         edit_button = QPushButton(
@@ -703,40 +703,45 @@ class TrackCard(QFrame):
         )
 
         edit_button.setMinimumWidth(
-            175
+            150
         )
 
         edit_button.clicked.connect(
             self.edit_track
         )
 
-        header.addWidget(
-            edit_button
-        )
-
-        # ----------------------------------------------------
-        # TRACK DELETE
-        # ----------------------------------------------------
-
         delete_button = QPushButton(
             "[ TRACK VERWIJDEREN ]"
         )
 
         delete_button.setMinimumWidth(
-            190
+            160
         )
 
         delete_button.clicked.connect(
             self.delete_track
         )
 
-        header.addWidget(
-            delete_button
-        )
+        actions = QHBoxLayout()
+        actions.setSpacing(7)
+        actions.addStretch()
+        actions.addWidget(edit_button)
+        actions.addWidget(delete_button)
 
         layout.addLayout(
             header
         )
+
+        self._track_header = header
+        self._track_actions = actions
+        self._edit_button = edit_button
+        self._delete_button = delete_button
+
+        layout.addLayout(
+            actions
+        )
+
+        self._responsive_small = False
 
         # ----------------------------------------------------
         # ARTIST
@@ -781,6 +786,21 @@ class TrackCard(QFrame):
     # ========================================================
     # EDIT TRACK
     # ========================================================
+
+    def resizeEvent(self, event):
+
+        super().resizeEvent(event)
+
+        # The action row stays below the metadata row. This means
+        # the track title keeps usable width at any window size.
+        # Keep the actions right-aligned for a clean desktop layout.
+        self._track_actions.setAlignment(
+            Qt.AlignmentFlag.AlignRight
+        )
+
+    # --------------------------------------------------------
+    # TRACK EDIT
+    # --------------------------------------------------------
 
     def edit_track(self):
 
@@ -1967,7 +1987,7 @@ class ReleaseDetailPage(QWidget):
         )
 
         self.cover_button.setMinimumWidth(
-            180
+            140
         )
 
         self.cover_button.clicked.connect(
@@ -2112,7 +2132,7 @@ class ReleaseDetailPage(QWidget):
         )
 
         self.checked_button.setMinimumWidth(
-            140
+            120
         )
 
         self.checked_button.setStyleSheet(
@@ -2206,7 +2226,7 @@ class ReleaseDetailPage(QWidget):
         )
 
         self.add_track_button.setMinimumWidth(
-            190
+            160
         )
 
         self.add_track_button.clicked.connect(

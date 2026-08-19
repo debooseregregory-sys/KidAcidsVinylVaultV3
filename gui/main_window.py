@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # KID ACID'S VINYLVAULT V3
 # MAIN WINDOW
 #
@@ -23,8 +23,12 @@ from PySide6.QtWidgets import (
 
 from gui.discogs_import_page import DiscogsImportPage
 from gui.release_library_page import ReleaseLibraryPage
+from gui.release_board_page import ReleaseBoardPage
 from gui.release_detail_page import ReleaseDetailPage
+from gui.release_showcase_page import ReleaseShowcasePage
 from gui.player import MP3Player
+from gui.mp3_library_page import MP3LibraryPage
+from gui.mp3_showcase_page import MP3ShowcasePage
 from gui.player_bar import PlayerBar
 
 
@@ -339,123 +343,83 @@ class VinylVaultWindow(QMainWindow):
         )
 
         # ====================================================
-        # NAVIGATION TITLE
+        # COLLECTION NAVIGATION
         # ====================================================
 
-        navigation_label = QLabel(
-            "LIBRARY"
-        )
+        navigation_label = QLabel("COLLECTIONS")
+        navigation_label.setObjectName("navigationLabel")
+        sidebar_layout.addWidget(navigation_label)
+        sidebar_layout.addSpacing(4)
 
-        navigation_label.setObjectName(
-            "navigationLabel"
-        )
+        # ----------------------------------------------------
+        # VINYL
+        # ----------------------------------------------------
 
-        sidebar_layout.addWidget(
-            navigation_label
-        )
+        vinyl_label = QLabel("VINYL")
+        vinyl_label.setObjectName("collectionSectionLabel")
+        sidebar_layout.addWidget(vinyl_label)
 
-        sidebar_layout.addSpacing(
-            4
-        )
+        self.vinyl_showcase_button = self.create_nav_button("◉", "Showcase")
+        self.vinyl_showcase_button.clicked.connect(self.show_vinyl_showcase)
+        sidebar_layout.addWidget(self.vinyl_showcase_button)
 
-        # ====================================================
-        # HOME
-        # ====================================================
+        self.library_button = self.create_nav_button("▣", "Release Library")
+        self.library_button.clicked.connect(self.show_library)
+        sidebar_layout.addWidget(self.library_button)
 
-        self.home_button = self.create_nav_button(
-            "⌂",
-            "Dashboard"
-        )
+        # ----------------------------------------------------
+        # MP3
+        # ----------------------------------------------------
 
-        self.home_button.clicked.connect(
-            self.show_home
-        )
+        mp3_label = QLabel("MP3")
+        mp3_label.setObjectName("collectionSectionLabel")
+        sidebar_layout.addSpacing(14)
+        sidebar_layout.addWidget(mp3_label)
 
-        sidebar_layout.addWidget(
-            self.home_button
-        )
+        self.mp3_showcase_button = self.create_nav_button("♫", "Showcase")
+        self.mp3_showcase_button.clicked.connect(self.show_mp3_showcase)
+        sidebar_layout.addWidget(self.mp3_showcase_button)
 
-        # ====================================================
-        # RELEASE LIBRARY
-        # ====================================================
+        self.mp3_button = self.create_nav_button("▤", "MP3 Library")
+        self.mp3_button.clicked.connect(self.show_mp3_library)
+        sidebar_layout.addWidget(self.mp3_button)
 
-        self.library_button = self.create_nav_button(
-            "▣",
-            "Release Library"
-        )
+        # ----------------------------------------------------
+        # CD
+        # ----------------------------------------------------
 
-        self.library_button.clicked.connect(
-            self.show_library
-        )
+        cd_label = QLabel("CD")
+        cd_label.setObjectName("collectionSectionLabel")
+        sidebar_layout.addSpacing(14)
+        sidebar_layout.addWidget(cd_label)
 
-        sidebar_layout.addWidget(
-            self.library_button
-        )
+        self.cd_showcase_button = self.create_nav_button("●", "Showcase")
+        self.cd_showcase_button.setEnabled(False)
+        self.cd_showcase_button.setToolTip("CD-module wordt toegevoegd zodra de CD-collectielijst is ingevoerd.")
+        sidebar_layout.addWidget(self.cd_showcase_button)
 
-        # ====================================================
-        # DISCOGS
-        # ====================================================
+        self.cd_library_button = self.create_nav_button("▤", "CD Library")
+        self.cd_library_button.setEnabled(False)
+        self.cd_library_button.setToolTip("CD-module wordt toegevoegd zodra de CD-collectielijst is ingevoerd.")
+        sidebar_layout.addWidget(self.cd_library_button)
 
-        self.discogs_button = self.create_nav_button(
-            "◈",
-            "Discogs Import"
-        )
+        # ----------------------------------------------------
+        # TOOLS
+        # ----------------------------------------------------
 
-        self.discogs_button.clicked.connect(
-            self.show_discogs
-        )
+        tools_label = QLabel("TOOLS")
+        tools_label.setObjectName("navigationLabel")
+        sidebar_layout.addSpacing(22)
+        sidebar_layout.addWidget(tools_label)
 
-        sidebar_layout.addWidget(
-            self.discogs_button
-        )
+        self.discogs_button = self.create_nav_button("◈", "Discogs Import")
+        self.discogs_button.clicked.connect(self.show_discogs)
+        sidebar_layout.addWidget(self.discogs_button)
 
-        # ====================================================
-        # FUTURE NAVIGATION
-        # ====================================================
-
-        tools_label = QLabel(
-            "TOOLS"
-        )
-
-        tools_label.setObjectName(
-            "navigationLabel"
-        )
-
-        sidebar_layout.addSpacing(
-            22
-        )
-
-        sidebar_layout.addWidget(
-            tools_label
-        )
-
-        self.mp3_button = self.create_nav_button(
-            "♫",
-            "MP3 Library"
-        )
-
-        self.mp3_button.setEnabled(
-            False
-        )
-
-        sidebar_layout.addWidget(
-            self.mp3_button
-        )
-
-        self.settings_button = self.create_nav_button(
-            "⚙",
-            "Instellingen"
-        )
-
-        self.settings_button.setEnabled(
-            False
-        )
-
-        sidebar_layout.addWidget(
-            self.settings_button
-        )
-
-        sidebar_layout.addStretch()
+        self.settings_button = self.create_nav_button("⚙", "Instellingen")
+        self.settings_button.setEnabled(False)
+        self.settings_button.setToolTip("Instellingen worden later toegevoegd.")
+        sidebar_layout.addWidget(self.settings_button)
 
         # ====================================================
         # SIDEBAR FOOTER
@@ -582,6 +546,72 @@ class VinylVaultWindow(QMainWindow):
         )
 
         # ====================================================
+        # RELEASE BOARD
+        # ====================================================
+
+        self.board_page = ReleaseBoardPage()
+
+        self.board_page.open_release.connect(
+            self.show_showcase
+        )
+
+        self.board_page.play_mp3.connect(
+            self.player_bar_play
+        )
+
+        self.pages.addWidget(
+            self.board_page
+        )
+        # ====================================================
+        # RELEASE SHOWCASE
+        # ====================================================
+
+        self.showcase_page = ReleaseShowcasePage()
+
+        self.showcase_page.back_requested.connect(
+            self.show_board
+        )
+
+        self.showcase_page.edit_requested.connect(
+            self.open_release
+        )
+
+        self.showcase_page.play_mp3.connect(
+            self.player_bar_play
+        )
+
+        self.pages.addWidget(
+            self.showcase_page
+        )
+
+
+        # ====================================================
+        # DASHBOARD
+        # ====================================================
+
+        self.home_button = self.create_nav_button(
+            "⌂",
+            "Dashboard"
+        )
+
+        self.home_button.clicked.connect(
+            self.show_home
+        )
+
+        sidebar_layout.addWidget(
+            self.home_button
+        )
+
+        # ====================================================
+        # VINYL
+        # ====================================================
+
+        vinyl_label = QLabel("VINYL")
+        vinyl_label.setObjectName("navigationLabel")
+        sidebar_layout.addSpacing(12)
+        sidebar_layout.addWidget(vinyl_label)
+
+        # ====================================================
         # RELEASE LIBRARY
         # ====================================================
 
@@ -619,12 +649,40 @@ class VinylVaultWindow(QMainWindow):
 
         self.discogs_page = DiscogsImportPage()
 
+        # ====================================================
+        # MP3 LIBRARY
+        # ====================================================
+
+        self.mp3_library_page = MP3LibraryPage()
+
+        self.mp3_library_page.play_mp3.connect(
+            self.player_bar_play
+        )
+
+        self.pages.addWidget(
+            self.mp3_library_page
+        )
+
         self.discogs_page.import_finished.connect(
             self.refresh_after_import
         )
 
         self.pages.addWidget(
             self.discogs_page
+        )
+
+        # ====================================================
+        # MP3 SHOWCASE
+        # ====================================================
+
+        self.mp3_showcase_page = MP3ShowcasePage()
+
+        self.mp3_showcase_page.play_mp3.connect(
+            self.player_bar_play
+        )
+
+        self.pages.addWidget(
+            self.mp3_showcase_page
         )
 
         right_layout.addWidget(
@@ -996,8 +1054,8 @@ class VinylVaultWindow(QMainWindow):
     ):
 
         buttons = [
-            self.home_button,
-            self.library_button,
+            self.home_button,            self.library_button,
+            self.vinyl_showcase_button,
             self.discogs_button,
         ]
 
@@ -1019,6 +1077,32 @@ class VinylVaultWindow(QMainWindow):
         self.current_nav = button
 
     # ========================================================
+    # VINYL SHOWCASE
+    # ========================================================
+
+    def show_vinyl_showcase(self):
+        self.pages.setCurrentWidget(self.board_page)
+        self.page_title.setText("Vinyl Showcase")
+        self.set_active_nav(self.vinyl_showcase_button)
+        if hasattr(self.board_page, "load_releases"):
+            self.board_page.load_releases()
+    def show_mp3_showcase(self):
+        self.pages.setCurrentWidget(self.mp3_showcase_page)
+        self.page_title.setText("MP3 Showcase")
+        self.set_active_nav(self.mp3_showcase_button)
+        if hasattr(self.mp3_showcase_page, "search"):
+            self.mp3_showcase_page.search.setFocus()
+
+    # ========================================================
+    # MP3 LIBRARY
+    # ========================================================
+
+    def show_mp3_library(self):
+        self.pages.setCurrentWidget(self.mp3_library_page)
+        self.page_title.setText("MP3 Library")
+        self.set_active_nav(self.mp3_button)
+
+    # ========================================================
     # HOME
     # ========================================================
 
@@ -1036,6 +1120,26 @@ class VinylVaultWindow(QMainWindow):
 
         self.set_active_nav(
             self.home_button
+        )
+
+    # ========================================================
+    # RELEASE BOARD
+    # ========================================================
+
+    def show_board(
+        self
+    ):
+
+        self.pages.setCurrentWidget(
+            self.board_page
+        )
+
+        self.page_title.setText(
+            "Release Board"
+        )
+
+        self.set_active_nav(
+            self.board_button
         )
 
     # ========================================================
@@ -1080,28 +1184,65 @@ class VinylVaultWindow(QMainWindow):
         release_ids=None
     ):
 
-        if release_ids is None:
-
-            release_ids = self.library_page.visible_release_ids()
-
-        self.detail_page.load_release(
+        self.showcase_page.load_release(
             release_id
         )
 
-        self.detail_page.set_navigation_ids(
-            release_ids
-        )
-
         self.pages.setCurrentWidget(
-            self.detail_page
+            self.showcase_page
         )
 
         self.page_title.setText(
-            "Release Detail"
+            "Vinyl Showcase"
         )
 
         self.set_active_nav(
-            self.library_button
+            self.vinyl_showcase_button
+        )
+
+    # ========================================================
+    # RELEASE SHOWCASE
+    # ========================================================
+
+    def show_showcase(
+        self,
+        release_id
+    ):
+
+        self.showcase_page.load_release(
+            release_id
+        )
+
+        self.pages.setCurrentWidget(
+            self.showcase_page
+        )
+
+        self.page_title.setText(
+            "Release"
+        )
+
+        self.set_active_nav(
+            self.board_button
+        )
+
+    # ========================================================
+    # MP3 LIBRARY
+    # ========================================================
+
+    def show_mp3_library(self):
+
+        self.mp3_library_page.load_data()
+
+        self.pages.setCurrentWidget(
+            self.mp3_library_page
+        )
+
+        self.page_title.setText(
+            "MP3 Library"
+        )
+
+        self.set_active_nav(
+            self.mp3_button
         )
 
     # ========================================================
@@ -1130,6 +1271,27 @@ class VinylVaultWindow(QMainWindow):
         ):
 
             self.discogs_page.release_id_input.setFocus()
+
+    # ========================================================
+    # MP3 SHOWCASE
+    # ========================================================
+
+    def show_mp3_showcase(
+        self
+    ):
+
+        self.pages.setCurrentWidget(
+            self.mp3_showcase_page
+        )
+
+        self.page_title.setText(
+            "MP3 Showcase"
+        )
+
+        if hasattr(self, "mp3_showcase_button"):
+            self.set_active_nav(
+                self.mp3_showcase_button
+            )
 
     # ========================================================
     # PLAY MP3
@@ -1234,6 +1396,16 @@ class VinylVaultWindow(QMainWindow):
                 font-weight: bold;
                 padding-left: 12px;
                 letter-spacing: 1.5px;
+            }
+
+            QLabel#collectionSectionLabel {
+                background: transparent;
+                color: #d84b91;
+                font-size: 10px;
+                font-weight: 900;
+                padding-left: 12px;
+                margin-top: 2px;
+                letter-spacing: 1.8px;
             }
 
             QLabel#sidebarFooter {
@@ -1558,6 +1730,7 @@ def main():
 
     window = VinylVaultWindow()
 
+    window.showMaximized()
     window.show()
 
     sys.exit(
