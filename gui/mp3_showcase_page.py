@@ -2,10 +2,28 @@ from pathlib import Path
 import math
 
 from PySide6.QtCore import Qt, QTimer, Signal, QPointF, QRectF
-from PySide6.QtGui import QPixmap, QPainter, QPen, QBrush, QColor, QFont
+from PySide6.QtGui import (
+    QPixmap,
+    QPainter,
+    QPen,
+    QBrush,
+    QColor,
+    QFont,
+    QPainterPath,
+    QLinearGradient,
+    QRadialGradient,
+)
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QListWidget, QListWidgetItem, QFrame, QSizePolicy,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QListWidget,
+    QListWidgetItem,
+    QFrame,
+    QSizePolicy,
 )
 
 from database.database import get_connection
@@ -18,10 +36,10 @@ except ImportError:
 
 
 class VinylDeckWidget(QWidget):
-    """Visual turntable for the MP3 Showcase.
+    """Detailed visual turntable used by the MP3 Showcase.
 
-    This widget is deliberately self-contained: MP3 playback remains handled
-    by the existing play_mp3 signal in MP3ShowcasePage.
+    Playback itself remains handled by MP3ShowcasePage. This widget only
+    animates the platter and the mechanical tonearm.
     """
 
     def __init__(self, parent=None):
@@ -30,11 +48,14 @@ class VinylDeckWidget(QWidget):
         self.title = "VINYL PLAYER"
         self.playing = False
         self.angle = 0.0
-        self.arm_angle = -38.0
+        self.arm_progress = 0.0
+        self.power_on = True
+        self.pitch = 0.0
 
         self.timer = QTimer(self)
-        self.timer.setInterval(35)
+        self.timer.setInterval(30)
         self.timer.timeout.connect(self._tick)
+        self.timer.start()
 
         self.setMinimumHeight(500)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -45,193 +66,440 @@ class VinylDeckWidget(QWidget):
         self.update()
 
     def set_playing(self, playing):
-        self.playing = bool(playing)
-        if self.playing:
-            self.timer.start()
-        else:
-            self.timer.stop()
+        self.playing = bool(playing) and self.power_on
+        self.update()
+
+    def set_power(self, on):
+        self.power_on = bool(on)
+        if not self.power_on:
+            self.playing = False
         self.update()
 
     def _tick(self):
-        self.angle = (self.angle + 4.5) % 360
-        target = 18.0 if self.playing else -38.0
-        self.arm_angle += (target - self.arm_angle) * 0.11
+        if self.playing and self.power_on:
+            self.angle = (self.angle + 2.8) % 360.0
+
+        target = 1.0 if self.playing and self.power_on else 0.0
+        self.arm_progress += (target - self.arm_progress) * 0.075
+        if abs(target - self.arm_progress) < 0.0005:
+            self.arm_progress = target
         self.update()
+
+    @staticmethod
+    def _lerp(a, b, amount):
+        return QPointF(
+            a.x() + (b.x() - a.x()) * amount,
+            a.y() + (b.y() - a.y()) * amount,
+        )
+
+    def _layout(self):
+        w = float(self.width())
+        h = float(self.height())
+        # Keep the platter visually central and slightly lower, leaving room
+        # for the mechanical controls above it.
+        r = min((w - 235.0) * 0.44, (h - 185.0) * 0.44)
+        r = max(145.0, min(r, 235.0))
+        cx = min(w * 0.47, w - r - 105.0)
+        cy = min(h * 0.53, h - r - 105.0)
+        return w, h, cx, cy, r
+
+    def _text(self, p, rect, text, size=9, color=None, weight=QFont.Weight.Bold,
+              align=Qt.AlignmentFlag.AlignLeft):
+        p.setPen(color or QColor("#8f919a"))
+        p.setFont(QFont("Segoe UI", size, weight))
+        p.drawText(rect, align, str(text))
+
+    def _draw_shadowed_ellipse(self, p, center, rx, ry, shadow=QColor(0, 0, 0, 130)):
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(shadow))
+        p.drawEllipse(QPointF(center.x() + 7, center.y() + 9), rx + 6, ry + 6)
 
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
 
-        w = self.width()
-        h = self.height()
-        p.fillRect(self.rect(), QColor("#0b0b0f"))
+        w, h, cx, cy, r = self._layout()
 
-        # Turntable body.
-        deck = QRectF(10, 10, w - 20, h - 20)
-        p.setBrush(QBrush(QColor("#202126")))
-        p.setPen(QPen(QColor("#4a4a52"), 2))
+        # ------------------------------------------------------------------
+        # CHASSIS
+        # ------------------------------------------------------------------
+        p.fillRect(self.rect(), QColor("#090a0d"))
+
+        deck = QRectF(8, 8, w - 16, h - 16)
+        gradient = QLinearGradient(0, 8, 0, h - 8)
+        gradient.setColorAt(0.0, QColor("#292b31"))
+        gradient.setColorAt(0.45, QColor("#191a1f"))
+        gradient.setColorAt(1.0, QColor("#101116"))
+        p.setBrush(QBrush(gradient))
+        p.setPen(QPen(QColor("#454750"), 2))
         p.drawRoundedRect(deck, 18, 18)
-        p.setBrush(QBrush(QColor("#151519")))
-        p.setPen(QPen(QColor("#09090b"), 2))
-        p.drawRoundedRect(QRectF(22, 22, w - 44, h - 44), 14, 14)
 
-        # Brushed-metal inner panel.
-        p.setBrush(QBrush(QColor("#19191d")))
-        p.setPen(QPen(QColor("#303037"), 1))
-        p.drawRoundedRect(QRectF(34, 34, w - 68, h - 68), 12, 12)
+        inner = QRectF(17, 17, w - 34, h - 34)
+        p.setBrush(QBrush(QColor("#111217")))
+        p.setPen(QPen(QColor("#07080a"), 2))
+        p.drawRoundedRect(inner, 14, 14)
 
-        # Platter.
-        cx = w * 0.42
-        cy = h * 0.42
-        r = min(w * 0.31, h * 0.285)
+        panel = QRectF(28, 28, w - 56, h - 56)
+        p.setBrush(QBrush(QColor("#17181d")))
+        p.setPen(QPen(QColor("#30323a"), 1))
+        p.drawRoundedRect(panel, 11, 11)
 
+        self._text(
+            p,
+            QRectF(42, 35, 350, 22),
+            "KID ACID'S VINYL VAULT",
+            12,
+            QColor("#d84b91"),
+            QFont.Weight.Black,
+        )
+        self._text(
+            p,
+            QRectF(42, 57, 390, 17),
+            "MP3 SHOWCASE / PROFESSIONAL DIRECT DRIVE",
+            8,
+        )
+
+        # Decorative screws and inset seams.
+        for x, y in ((43, 82), (w - 43, 82), (43, h - 80), (w - 43, h - 80)):
+            p.setBrush(QBrush(QColor("#4d4f57")))
+            p.setPen(QPen(QColor("#090a0c"), 2))
+            p.drawEllipse(QPointF(x, y), 5, 5)
+            p.setPen(QPen(QColor("#8b8d95"), 1))
+            p.drawLine(QPointF(x - 2, y), QPointF(x + 2, y))
+
+        # ------------------------------------------------------------------
+        # PLATTER + VINYL
+        # ------------------------------------------------------------------
+        self._draw_shadowed_ellipse(p, QPointF(cx, cy), r + 17, r + 17)
+
+        platter_gradient = QRadialGradient(QPointF(cx - r * 0.25, cy - r * 0.25), r + 20)
+        platter_gradient.setColorAt(0.0, QColor("#555861"))
+        platter_gradient.setColorAt(0.62, QColor("#303239"))
+        platter_gradient.setColorAt(1.0, QColor("#17181d"))
+        p.setBrush(QBrush(platter_gradient))
+        p.setPen(QPen(QColor("#08090b"), 3))
+        p.drawEllipse(QPointF(cx, cy), r + 18, r + 18)
+
+        p.setBrush(QBrush(QColor("#22242a")))
+        p.setPen(QPen(QColor("#676a73"), 2))
+        p.drawEllipse(QPointF(cx, cy), r + 10, r + 10)
+
+        # Strobe dots rotate subtly with the platter.
+        for i in range(60):
+            a = math.radians(i * 6.0 + self.angle * 0.16)
+            rr = r + 5
+            dot = QPointF(cx + math.cos(a) * rr, cy + math.sin(a) * rr)
+            major = i % 5 == 0
+            p.setPen(QPen(QColor("#a6a8af"), 2.5 if major else 1.4))
+            p.drawPoint(dot)
+
+        # Record shadow.
         p.setBrush(QBrush(QColor(0, 0, 0, 150)))
         p.setPen(Qt.PenStyle.NoPen)
-        p.drawEllipse(QPointF(cx + 7, cy + 9), r + 10, r + 10)
-        p.setBrush(QBrush(QColor("#34343a")))
-        p.setPen(QPen(QColor("#5b5b63"), 3))
-        p.drawEllipse(QPointF(cx, cy), r + 6, r + 6)
+        p.drawEllipse(QPointF(cx + 3, cy + 4), r, r)
 
-        # Vinyl record.
-        p.setBrush(QBrush(QColor("#050506")))
-        p.setPen(QPen(QColor("#080809"), 1))
+        record_gradient = QRadialGradient(QPointF(cx - r * 0.35, cy - r * 0.35), r * 1.05)
+        record_gradient.setColorAt(0.0, QColor("#24262b"))
+        record_gradient.setColorAt(0.18, QColor("#0d0e11"))
+        record_gradient.setColorAt(0.78, QColor("#030406"))
+        record_gradient.setColorAt(1.0, QColor("#111217"))
+        p.setBrush(QBrush(record_gradient))
+        p.setPen(QPen(QColor("#050609"), 2))
         p.drawEllipse(QPointF(cx, cy), r, r)
 
+        # Grooves and moving highlight.
         p.save()
         p.translate(cx, cy)
         p.rotate(self.angle)
         p.setBrush(Qt.BrushStyle.NoBrush)
-        for rr in (0.94, 0.89, 0.84, 0.79, 0.74, 0.68, 0.62, 0.56):
-            p.setPen(QPen(QColor(40, 40, 44), 1))
-            p.drawEllipse(QPointF(0, 0), r * rr, r * rr)
-        # Moving vinyl reflection.
-        p.setPen(QPen(QColor(115, 115, 122, 70), 2))
-        p.drawArc(QRectF(-r * .9, -r * .9, r * 1.8, r * 1.8), 12 * 16, 48 * 16)
+        for factor in (0.985, 0.965, 0.945, 0.925, 0.905, 0.885, 0.865,
+                       0.845, 0.825, 0.805, 0.785, 0.765, 0.745, 0.725,
+                       0.705, 0.685, 0.665, 0.645, 0.625, 0.605):
+            p.setPen(QPen(QColor(70, 72, 78, 90), 1))
+            p.drawEllipse(QPointF(0, 0), r * factor, r * factor)
+
+        p.setPen(QPen(QColor(225, 225, 230, 24), 3))
+        p.drawArc(QRectF(-r * 0.88, -r * 0.88, r * 1.76, r * 1.76), 12 * 16, 55 * 16)
+        p.setPen(QPen(QColor(216, 75, 145, 85), 2))
+        p.drawArc(QRectF(-r * 0.73, -r * 0.73, r * 1.46, r * 1.46), 198 * 16, 38 * 16)
         p.restore()
 
-        # Label.
-        label_r = r * 0.29
-        p.setBrush(QBrush(QColor("#b53e76")))
-        p.setPen(QPen(QColor("#e07aa5"), 2))
+        # Label and spindle.
+        label_r = min(61.0, r * 0.255)
+        label_gradient = QRadialGradient(QPointF(cx - label_r * 0.25, cy - label_r * 0.25), label_r)
+        label_gradient.setColorAt(0.0, QColor("#b94b7d"))
+        label_gradient.setColorAt(0.72, QColor("#711b45"))
+        label_gradient.setColorAt(1.0, QColor("#45102b"))
+        p.setBrush(QBrush(label_gradient))
+        p.setPen(QPen(QColor("#ef9fc2"), 2))
         p.drawEllipse(QPointF(cx, cy), label_r, label_r)
-        p.setPen(QPen(QColor("#f4bfd5"), 1))
-        p.setFont(QFont("Segoe UI", max(7, int(label_r * .15)), QFont.Weight.Bold))
-        p.drawText(
-            QRectF(cx - label_r, cy - label_r * .32, label_r * 2, label_r * .64),
-            Qt.AlignmentFlag.AlignCenter,
+        p.setPen(QPen(QColor("#e2a1be"), 1))
+        p.drawEllipse(QPointF(cx, cy), label_r * 0.78, label_r * 0.78)
+        self._text(
+            p,
+            QRectF(cx - label_r, cy - 11, label_r * 2, 18),
             "KID ACID",
+            max(8, int(label_r * 0.15)),
+            QColor("#f8e9f0"),
+            QFont.Weight.Black,
+            Qt.AlignmentFlag.AlignCenter,
         )
-        p.setBrush(QBrush(QColor("#d7d7dc")))
+        self._text(
+            p,
+            QRectF(cx - label_r, cy + 7, label_r * 2, 15),
+            "VINYL VAULT",
+            max(5, int(label_r * 0.075)),
+            QColor("#edb2ca"),
+            QFont.Weight.Bold,
+            Qt.AlignmentFlag.AlignCenter,
+        )
+        p.setBrush(QBrush(QColor("#cfd0d5")))
+        p.setPen(QPen(QColor("#6e7078"), 1))
+        p.drawEllipse(QPointF(cx, cy), 5.5, 5.5)
+        p.setBrush(QBrush(QColor("#17181c")))
         p.setPen(Qt.PenStyle.NoPen)
-        p.drawEllipse(QPointF(cx, cy), 4.5, 4.5)
+        p.drawEllipse(QPointF(cx, cy), 2.2, 2.2)
 
-        # -------------------- REALISTIC TONEARM --------------------
-        # Pivot sits to the right of the platter. The arm is drawn as a real
-        # assembly: counterweight -> pivot -> arm tube -> headshell -> stylus.
-        pivot = QPointF(w * 0.78, h * 0.225)
-        arm_len = min(w * 0.40, h * 0.40)
-        a = math.radians(self.arm_angle)
-        direction = QPointF(math.cos(a), math.sin(a))
-        end = QPointF(
-            pivot.x() + direction.x() * arm_len,
-            pivot.y() + direction.y() * arm_len,
+        # ------------------------------------------------------------------
+        # TONEARM: LONG, MECHANICAL, WITH A REAL REST CRADLE
+        # ------------------------------------------------------------------
+        pivot = QPointF(w - 112, 122)
+        rest_stylus = QPointF(cx + r + 48, cy - r * 0.31)
+        play_stylus = QPointF(cx + r * 0.68, cy + r * 0.10)
+        stylus = self._lerp(rest_stylus, play_stylus, self.arm_progress)
+
+        # Cradle remains visible at the true rest position.
+        cradle = QPointF(rest_stylus.x() + 5, rest_stylus.y() - 2)
+        p.setPen(QPen(QColor("#07080a"), 3))
+        p.setBrush(QBrush(QColor("#25272d")))
+        p.drawRoundedRect(QRectF(cradle.x() - 18, cradle.y() - 13, 36, 26), 5, 5)
+        p.setPen(QPen(QColor("#62656e"), 2))
+        p.drawLine(QPointF(cradle.x() - 10, cradle.y() - 6), QPointF(cradle.x() + 10, cradle.y() - 6))
+        p.drawLine(QPointF(cradle.x() - 10, cradle.y() + 6), QPointF(cradle.x() + 10, cradle.y() + 6))
+        p.setPen(QPen(QColor("#9699a1"), 1))
+        p.drawLine(QPointF(cradle.x() - 12, cradle.y()), QPointF(cradle.x() + 12, cradle.y()))
+
+        # Geometry for the long S-shaped arm. The stylus end follows the
+        # platter naturally while the pivot stays fixed.
+        dx = stylus.x() - pivot.x()
+        dy = stylus.y() - pivot.y()
+        arm_angle = math.degrees(math.atan2(dy, dx))
+        length = max(1.0, math.hypot(dx, dy))
+        ux, uy = dx / length, dy / length
+        perp = QPointF(-uy, ux)
+
+        elbow = QPointF(
+            pivot.x() + dx * 0.55 + perp.x() * 20,
+            pivot.y() + dy * 0.55 + perp.y() * 20,
+        )
+        headshell_center = QPointF(
+            stylus.x() - ux * 25,
+            stylus.y() - uy * 25,
         )
 
-        # Counterweight behind the pivot.
+        # Counterweight is behind the pivot and stays mechanically attached.
         counter = QPointF(pivot.x() - 48, pivot.y() - 2)
-        p.setPen(QPen(QColor("#111114"), 15, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.setPen(QPen(QColor("#07080a"), 17, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         p.drawLine(pivot, counter)
-        p.setPen(QPen(QColor("#85858d"), 10, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.setPen(QPen(QColor("#70737c"), 11, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         p.drawLine(pivot, counter)
-        p.setBrush(QBrush(QColor("#55555d")))
-        p.setPen(QPen(QColor("#a0a0a7"), 2))
+        p.setPen(QPen(QColor("#c4c6cc"), 2))
+        p.drawLine(QPointF(pivot.x(), pivot.y() - 3), QPointF(counter.x(), counter.y() - 3))
+        p.setBrush(QBrush(QColor("#4a4c53")))
+        p.setPen(QPen(QColor("#92959d"), 2))
         p.drawEllipse(counter, 17, 17)
-        p.setPen(QPen(QColor("#24242a"), 2))
-        p.drawEllipse(counter, 9, 9)
+        p.setBrush(QBrush(QColor("#23252a")))
+        p.setPen(QPen(QColor("#666972"), 2))
+        p.drawEllipse(counter, 10, 10)
+        p.setPen(QPen(QColor("#aeb0b7"), 2))
+        for offset in (-5, 0, 5):
+            p.drawLine(
+                QPointF(counter.x() - 13, counter.y() + offset),
+                QPointF(counter.x() + 13, counter.y() + offset),
+            )
 
-        # Main arm tube with dark outline and metal highlight.
-        p.setPen(QPen(QColor("#08080a"), 17, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-        p.drawLine(pivot, end)
-        p.setPen(QPen(QColor("#a8a8b0"), 11, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-        p.drawLine(pivot, end)
-        p.setPen(QPen(QColor("#dedee2"), 2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-        p.drawLine(pivot + QPointF(0, -2), end + QPointF(0, -2))
+        # Main arm path with dark outline, metal body and highlight.
+        arm_path = QPainterPath()
+        arm_path.moveTo(pivot)
+        arm_path.cubicTo(
+            QPointF(pivot.x() - 12, pivot.y() + 5),
+            QPointF(elbow.x() + 12, elbow.y() - 8),
+            elbow,
+        )
+        arm_path.cubicTo(
+            QPointF(elbow.x() - 15, elbow.y() + 6),
+            QPointF(headshell_center.x() + 18, headshell_center.y() - 2),
+            headshell_center,
+        )
+        p.setPen(QPen(QColor("#06070a"), 18, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawPath(arm_path)
+        p.setPen(QPen(QColor("#9fa2aa"), 12, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+        p.drawPath(arm_path)
+        p.setPen(QPen(QColor("#e1e2e5"), 2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        highlight = QPainterPath()
+        highlight.moveTo(QPointF(pivot.x() - 1, pivot.y() - 2))
+        highlight.cubicTo(
+            QPointF(pivot.x() + 6, pivot.y() - 1),
+            QPointF(elbow.x() + 4, elbow.y() - 9),
+            QPointF(elbow.x(), elbow.y() - 2),
+        )
+        highlight.cubicTo(
+            QPointF(elbow.x() - 3, elbow.y() + 1),
+            QPointF(headshell_center.x() + 16, headshell_center.y() - 6),
+            QPointF(headshell_center.x(), headshell_center.y() - 4),
+        )
+        p.drawPath(highlight)
 
-        # Headshell.
+        # Headshell follows the arm direction.
         shell = QPointF(
-            end.x() + direction.x() * 20,
-            end.y() + direction.y() * 20,
+            stylus.x() - ux * 40,
+            stylus.y() - uy * 40,
         )
         p.save()
         p.translate(shell)
-        p.rotate(self.arm_angle)
-        p.setBrush(QBrush(QColor("#25252a")))
-        p.setPen(QPen(QColor("#b4b4bb"), 2))
-        p.drawRoundedRect(QRectF(-5, -11, 43, 22), 4, 4)
-        p.setBrush(QBrush(QColor("#111114")))
-        p.setPen(QPen(QColor("#777780"), 1))
-        p.drawRect(QRectF(18, -7, 18, 14))
-        # Cartridge screws.
-        p.setBrush(QBrush(QColor("#c0c0c4")))
+        p.rotate(arm_angle)
+        p.setBrush(QBrush(QColor("#b9bbc1")))
+        p.setPen(QPen(QColor("#08090b"), 3))
+        p.drawRoundedRect(QRectF(-27, -9, 34, 18), 3, 3)
+        p.setBrush(QBrush(QColor("#30323a")))
+        p.setPen(QPen(QColor("#70737c"), 1))
+        p.drawRoundedRect(QRectF(4, -7, 22, 14), 2, 2)
+        p.setBrush(QBrush(QColor("#15161a")))
+        p.setPen(QPen(QColor("#868992"), 1))
+        p.drawRect(QRectF(9, -5, 13, 10))
+        p.setBrush(QBrush(QColor("#d5d6da")))
         p.setPen(Qt.PenStyle.NoPen)
-        p.drawEllipse(QPointF(22, -4), 1.5, 1.5)
-        p.drawEllipse(QPointF(22, 4), 1.5, 1.5)
+        p.drawEllipse(QPointF(12, -3.5), 1.5, 1.5)
+        p.drawEllipse(QPointF(12, 3.5), 1.5, 1.5)
         p.restore()
 
-        # Stylus and needle.
-        stylus_top = QPointF(
-            shell.x() + direction.x() * 31,
-            shell.y() + direction.y() * 31,
-        )
-        stylus_tip = QPointF(stylus_top.x(), stylus_top.y() + 9)
-        p.setPen(QPen(QColor("#d8d8dd"), 2))
-        p.drawLine(stylus_top, stylus_tip)
-        p.setBrush(QBrush(QColor("#f0f0f2")))
-        p.drawEllipse(stylus_tip, 2.3, 2.3)
-
-        # Pivot housing.
-        p.setBrush(QBrush(QColor("#3a3a41")))
-        p.setPen(QPen(QColor("#b3b3ba"), 2))
-        p.drawEllipse(pivot, 20, 20)
-        p.setBrush(QBrush(QColor("#111114")))
-        p.setPen(QPen(QColor("#686870"), 2))
-        p.drawEllipse(pivot, 8, 8)
-        p.setBrush(QBrush(QColor("#c7c7cc")))
+        # Cartridge body and stylus assembly.
+        cartridge = QPointF(stylus.x() - ux * 12, stylus.y() - uy * 12)
+        p.save()
+        p.translate(cartridge)
+        p.rotate(arm_angle)
+        p.setBrush(QBrush(QColor("#15161a")))
+        p.setPen(QPen(QColor("#8f929a"), 1))
+        p.drawRoundedRect(QRectF(-6, -5, 16, 10), 2, 2)
+        p.setBrush(QBrush(QColor("#d84b91")))
         p.setPen(Qt.PenStyle.NoPen)
-        p.drawEllipse(pivot, 3, 3)
+        p.drawRect(QRectF(5, -3, 4, 6))
+        p.restore()
 
-        # Small cue lever beside the arm.
-        cue_x = w * 0.91
-        cue_y = h * 0.31
-        p.setPen(QPen(QColor("#77777f"), 4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-        p.drawLine(QPointF(cue_x, cue_y + 20), QPointF(cue_x, cue_y - 8))
-        p.setBrush(QBrush(QColor("#4c4c53")))
-        p.setPen(QPen(QColor("#8e8e95"), 1))
-        p.drawRoundedRect(QRectF(cue_x - 7, cue_y - 13, 14, 8), 3, 3)
+        # Stylus is explicitly drawn to the record surface.
+        stylus_base = QPointF(stylus.x() - ux * 6, stylus.y() - uy * 6)
+        stylus_tip = QPointF(stylus.x() + ux * 3, stylus.y() + uy * 3)
+        p.setPen(QPen(QColor("#08090b"), 5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.drawLine(stylus_base, stylus_tip)
+        p.setPen(QPen(QColor("#f1f2f4"), 1.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.drawLine(stylus_base, stylus_tip)
+        p.setBrush(QBrush(QColor("#ffffff")))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawEllipse(stylus_tip, 2.2, 2.2)
 
-        # Status and track information.
-        p.setPen(QPen(QColor("#d84b91")))
-        p.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-        p.drawText(QRectF(44, h - 132, w - 88, 20), Qt.AlignmentFlag.AlignCenter, "VINYL PLAYER")
+        # Pivot housing, drawn last so it sits visibly above the arm tube.
+        pivot_gradient = QRadialGradient(QPointF(pivot.x() - 7, pivot.y() - 7), 25)
+        pivot_gradient.setColorAt(0.0, QColor("#777a82"))
+        pivot_gradient.setColorAt(0.65, QColor("#3a3c43"))
+        pivot_gradient.setColorAt(1.0, QColor("#17181d"))
+        p.setBrush(QBrush(pivot_gradient))
+        p.setPen(QPen(QColor("#07080a"), 4))
+        p.drawEllipse(pivot, 27, 27)
+        p.setBrush(QBrush(QColor("#202228")))
+        p.setPen(QPen(QColor("#777a83"), 2))
+        p.drawEllipse(pivot, 17, 17)
+        p.setBrush(QBrush(QColor("#c4c6ca")))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawEllipse(pivot, 4, 4)
+        p.setPen(QPen(QColor("#8f9299"), 1))
+        p.drawLine(QPointF(pivot.x() - 8, pivot.y()), QPointF(pivot.x() + 8, pivot.y()))
+        p.drawLine(QPointF(pivot.x(), pivot.y() - 8), QPointF(pivot.x(), pivot.y() + 8))
 
-        p.setPen(QPen(QColor("#f0f0f3")))
-        p.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        p.drawText(QRectF(44, h - 110, w - 88, 22), Qt.AlignmentFlag.AlignCenter, self.artist)
-        p.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        p.drawText(QRectF(38, h - 87, w - 76, 27), Qt.AlignmentFlag.AlignCenter, self.title)
+        # Cueing lever and lock mechanism.
+        cue_x = w - 55
+        cue_y = 210
+        p.setPen(QPen(QColor("#686b73"), 4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.drawLine(QPointF(cue_x, cue_y + 25), QPointF(cue_x, cue_y - 5))
+        p.setPen(QPen(QColor("#a5a7ad"), 2))
+        p.drawLine(QPointF(cue_x - 7, cue_y - 8), QPointF(cue_x + 8, cue_y - 8))
+        p.setBrush(QBrush(QColor("#2b2d33")))
+        p.setPen(QPen(QColor("#70737b"), 1))
+        p.drawRoundedRect(QRectF(cue_x - 8, cue_y + 21, 16, 9), 3, 3)
 
-        status_color = QColor("#77d999") if self.playing else QColor("#77777f")
-        status = "●  PLAYING" if self.playing else "■  READY"
-        p.setPen(QPen(status_color))
-        p.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-        p.drawText(QRectF(40, h - 58, w - 80, 18), Qt.AlignmentFlag.AlignCenter, status)
+        # ------------------------------------------------------------------
+        # LEFT PITCH CONTROL
+        # ------------------------------------------------------------------
+        pitch_x = 48
+        top = 210
+        bottom = max(top + 150, h - 155)
+        center = (top + bottom) / 2
+        p.setPen(QPen(QColor("#07080a"), 11))
+        p.drawLine(QPointF(pitch_x, top), QPointF(pitch_x, bottom))
+        p.setPen(QPen(QColor("#777a82"), 3))
+        p.drawLine(QPointF(pitch_x, top), QPointF(pitch_x, bottom))
+        step = (bottom - top) / 16.0
+        for i in range(-8, 9):
+            y = center - i * step
+            major = i in (-8, -4, 0, 4, 8)
+            p.setPen(QPen(QColor("#b6b8be") if major else QColor("#5c5f67"), 2))
+            tick = 17 if major else 9
+            p.drawLine(QPointF(pitch_x - tick, y), QPointF(pitch_x + tick, y))
+        knob_y = center - max(-8.0, min(8.0, self.pitch)) * step
+        p.setBrush(QBrush(QColor("#c7c9ce")))
+        p.setPen(QPen(QColor("#07080a"), 3))
+        p.drawRoundedRect(QRectF(pitch_x - 25, knob_y - 11, 50, 22), 5, 5)
+        p.setPen(QPen(QColor("#6d7078"), 1))
+        p.drawLine(QPointF(pitch_x - 17, knob_y), QPointF(pitch_x + 17, knob_y))
+        self._text(p, QRectF(pitch_x - 35, top - 28, 70, 18), "+8", 8, align=Qt.AlignmentFlag.AlignCenter)
+        self._text(p, QRectF(pitch_x - 35, center - 9, 70, 18), "0", 8, QColor("#f2f2f5"), QFont.Weight.Black, Qt.AlignmentFlag.AlignCenter)
+        self._text(p, QRectF(pitch_x - 35, bottom + 9, 70, 18), "-8", 8, align=Qt.AlignmentFlag.AlignCenter)
+        self._text(p, QRectF(pitch_x - 42, bottom + 30, 84, 18), "PITCH", 8, QColor("#d84b91"), QFont.Weight.Black, Qt.AlignmentFlag.AlignCenter)
 
-        # Strobe ticks at the front of the deck.
-        for i in range(18):
-            x = 48 + i * max(1, int((w - 96) / 18))
-            p.setPen(QPen(QColor("#55555d"), 2))
-            p.drawLine(x, h - 30, x + 7, h - 30)
+        # ------------------------------------------------------------------
+        # POWER + INFORMATION STRIP
+        # ------------------------------------------------------------------
+        power = QPointF(70, h - 66)
+        p.setBrush(QBrush(QColor("#292b31")))
+        p.setPen(QPen(QColor("#050607"), 3))
+        p.drawEllipse(power, 24, 24)
+        p.setPen(QPen(QColor("#5c5f68"), 1))
+        p.drawEllipse(power, 19, 19)
+        p.setPen(QPen(QColor("#d84b91") if self.power_on else QColor("#5a5c63"), 3))
+        p.drawArc(QRectF(power.x() - 11, power.y() - 11, 22, 22), 45 * 16, 270 * 16)
+        p.drawLine(QPointF(power.x(), power.y() - 14), QPointF(power.x(), power.y() + 1))
+        self._text(p, QRectF(power.x() - 40, power.y() + 27, 80, 18), "POWER", 7, QColor("#d84b91") if self.power_on else QColor("#777981"), QFont.Weight.Black, Qt.AlignmentFlag.AlignCenter)
+
+        strip = QRectF(120, h - 92, max(260.0, w - 205), 58)
+        p.setBrush(QBrush(QColor("#0c0d11")))
+        p.setPen(QPen(QColor("#30323a"), 1))
+        p.drawRoundedRect(strip, 7, 7)
+        self._text(p, QRectF(strip.x() + 12, strip.y() + 6, strip.width() - 24, 17), "33 RPM | DIRECT DRIVE | STABLE PLATTER", 8)
+        self._text(p, QRectF(strip.x() + 12, strip.y() + 27, strip.width() * 0.44, 20), self.artist, 10, QColor("#f2f2f5"), QFont.Weight.Bold)
+        self._text(p, QRectF(strip.x() + strip.width() * 0.46, strip.y() + 27, strip.width() * 0.51 - 12, 20), self.title, 10, QColor("#d84b91"), QFont.Weight.Black, Qt.AlignmentFlag.AlignRight)
+
+        # Small status light.
+        status = QColor("#77d999") if self.playing else QColor("#777981")
+        p.setBrush(QBrush(status))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawEllipse(QPointF(w - 46, h - 64), 4, 4)
+        self._text(p, QRectF(w - 92, h - 55, 45, 18), "PLAY" if self.playing else "READY", 7, status, QFont.Weight.Black, Qt.AlignmentFlag.AlignRight)
+
+        p.end()
+
+    def mousePressEvent(self, event):
+        if event.button() != Qt.MouseButton.LeftButton:
+            return super().mousePressEvent(event)
+        w, h, *_ = self._layout()
+        pos = event.position()
+        power = QPointF(70, h - 66)
+        if math.hypot(pos.x() - power.x(), pos.y() - power.y()) <= 32:
+            self.set_power(not self.power_on)
+            event.accept()
+            return
+        super().mousePressEvent(event)
 
 
 class MP3ShowcasePage(QWidget):
@@ -319,16 +587,15 @@ class MP3ShowcasePage(QWidget):
         top.addLayout(info, 1)
         cl.addLayout(top)
 
-        # The visual deck is now part of the showcase card.
         self.vinyl_deck = VinylDeckWidget(self)
         self.vinyl_deck.set_track("Onbekende artiest", "-")
         self.vinyl_deck.set_playing(False)
         cl.addWidget(self.vinyl_deck, 1)
 
         controls = QHBoxLayout()
-        self.previous = QPushButton("◀ VORIGE")
-        self.play = QPushButton("▶ PLAY")
-        self.next = QPushButton("VOLGENDE ▶")
+        self.previous = QPushButton("< VORIGE")
+        self.play = QPushButton("> PLAY")
+        self.next = QPushButton("VOLGENDE >")
         controls.addWidget(self.previous)
         controls.addWidget(self.play, 1)
         controls.addWidget(self.next)
@@ -358,6 +625,7 @@ class MP3ShowcasePage(QWidget):
         self.setStyleSheet("""
             QWidget{background:#0b0b0f;color:#f2f2f5;}
             QLineEdit,QPushButton,QListWidget{background:#18181f;color:#fff;border:1px solid #30303a;border-radius:6px;padding:8px 10px;}
+            QPushButton{font-weight:800;min-height:32px;}
             QPushButton:hover{border-color:#d84b91;background:#24242c;}
             QListWidget{background:#0f0f14;}
             QListWidget::item{padding:8px;border-bottom:1px solid #24242d;}
@@ -391,14 +659,20 @@ class MP3ShowcasePage(QWidget):
 
     def populate_list(self):
         q = self.search.text().strip().casefold()
-        self.visible_items = [row for row in self.items if not q or q in " ".join(str(x or "") for x in row).casefold()]
+        self.visible_items = [
+            row for row in self.items
+            if not q or q in " ".join(str(x or "") for x in row).casefold()
+        ]
         self.list.blockSignals(True)
         self.list.clear()
         for row in self.visible_items:
             name = Path(str(row[0])).name
             artist = str(row[1] or "").strip()
             title = str(row[2] or "").strip()
-            text = f"{artist} — {title}".strip(" —") if artist or title else name
+            if artist or title:
+                text = f"{artist} - {title}".strip(" -")
+            else:
+                text = name
             item = QListWidgetItem(text)
             item.setToolTip(str(row[0]))
             self.list.addItem(item)
@@ -416,28 +690,35 @@ class MP3ShowcasePage(QWidget):
             self.show_item(self.visible_items[index])
 
     def show_item(self, row):
-        path,artist,title,album,year,bpm,genre,release_artist,release_title,discogs_id,release_cover = row
+        path, artist, title, album, year, bpm, genre, release_artist, release_title, discogs_id, release_cover = row
         artist = str(artist or "").strip() or "Onbekende artiest"
         title = str(title or "").strip() or Path(str(path)).stem
         album = str(album or "").strip()
         self.artist_label.setText(artist)
         self.title_label.setText(title)
-        meta=[]
-        if album: meta.append(f"Album: {album}")
-        if year: meta.append(f"Jaar: {year}")
-        if genre: meta.append(f"Genre: {genre}")
-        if bpm: meta.append(f"BPM: {bpm}")
-        self.meta_label.setText("  •  ".join(meta) if meta else "Geen aanvullende metadata")
+        meta = []
+        if album:
+            meta.append(f"Album: {album}")
+        if year:
+            meta.append(f"Jaar: {year}")
+        if genre:
+            meta.append(f"Genre: {genre}")
+        if bpm:
+            meta.append(f"BPM: {bpm}")
+        self.meta_label.setText("  |  ".join(meta) if meta else "Geen aanvullende metadata")
         if release_title:
-            release_text=str(release_title)
-            if release_artist: release_text=f"{release_artist} — {release_text}"
+            release_text = str(release_title)
+            if release_artist:
+                release_text = f"{release_artist} - {release_text}"
             self.release_label.setText(f"Release: {release_text}")
         else:
             self.release_label.setText("Release: geen gekoppelde release")
-        self.discogs_label.setText(f"Discogs release ID: {discogs_id}" if discogs_id else "Discogs: geen releasekoppeling")
-        self.vinyl_deck.set_track(artist,title)
+        self.discogs_label.setText(
+            f"Discogs release ID: {discogs_id}" if discogs_id else "Discogs: geen releasekoppeling"
+        )
+        self.vinyl_deck.set_track(artist, title)
         self.vinyl_deck.set_playing(False)
-        self.load_cover(str(path),str(release_cover or ""))
+        self.load_cover(str(path), str(release_cover or ""))
         self.load_tracklist(str(path))
         self.load_comment(str(path))
         self.previous.setEnabled(self.current_index > 0)
@@ -447,73 +728,99 @@ class MP3ShowcasePage(QWidget):
     def load_cover(self, path, release_cover):
         if MUTAGEN_AVAILABLE and Path(path).exists():
             try:
-                tags=ID3(path)
-                pictures=tags.getall("APIC")
+                tags = ID3(path)
+                pictures = tags.getall("APIC")
                 if pictures:
-                    pixmap=QPixmap()
+                    pixmap = QPixmap()
                     if pixmap.loadFromData(pictures[0].data):
-                        self.cover.setPixmap(pixmap.scaled(340,340,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation))
+                        self.cover.setPixmap(
+                            pixmap.scaled(
+                                340,
+                                340,
+                                Qt.AspectRatioMode.KeepAspectRatio,
+                                Qt.TransformationMode.SmoothTransformation,
+                            )
+                        )
                         self.cover.setText("")
                         return
             except Exception:
                 pass
         if release_cover and Path(release_cover).exists():
-            pixmap=QPixmap(release_cover)
+            pixmap = QPixmap(release_cover)
             if not pixmap.isNull():
-                self.cover.setPixmap(pixmap.scaled(340,340,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation))
+                self.cover.setPixmap(
+                    pixmap.scaled(
+                        340,
+                        340,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                )
                 self.cover.setText("")
                 return
-        self.cover.clear(); self.cover.setText("NO COVER")
+        self.cover.clear()
+        self.cover.setText("NO COVER")
 
     def load_comment(self, path):
         self.comment_label.clear()
-        if not MUTAGEN_AVAILABLE or not Path(path).exists(): return
+        if not MUTAGEN_AVAILABLE or not Path(path).exists():
+            return
         try:
-            tags=ID3(path)
-            values=[]
+            tags = ID3(path)
+            values = []
             for frame in tags.getall("COMM"):
                 values.extend(str(value).strip() for value in frame.text if str(value).strip())
-            if values: self.comment_label.setText("Comment: " + " • ".join(dict.fromkeys(values)))
+            if values:
+                self.comment_label.setText("Comment: " + " | ".join(dict.fromkeys(values)))
         except Exception:
             pass
 
     def load_tracklist(self, current_path):
         self.track_list.clear()
         try:
-            conn=get_connection()
+            conn = get_connection()
             try:
-                linked=conn.execute("""
+                linked = conn.execute("""
                     SELECT t.position,t.title,t.duration,t.bpm,m.path
-                    FROM track_mp3 tm JOIN tracks t ON t.id=tm.track_id JOIN mp3_files m ON m.id=tm.mp3_id
-                    WHERE m.path=? ORDER BY t.position COLLATE NOCASE
-                """,(current_path,)).fetchall()
-            finally: conn.close()
+                    FROM track_mp3 tm
+                    JOIN tracks t ON t.id=tm.track_id
+                    JOIN mp3_files m ON m.id=tm.mp3_id
+                    WHERE m.path=?
+                    ORDER BY t.position COLLATE NOCASE
+                """, (current_path,)).fetchall()
+            finally:
+                conn.close()
         except Exception:
-            linked=[]
+            linked = []
         if not linked:
-            item=QListWidgetItem("Geen gekoppelde VinylVault-track voor dit bestand")
-            item.setForeground(Qt.GlobalColor.gray); self.track_list.addItem(item); return
-        for position,title,duration,bpm,path in linked:
-            text=f"{position or ''}  {title or ''}".strip()
-            extras=[]
-            if duration: extras.append(str(duration))
-            if bpm: extras.append(f"{bpm} BPM")
-            if extras: text += "  •  " + "  •  ".join(extras)
-            item=QListWidgetItem(text)
-            item.setData(Qt.ItemDataRole.UserRole,str(path))
+            item = QListWidgetItem("Geen gekoppelde VinylVault-track voor dit bestand")
+            item.setForeground(Qt.GlobalColor.gray)
+            self.track_list.addItem(item)
+            return
+        for position, title, duration, bpm, path in linked:
+            text = f"{position or ''}  {title or ''}".strip()
+            extras = []
+            if duration:
+                extras.append(str(duration))
+            if bpm:
+                extras.append(f"{bpm} BPM")
+            if extras:
+                text += "  |  " + "  |  ".join(extras)
+            item = QListWidgetItem(text)
+            item.setData(Qt.ItemDataRole.UserRole, str(path))
             self.track_list.addItem(item)
 
     def play_current(self):
         if 0 <= self.current_index < len(self.visible_items):
-            path=str(self.visible_items[self.current_index][0] or "")
+            path = str(self.visible_items[self.current_index][0] or "")
             if Path(path).exists():
                 self.vinyl_deck.set_playing(True)
                 self.play_mp3.emit(path)
 
     def play_track_item(self, item):
-        path=item.data(Qt.ItemDataRole.UserRole)
+        path = item.data(Qt.ItemDataRole.UserRole)
         if path and Path(str(path)).exists():
-            self.vinyl_deck.set_track(self.artist_label.text(),self.title_label.text())
+            self.vinyl_deck.set_track(self.artist_label.text(), self.title_label.text())
             self.vinyl_deck.set_playing(True)
             self.play_mp3.emit(str(path))
         else:
@@ -521,17 +828,26 @@ class MP3ShowcasePage(QWidget):
 
     def previous_track(self):
         if self.current_index > 0:
-            self.list.setCurrentRow(self.current_index-1)
+            self.list.setCurrentRow(self.current_index - 1)
             self.play_current()
 
     def next_track(self):
         if self.current_index + 1 < len(self.visible_items):
-            self.list.setCurrentRow(self.current_index+1)
+            self.list.setCurrentRow(self.current_index + 1)
             self.play_current()
 
     def clear_showcase(self):
-        self.cover.clear(); self.cover.setText("NO COVER")
-        self.artist_label.setText("-"); self.title_label.setText("-"); self.meta_label.setText("-")
-        self.release_label.setText("Release: -"); self.discogs_label.setText("Discogs: -"); self.comment_label.clear()
-        self.track_list.clear(); self.previous.setEnabled(False); self.next.setEnabled(False); self.play.setEnabled(False)
-        self.vinyl_deck.set_track("Onbekende artiest","-"); self.vinyl_deck.set_playing(False)
+        self.cover.clear()
+        self.cover.setText("NO COVER")
+        self.artist_label.setText("-")
+        self.title_label.setText("-")
+        self.meta_label.setText("-")
+        self.release_label.setText("Release: -")
+        self.discogs_label.setText("Discogs: -")
+        self.comment_label.clear()
+        self.track_list.clear()
+        self.previous.setEnabled(False)
+        self.next.setEnabled(False)
+        self.play.setEnabled(False)
+        self.vinyl_deck.set_track("Onbekende artiest", "-")
+        self.vinyl_deck.set_playing(False)
