@@ -2,7 +2,7 @@
 from pathlib import Path
 from math import cos, sin, radians, hypot, atan2, degrees
 from PySide6.QtCore import Qt, QTimer, Signal, QPointF, QRectF
-from PySide6.QtGui import QPixmap, QPainter, QPen, QBrush, QColor, QFont
+from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QPen, QBrush, QColor, QFont
 from PySide6.QtWidgets import (
     QApplication,
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
@@ -389,37 +389,47 @@ class VinylDeckWidget(QWidget):
             return
         super().mousePressEvent(event)
 class ShowcaseVisualizer(QWidget):
-    """Large animated DJ spectrum display filling the available lower panel."""
+    """Premium DJ-style animated audio analyzer."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
         self.playing = False
+        self.position_ms = 0
+        self.duration_ms = 0
         self.phase = 0.0
 
-        # Geen kleine vaste hoogte meer.
-        self.setMinimumHeight(170)
+        self.setMinimumHeight(190)
         self.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Expanding
         )
 
         self.timer = QTimer(self)
-        self.timer.setInterval(30)
+        self.timer.setInterval(28)
         self.timer.timeout.connect(self._tick)
 
     def set_playing(self, playing):
         self.playing = bool(playing)
 
         if self.playing:
-            self.timer.start()
+            if not self.timer.isActive():
+                self.timer.start()
         else:
             self.timer.stop()
 
         self.update()
 
+    def set_position(self, position):
+        self.position_ms = max(0, int(position))
+        self.update()
+
+    def set_duration(self, duration):
+        self.duration_ms = max(0, int(duration))
+        self.update()
+
     def _tick(self):
-        self.phase += 0.16
+        self.phase += 0.095
         self.update()
 
     def paintEvent(self, event):
@@ -429,287 +439,381 @@ class ShowcaseVisualizer(QWidget):
         w = float(self.width())
         h = float(self.height())
 
-        if w < 20 or h < 20:
+        if w < 120 or h < 120:
             p.end()
             return
 
-        # ----------------------------------------------------
-        # OUTER PANEL
-        # ----------------------------------------------------
-        p.setPen(QPen(QColor("#30323a"), 1))
-        p.setBrush(QBrush(QColor("#08090d")))
+        # ====================================================
+        # OUTER HARDWARE PANEL
+        # ====================================================
+        p.setPen(QPen(QColor("#343640"), 1))
+        p.setBrush(QBrush(QColor("#090a0d")))
         p.drawRoundedRect(
-            QRectF(0, 0, w, h),
-            9,
-            9
+            QRectF(0.5, 0.5, w - 1, h - 1),
+            10,
+            10
         )
 
-        # ----------------------------------------------------
-        # INNER DISPLAY
-        # ----------------------------------------------------
-        screen = QRectF(
-            7,
-            7,
-            w - 14,
-            h - 14
-        )
-
-        p.setPen(QPen(QColor("#202229"), 1))
-        p.setBrush(QBrush(QColor("#0d0f14")))
+        # Inner recessed screen.
+        p.setPen(QPen(QColor("#1e2027"), 1))
+        p.setBrush(QBrush(QColor("#0b0c10")))
         p.drawRoundedRect(
-            screen,
-            6,
-            6
+            QRectF(7, 7, w - 14, h - 14),
+            8,
+            8
         )
 
-        # ----------------------------------------------------
+        # ====================================================
         # HEADER
-        # ----------------------------------------------------
-        p.setPen(QColor("#d84b91"))
-        p.setFont(
-            QFont(
-                "Segoe UI",
-                9,
-                QFont.Weight.Black
-            )
-        )
+        # ====================================================
+        p.setFont(QFont("Segoe UI", 8, QFont.Weight.Black))
 
+        p.setPen(QColor("#d84b91"))
         p.drawText(
-            QRectF(16, 13, w - 32, 18),
+            QRectF(17, 13, 180, 18),
             Qt.AlignmentFlag.AlignLeft,
-            "AUDIO SPECTRUM"
+            "KID ACID  //  AUDIO ANALYZER"
         )
 
         p.setPen(
             QColor("#d84b91")
             if self.playing
-            else QColor("#62656e")
+            else QColor("#666973")
         )
-
-        p.setFont(
-            QFont(
-                "Segoe UI",
-                8,
-                QFont.Weight.Bold
-            )
-        )
-
         p.drawText(
-            QRectF(16, 13, w - 32, 18),
+            QRectF(w - 125, 13, 108, 18),
             Qt.AlignmentFlag.AlignRight,
-            "PLAYING" if self.playing else "READY"
+            "● LIVE" if self.playing else "○ READY"
         )
 
-        # ----------------------------------------------------
-        # GRAPH AREA
-        # ----------------------------------------------------
-        left = 16.0
-        right = w - 16.0
-        top = 40.0
-        bottom = h - 25.0
+        # ====================================================
+        # MAIN ANALYZER AREA
+        # ====================================================
+        left = 43.0
+        right = w - 43.0
+        top = 42.0
+        bottom = h - 43.0
 
-        graph_height = max(
-            40.0,
-            bottom - top
-        )
+        area_w = max(50.0, right - left)
+        area_h = max(50.0, bottom - top)
 
-        center_y = top + graph_height * 0.53
+        center_y = top + area_h * 0.48
 
-        # Achtergrondlijnen
-        p.setPen(
-            QPen(
-                QColor("#1c1e25"),
-                1
-            )
-        )
+        # Grid.
+        p.setPen(QPen(QColor("#17191e"), 1))
 
-        for fraction in (
-            0.0,
-            0.25,
-            0.50,
-            0.75,
-            1.0
-        ):
-            y = top + graph_height * fraction
-
+        for i in range(1, 6):
+            y = top + area_h * i / 6.0
             p.drawLine(
                 QPointF(left, y),
                 QPointF(right, y)
             )
 
-        # Middenlijn
-        p.setPen(
-            QPen(
-                QColor("#353741"),
-                1
+        for i in range(1, 9):
+            x = left + area_w * i / 9.0
+            p.drawLine(
+                QPointF(x, top),
+                QPointF(x, bottom)
             )
-        )
 
+        # Center line.
+        p.setPen(QPen(QColor("#30323a"), 1))
         p.drawLine(
             QPointF(left, center_y),
             QPointF(right, center_y)
         )
 
-        # ----------------------------------------------------
-        # LARGE SPECTRUM
-        # ----------------------------------------------------
-        bars = max(
-            28,
-            min(
-                72,
-                int(w / 10.0)
-            )
-        )
-
-        usable_width = right - left
-
-        gap = max(
-            2.0,
-            usable_width / (bars * 9.0)
-        )
-
+        # ====================================================
+        # SPECTRUM BARS BEHIND WAVEFORM
+        # ====================================================
+        bars = 42
+        gap = 2.5
         bar_width = max(
-            3.0,
-            (
-                usable_width
-                - gap * (bars - 1)
-            ) / bars
+            2.0,
+            (area_w - (bars - 1) * gap) / bars
         )
 
         for i in range(bars):
+            x = left + i * (bar_width + gap)
 
             if self.playing:
+                n = i / float(max(1, bars - 1))
 
-                wave_a = abs(
-                    sin(
-                        self.phase
-                        + i * 0.31
-                    )
+                low = abs(
+                    sin(self.phase * 1.35 + i * 0.31)
                 )
 
-                wave_b = abs(
-                    sin(
-                        self.phase * 1.71
-                        + i * 0.17
-                    )
+                mid = abs(
+                    sin(self.phase * 2.25 + i * 0.57)
                 )
 
-                wave_c = abs(
-                    sin(
-                        self.phase * 0.63
-                        + i * 0.57
-                    )
+                high = abs(
+                    sin(self.phase * 3.9 + i * 0.91)
                 )
 
-                energy = (
-                    wave_a * 0.45
-                    + wave_b * 0.35
-                    + wave_c * 0.20
+                envelope = (
+                    0.25
+                    + 0.75 * sin(n * 3.14159)
                 )
 
-                # Grote beweging die het volledige vak gebruikt.
+                magnitude = (
+                    low * 0.38
+                    + mid * 0.37
+                    + high * 0.25
+                )
+
                 bar_height = (
-                    20.0
-                    + energy
-                    * graph_height
-                    * 0.78
+                    12
+                    + magnitude * envelope * area_h * 0.48
                 )
-
             else:
-
-                energy = (
-                    0.18
-                    + abs(
-                        sin(i * 0.67)
-                    ) * 0.12
-                )
-
                 bar_height = (
-                    12.0
-                    + energy
-                    * graph_height
-                    * 0.30
+                    8
+                    + abs(sin(i * 0.55)) * 6
                 )
 
-            x = (
-                left
-                + i * (
-                    bar_width
-                    + gap
-                )
-            )
+            bar_height = min(area_h * 0.44, bar_height)
 
-            if x >= right:
-                continue
-
-            current_width = min(
-                bar_width,
-                right - x
-            )
-
-            # Symmetrisch rond de middenlijn.
-            top_y = (
-                center_y
-                - bar_height * 0.50
-            )
-
-            rect = QRectF(
+            # Top bar.
+            rect_top = QRectF(
                 x,
-                top_y,
-                current_width,
+                center_y - bar_height,
+                bar_width,
                 bar_height
             )
 
-            if self.playing:
-                fill = QColor("#d84b91")
-                edge = QColor("#8f2f63")
-            else:
-                fill = QColor("#4d5059")
-                edge = QColor("#30323a")
-
-            p.setPen(
-                QPen(
-                    edge,
-                    1
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(
+                QBrush(
+                    QColor("#542040")
+                    if self.playing
+                    else QColor("#25272e")
                 )
+            )
+            p.drawRoundedRect(rect_top, 1.5, 1.5)
+
+            # Bottom reflection.
+            rect_bottom = QRectF(
+                x,
+                center_y + 4,
+                bar_width,
+                bar_height * 0.42
             )
 
             p.setBrush(
-                QBrush(fill)
+                QBrush(
+                    QColor("#301426")
+                    if self.playing
+                    else QColor("#1b1d23")
+                )
+            )
+            p.drawRoundedRect(rect_bottom, 1.5, 1.5)
+
+        # ====================================================
+        # MAIN OSCILLOSCOPE
+        # ====================================================
+        wave = QPainterPath()
+        wave_started = False
+
+        samples = max(120, int(area_w / 2.5))
+
+        for i in range(samples):
+            n = i / float(max(1, samples - 1))
+            x = left + n * area_w
+
+            if self.playing:
+                a = sin(
+                    self.phase * 2.4
+                    + n * 34.0
+                )
+
+                b = sin(
+                    self.phase * 4.1
+                    + n * 71.0
+                )
+
+                c = sin(
+                    self.phase * 1.25
+                    + n * 17.0
+                )
+
+                d = sin(
+                    self.phase * 7.0
+                    + n * 123.0
+                )
+
+                signal = (
+                    a * 0.48
+                    + b * 0.25
+                    + c * 0.17
+                    + d * 0.10
+                )
+
+                envelope = (
+                    0.35
+                    + 0.65 * sin(n * 3.14159)
+                )
+
+                amplitude = area_h * 0.30 * envelope
+
+                y = center_y + signal * amplitude
+            else:
+                signal = sin(n * 24.0)
+                y = center_y + signal * 4.0
+
+            if not wave_started:
+                wave.moveTo(x, y)
+                wave_started = True
+            else:
+                wave.lineTo(x, y)
+
+        # Glow.
+        if self.playing:
+            p.setPen(
+                QPen(QColor("#5d2041"), 6)
+            )
+            p.drawPath(wave)
+
+        p.setPen(
+            QPen(
+                QColor("#f06aa9")
+                if self.playing
+                else QColor("#666973"),
+                2
+            )
+        )
+        p.drawPath(wave)
+
+        # ====================================================
+        # SCANLINE
+        # ====================================================
+        progress = 0.0
+
+        if self.duration_ms > 0:
+            progress = min(
+                1.0,
+                max(
+                    0.0,
+                    self.position_ms / float(self.duration_ms)
+                )
+            )
+        elif self.playing:
+            progress = (
+                (self.phase * 0.035) % 1.0
+            )
+
+        scan_x = left + progress * area_w
+
+        if self.playing:
+            p.setPen(
+                QPen(QColor("#d84b91"), 2)
+            )
+            p.drawLine(
+                QPointF(scan_x, top),
+                QPointF(scan_x, bottom)
+            )
+
+            p.setPen(
+                QPen(QColor("#f06aa9"), 1)
+            )
+            p.drawLine(
+                QPointF(scan_x + 3, top + 4),
+                QPointF(scan_x + 3, bottom - 4)
+            )
+        else:
+            p.setPen(
+                QPen(QColor("#3b3d45"), 1)
+            )
+            p.drawLine(
+                QPointF(scan_x, top),
+                QPointF(scan_x, bottom)
+            )
+
+        # ====================================================
+        # LEFT / RIGHT STEREO METERS
+        # ====================================================
+        meter_top = top
+        meter_bottom = bottom
+        meter_h = meter_bottom - meter_top
+
+        for side_x, direction in (
+            (18.0, 1.0),
+            (w - 25.0, -1.0),
+        ):
+
+            meter_w = 7.0
+
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QBrush(QColor("#15171c")))
+
+            p.drawRoundedRect(
+                QRectF(
+                    side_x,
+                    meter_top,
+                    meter_w,
+                    meter_h
+                ),
+                3,
+                3
+            )
+
+            if self.playing:
+                level = (
+                    0.45
+                    + 0.40
+                    * abs(
+                        sin(
+                            self.phase * 2.0
+                            + side_x
+                        )
+                    )
+                )
+            else:
+                level = 0.08
+
+            filled_h = meter_h * level
+
+            p.setBrush(
+                QBrush(
+                    QColor("#d84b91")
+                    if self.playing
+                    else QColor("#42444c")
+                )
             )
 
             p.drawRoundedRect(
-                rect,
-                2,
-                2
+                QRectF(
+                    side_x,
+                    meter_bottom - filled_h,
+                    meter_w,
+                    filled_h
+                ),
+                3,
+                3
             )
 
-            # Licht accent door het midden.
-            if self.playing and current_width > 3:
+        # ====================================================
+        # BOTTOM STATUS BAR
+        # ====================================================
+        status_y = h - 30
 
-                p.setPen(
-                    QPen(
-                        QColor("#f1a4c8"),
-                        1
-                    )
-                )
-
-                p.drawLine(
-                    QPointF(
-                        x + 1,
-                        center_y
-                    ),
-                    QPointF(
-                        x + current_width - 1,
-                        center_y
-                    )
-                )
-
-        # ----------------------------------------------------
-        # FREQUENCY MARKERS
-        # ----------------------------------------------------
         p.setPen(
-            QColor("#555862")
+            QPen(QColor("#292b32"), 1)
+        )
+        p.drawLine(
+            QPointF(17, status_y - 5),
+            QPointF(w - 17, status_y - 5)
+        )
+
+        elapsed = self.position_ms // 1000
+        total = self.duration_ms // 1000
+
+        elapsed_text = (
+            f"{elapsed // 60:02d}:{elapsed % 60:02d}"
+        )
+
+        total_text = (
+            f"{total // 60:02d}:{total % 60:02d}"
         )
 
         p.setFont(
@@ -720,33 +824,34 @@ class ShowcaseVisualizer(QWidget):
             )
         )
 
-        markers = [
-            ("60", 0.00),
-            ("250", 0.25),
-            ("1K", 0.50),
-            ("4K", 0.75),
-            ("16K", 1.00),
-        ]
+        p.setPen(QColor("#777a84"))
+        p.drawText(
+            QRectF(18, status_y, 130, 18),
+            Qt.AlignmentFlag.AlignLeft,
+            "STEREO  /  44.1 kHz"
+        )
 
-        for label, fraction in markers:
+        p.setPen(QColor("#b9bbc2"))
+        p.drawText(
+            QRectF(0, status_y, w, 18),
+            Qt.AlignmentFlag.AlignCenter,
+            f"{elapsed_text}   /   {total_text}"
+        )
 
-            x = (
-                left
-                + usable_width * fraction
-            )
+        p.setPen(
+            QColor("#d84b91")
+            if self.playing
+            else QColor("#555861")
+        )
 
-            p.drawText(
-                QRectF(
-                    x - 22,
-                    h - 18,
-                    44,
-                    12
-                ),
-                Qt.AlignmentFlag.AlignCenter,
-                label
-            )
+        p.drawText(
+            QRectF(w - 145, status_y, 127, 18),
+            Qt.AlignmentFlag.AlignRight,
+            "SIGNAL ACTIVE" if self.playing else "SIGNAL STANDBY"
+        )
 
         p.end()
+
 
 class MP3ShowcasePage(QWidget):
     play_mp3 = Signal(str)
@@ -1064,6 +1169,10 @@ class MP3ShowcasePage(QWidget):
         self.track_list.clear()
         self.cover.setPixmap(QPixmap())
         self.cover.setText("GEEN COVER")
+
+
+
+
 
 
 
