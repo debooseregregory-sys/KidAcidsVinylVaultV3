@@ -387,6 +387,114 @@ class VinylDeckWidget(QWidget):
             self.update()
             return
         super().mousePressEvent(event)
+class ShowcaseVisualizer(QWidget):
+    """Compact animated audio visualizer for the selected MP3."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.playing = False
+        self.phase = 0.0
+        self.setMinimumHeight(105)
+        self.setMaximumHeight(135)
+
+        self.timer = QTimer(self)
+        self.timer.setInterval(35)
+        self.timer.timeout.connect(self._tick)
+
+    def set_playing(self, playing):
+        self.playing = bool(playing)
+
+        if self.playing:
+            self.timer.start()
+        else:
+            self.timer.stop()
+
+        self.update()
+
+    def _tick(self):
+        self.phase += 0.18
+        self.update()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        w = float(self.width())
+        h = float(self.height())
+
+        p.setPen(QPen(QColor("#2d2f36"), 1))
+        p.setBrush(QBrush(QColor("#0d0e12")))
+        p.drawRoundedRect(QRectF(0, 0, w, h), 8, 8)
+
+        p.setPen(QColor("#d84b91"))
+        p.setFont(QFont("Segoe UI", 8, QFont.Weight.Black))
+        p.drawText(
+            QRectF(12, 8, w - 24, 18),
+            Qt.AlignmentFlag.AlignLeft,
+            "AUDIO VISUALIZER"
+        )
+
+        center_y = h * 0.60
+
+        p.setPen(QPen(QColor("#34353d"), 1))
+        p.drawLine(
+            QPointF(12, center_y),
+            QPointF(w - 12, center_y)
+        )
+
+        bars = 30
+        usable_w = max(20.0, w - 28)
+        gap = 3.0
+        bar_w = max(
+            2.0,
+            (usable_w - (bars - 1) * gap) / bars
+        )
+
+        for i in range(bars):
+            x = 14 + i * (bar_w + gap)
+
+            if self.playing:
+                wave1 = abs(sin(self.phase + i * 0.42))
+                wave2 = abs(sin(self.phase * 1.7 + i * 0.19))
+                height = 7 + (
+                    wave1 * 0.65 +
+                    wave2 * 0.35
+                ) * (h * 0.34)
+            else:
+                height = 6 + (i % 3) * 2
+
+            rect = QRectF(
+                x,
+                center_y - height,
+                bar_w,
+                height
+            )
+
+            p.setPen(QPen(QColor("#8f2f63"), 1))
+            p.setBrush(
+                QBrush(
+                    QColor("#d84b91")
+                    if self.playing
+                    else QColor("#555762")
+                )
+            )
+            p.drawRoundedRect(rect, 2, 2)
+
+        status = "PLAYING" if self.playing else "READY"
+
+        p.setPen(
+            QColor("#d84b91")
+            if self.playing
+            else QColor("#777984")
+        )
+        p.setFont(QFont("Segoe UI", 7, QFont.Weight.Black))
+        p.drawText(
+            QRectF(12, h - 22, w - 24, 15),
+            Qt.AlignmentFlag.AlignLeft,
+            status
+        )
+
+        p.end()
+
 class MP3ShowcasePage(QWidget):
     play_mp3 = Signal(str)
     def __init__(self, parent=None):
@@ -458,19 +566,36 @@ class MP3ShowcasePage(QWidget):
         rl.addWidget(now)
         self.cover = QLabel("GEEN COVER")
         self.cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.cover.setMinimumHeight(170)
+        self.cover.setFixedHeight(145)
         self.cover.setStyleSheet("background:#0a0b0e;border:1px solid #30323a;border-radius:8px;color:#666;")
         rl.addWidget(self.cover)
         self.info = QLabel("Geen track geselecteerd")
         self.info.setWordWrap(True)
+        self.info.setMaximumHeight(58)
         rl.addWidget(self.info)
         tracks = QLabel("SELECTED TRACK")
-        tracks.setStyleSheet("font-weight:900;color:#d84b91;")
+        tracks.setStyleSheet(
+            "font-size:10px;font-weight:900;color:#d84b91;"
+        )
+        tracks.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        tracks.setFixedHeight(16)
         rl.addWidget(tracks)
+
         self.track_list = QListWidget()
-        self.track_list.setMinimumHeight(120)
+        self.track_list.setFixedHeight(52)
+        self.track_list.setMinimumHeight(52)
+        self.track_list.setMaximumHeight(52)
+        self.track_list.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.track_list.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
         self.track_list.itemDoubleClicked.connect(self.play_track_item)
-        rl.addWidget(self.track_list, 1)
+        rl.addWidget(self.track_list)
+
+        self.visualizer = ShowcaseVisualizer(self)
+        rl.addWidget(self.visualizer, 0, Qt.AlignmentFlag.AlignTop)
         controls = QHBoxLayout()
         self.previous = QPushButton("VORIGE")
         self.play = QPushButton("PLAY")
@@ -481,6 +606,7 @@ class MP3ShowcasePage(QWidget):
         controls.addWidget(self.next)
         controls.addWidget(self.power)
         rl.addLayout(controls)
+        rl.addStretch(1)
         body.addWidget(right, 3)
         root.addLayout(body, 1)
         self.previous.clicked.connect(self.previous_track)
@@ -546,6 +672,7 @@ class MP3ShowcasePage(QWidget):
             title = str(row[2] or Path(str(row[0])).stem)
             self.vinyl_deck.set_track(artist, title)
             self.vinyl_deck.set_playing(False)
+            self.visualizer.set_playing(False)
             self.info.setText(f"<b>{artist}</b><br><span style='color:#d84b91;font-size:16px'>{title}</span><br><br>{row[3] or ''}<br>{row[4] or ''}")
             self.track_list.clear()
             item = QListWidgetItem(f"{artist} - {title}")
@@ -572,6 +699,7 @@ class MP3ShowcasePage(QWidget):
             if Path(path).exists():
                 self.play_mp3.emit(path)
                 self.vinyl_deck.set_playing(True)
+                self.visualizer.set_playing(True)
     def play_track_item(self, item):
         path = str(item.data(Qt.ItemDataRole.UserRole) or "")
         if path and Path(path).exists():
@@ -579,6 +707,7 @@ class MP3ShowcasePage(QWidget):
             self.vinyl_deck.set_playing(True)
     def stop_current(self):
         self.vinyl_deck.set_playing(False)
+        self.visualizer.set_playing(False)
     def previous_track(self):
         if self.current_index > 0:
             self.list.selectRow(self.current_index - 1)
@@ -590,10 +719,17 @@ class MP3ShowcasePage(QWidget):
     def clear_showcase(self):
         self.vinyl_deck.set_track("Onbekende artiest", "-")
         self.vinyl_deck.set_playing(False)
+        self.visualizer.set_playing(False)
         self.info.setText("Geen track geselecteerd")
         self.track_list.clear()
         self.cover.setPixmap(QPixmap())
         self.cover.setText("GEEN COVER")
+
+
+
+
+
+
 
 
 
