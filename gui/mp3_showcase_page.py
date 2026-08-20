@@ -4,6 +4,7 @@ from math import cos, sin, radians, hypot, atan2, degrees
 from PySide6.QtCore import Qt, QTimer, Signal, QPointF, QRectF
 from PySide6.QtGui import QPixmap, QPainter, QPen, QBrush, QColor, QFont
 from PySide6.QtWidgets import (
+    QApplication,
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QListWidget, QListWidgetItem, QTableWidget, QHeaderView, QFrame,
     QSizePolicy,
@@ -388,16 +389,23 @@ class VinylDeckWidget(QWidget):
             return
         super().mousePressEvent(event)
 class ShowcaseVisualizer(QWidget):
-    """Compact animated audio visualizer for the selected MP3."""
+    """Large animated DJ spectrum display filling the available lower panel."""
+
     def __init__(self, parent=None):
         super().__init__(parent)
+
         self.playing = False
         self.phase = 0.0
-        self.setMinimumHeight(105)
-        self.setMaximumHeight(135)
+
+        # Geen kleine vaste hoogte meer.
+        self.setMinimumHeight(170)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding
+        )
 
         self.timer = QTimer(self)
-        self.timer.setInterval(35)
+        self.timer.setInterval(30)
         self.timer.timeout.connect(self._tick)
 
     def set_playing(self, playing):
@@ -411,7 +419,7 @@ class ShowcaseVisualizer(QWidget):
         self.update()
 
     def _tick(self):
-        self.phase += 0.18
+        self.phase += 0.16
         self.update()
 
     def paintEvent(self, event):
@@ -421,77 +429,322 @@ class ShowcaseVisualizer(QWidget):
         w = float(self.width())
         h = float(self.height())
 
-        p.setPen(QPen(QColor("#2d2f36"), 1))
-        p.setBrush(QBrush(QColor("#0d0e12")))
-        p.drawRoundedRect(QRectF(0, 0, w, h), 8, 8)
+        if w < 20 or h < 20:
+            p.end()
+            return
 
+        # ----------------------------------------------------
+        # OUTER PANEL
+        # ----------------------------------------------------
+        p.setPen(QPen(QColor("#30323a"), 1))
+        p.setBrush(QBrush(QColor("#08090d")))
+        p.drawRoundedRect(
+            QRectF(0, 0, w, h),
+            9,
+            9
+        )
+
+        # ----------------------------------------------------
+        # INNER DISPLAY
+        # ----------------------------------------------------
+        screen = QRectF(
+            7,
+            7,
+            w - 14,
+            h - 14
+        )
+
+        p.setPen(QPen(QColor("#202229"), 1))
+        p.setBrush(QBrush(QColor("#0d0f14")))
+        p.drawRoundedRect(
+            screen,
+            6,
+            6
+        )
+
+        # ----------------------------------------------------
+        # HEADER
+        # ----------------------------------------------------
         p.setPen(QColor("#d84b91"))
-        p.setFont(QFont("Segoe UI", 8, QFont.Weight.Black))
+        p.setFont(
+            QFont(
+                "Segoe UI",
+                9,
+                QFont.Weight.Black
+            )
+        )
+
         p.drawText(
-            QRectF(12, 8, w - 24, 18),
+            QRectF(16, 13, w - 32, 18),
             Qt.AlignmentFlag.AlignLeft,
-            "AUDIO VISUALIZER"
+            "AUDIO SPECTRUM"
         )
-
-        center_y = h * 0.60
-
-        p.setPen(QPen(QColor("#34353d"), 1))
-        p.drawLine(
-            QPointF(12, center_y),
-            QPointF(w - 12, center_y)
-        )
-
-        bars = 30
-        usable_w = max(20.0, w - 28)
-        gap = 3.0
-        bar_w = max(
-            2.0,
-            (usable_w - (bars - 1) * gap) / bars
-        )
-
-        for i in range(bars):
-            x = 14 + i * (bar_w + gap)
-
-            if self.playing:
-                wave1 = abs(sin(self.phase + i * 0.42))
-                wave2 = abs(sin(self.phase * 1.7 + i * 0.19))
-                height = 7 + (
-                    wave1 * 0.65 +
-                    wave2 * 0.35
-                ) * (h * 0.34)
-            else:
-                height = 6 + (i % 3) * 2
-
-            rect = QRectF(
-                x,
-                center_y - height,
-                bar_w,
-                height
-            )
-
-            p.setPen(QPen(QColor("#8f2f63"), 1))
-            p.setBrush(
-                QBrush(
-                    QColor("#d84b91")
-                    if self.playing
-                    else QColor("#555762")
-                )
-            )
-            p.drawRoundedRect(rect, 2, 2)
-
-        status = "PLAYING" if self.playing else "READY"
 
         p.setPen(
             QColor("#d84b91")
             if self.playing
-            else QColor("#777984")
+            else QColor("#62656e")
         )
-        p.setFont(QFont("Segoe UI", 7, QFont.Weight.Black))
+
+        p.setFont(
+            QFont(
+                "Segoe UI",
+                8,
+                QFont.Weight.Bold
+            )
+        )
+
         p.drawText(
-            QRectF(12, h - 22, w - 24, 15),
-            Qt.AlignmentFlag.AlignLeft,
-            status
+            QRectF(16, 13, w - 32, 18),
+            Qt.AlignmentFlag.AlignRight,
+            "PLAYING" if self.playing else "READY"
         )
+
+        # ----------------------------------------------------
+        # GRAPH AREA
+        # ----------------------------------------------------
+        left = 16.0
+        right = w - 16.0
+        top = 40.0
+        bottom = h - 25.0
+
+        graph_height = max(
+            40.0,
+            bottom - top
+        )
+
+        center_y = top + graph_height * 0.53
+
+        # Achtergrondlijnen
+        p.setPen(
+            QPen(
+                QColor("#1c1e25"),
+                1
+            )
+        )
+
+        for fraction in (
+            0.0,
+            0.25,
+            0.50,
+            0.75,
+            1.0
+        ):
+            y = top + graph_height * fraction
+
+            p.drawLine(
+                QPointF(left, y),
+                QPointF(right, y)
+            )
+
+        # Middenlijn
+        p.setPen(
+            QPen(
+                QColor("#353741"),
+                1
+            )
+        )
+
+        p.drawLine(
+            QPointF(left, center_y),
+            QPointF(right, center_y)
+        )
+
+        # ----------------------------------------------------
+        # LARGE SPECTRUM
+        # ----------------------------------------------------
+        bars = max(
+            28,
+            min(
+                72,
+                int(w / 10.0)
+            )
+        )
+
+        usable_width = right - left
+
+        gap = max(
+            2.0,
+            usable_width / (bars * 9.0)
+        )
+
+        bar_width = max(
+            3.0,
+            (
+                usable_width
+                - gap * (bars - 1)
+            ) / bars
+        )
+
+        for i in range(bars):
+
+            if self.playing:
+
+                wave_a = abs(
+                    sin(
+                        self.phase
+                        + i * 0.31
+                    )
+                )
+
+                wave_b = abs(
+                    sin(
+                        self.phase * 1.71
+                        + i * 0.17
+                    )
+                )
+
+                wave_c = abs(
+                    sin(
+                        self.phase * 0.63
+                        + i * 0.57
+                    )
+                )
+
+                energy = (
+                    wave_a * 0.45
+                    + wave_b * 0.35
+                    + wave_c * 0.20
+                )
+
+                # Grote beweging die het volledige vak gebruikt.
+                bar_height = (
+                    20.0
+                    + energy
+                    * graph_height
+                    * 0.78
+                )
+
+            else:
+
+                energy = (
+                    0.18
+                    + abs(
+                        sin(i * 0.67)
+                    ) * 0.12
+                )
+
+                bar_height = (
+                    12.0
+                    + energy
+                    * graph_height
+                    * 0.30
+                )
+
+            x = (
+                left
+                + i * (
+                    bar_width
+                    + gap
+                )
+            )
+
+            if x >= right:
+                continue
+
+            current_width = min(
+                bar_width,
+                right - x
+            )
+
+            # Symmetrisch rond de middenlijn.
+            top_y = (
+                center_y
+                - bar_height * 0.50
+            )
+
+            rect = QRectF(
+                x,
+                top_y,
+                current_width,
+                bar_height
+            )
+
+            if self.playing:
+                fill = QColor("#d84b91")
+                edge = QColor("#8f2f63")
+            else:
+                fill = QColor("#4d5059")
+                edge = QColor("#30323a")
+
+            p.setPen(
+                QPen(
+                    edge,
+                    1
+                )
+            )
+
+            p.setBrush(
+                QBrush(fill)
+            )
+
+            p.drawRoundedRect(
+                rect,
+                2,
+                2
+            )
+
+            # Licht accent door het midden.
+            if self.playing and current_width > 3:
+
+                p.setPen(
+                    QPen(
+                        QColor("#f1a4c8"),
+                        1
+                    )
+                )
+
+                p.drawLine(
+                    QPointF(
+                        x + 1,
+                        center_y
+                    ),
+                    QPointF(
+                        x + current_width - 1,
+                        center_y
+                    )
+                )
+
+        # ----------------------------------------------------
+        # FREQUENCY MARKERS
+        # ----------------------------------------------------
+        p.setPen(
+            QColor("#555862")
+        )
+
+        p.setFont(
+            QFont(
+                "Segoe UI",
+                7,
+                QFont.Weight.Bold
+            )
+        )
+
+        markers = [
+            ("60", 0.00),
+            ("250", 0.25),
+            ("1K", 0.50),
+            ("4K", 0.75),
+            ("16K", 1.00),
+        ]
+
+        for label, fraction in markers:
+
+            x = (
+                left
+                + usable_width * fraction
+            )
+
+            p.drawText(
+                QRectF(
+                    x - 22,
+                    h - 18,
+                    44,
+                    12
+                ),
+                Qt.AlignmentFlag.AlignCenter,
+                label
+            )
 
         p.end()
 
@@ -595,7 +848,8 @@ class MP3ShowcasePage(QWidget):
         rl.addWidget(self.track_list)
 
         self.visualizer = ShowcaseVisualizer(self)
-        rl.addWidget(self.visualizer, 0, Qt.AlignmentFlag.AlignTop)
+        # Large visualizer fills the remaining lower area.
+        rl.addWidget(self.visualizer, 1)
         controls = QHBoxLayout()
         self.previous = QPushButton("VORIGE")
         self.play = QPushButton("PLAY")
@@ -606,7 +860,6 @@ class MP3ShowcasePage(QWidget):
         controls.addWidget(self.next)
         controls.addWidget(self.power)
         rl.addLayout(controls)
-        rl.addStretch(1)
         body.addWidget(right, 3)
         root.addLayout(body, 1)
         self.previous.clicked.connect(self.previous_track)
@@ -615,6 +868,9 @@ class MP3ShowcasePage(QWidget):
         self.power.clicked.connect(lambda: self.vinyl_deck.set_power(not self.vinyl_deck.power_on))
         self.search.textChanged.connect(self.populate_list)
         self.refresh.clicked.connect(self.load_files)
+
+        # Connect the visualizer to the REAL central MP3 player.
+        QTimer.singleShot(500, self._connect_visualizer_to_player)
         self.setStyleSheet("""
             QWidget{background:#0b0b0f;color:#f2f2f5;}
             QFrame#column{background:#121318;border:1px solid #292b33;border-radius:10px;}
@@ -629,6 +885,90 @@ class MP3ShowcasePage(QWidget):
             QListWidget::item{padding:7px;border-bottom:1px solid #22222a;}
             QListWidget::item:selected{background:#3a1d31;}
         """)
+    def _connect_visualizer_to_player(self):
+        """Connect visualizer to the application's real MP3 player."""
+        try:
+            from gui.player import MP3Player
+
+            players = [
+                w for w in QApplication.allWidgets()
+                if isinstance(w, MP3Player)
+            ]
+
+            central = None
+
+            for player in players:
+                try:
+                    if player.parentWidget() is None:
+                        central = player
+                        break
+                except RuntimeError:
+                    pass
+
+            if central is None and players:
+                central = players[0]
+
+            if central is None:
+                return False
+
+            self._visualizer_player = central
+
+            try:
+                central.player.playbackStateChanged.disconnect(
+                    self._visualizer_playback_changed
+                )
+            except (RuntimeError, TypeError):
+                pass
+
+            central.player.playbackStateChanged.connect(
+                self._visualizer_playback_changed
+            )
+
+            try:
+                central.player.mediaStatusChanged.connect(
+                    self._visualizer_media_status
+                )
+            except (RuntimeError, TypeError):
+                pass
+
+            self._visualizer_playback_changed(
+                central.player.playbackState()
+            )
+
+            print("SHOWCASE VISUALIZER: connected to central MP3 player")
+            return True
+
+        except Exception as exc:
+            print("SHOWCASE VISUALIZER CONNECT ERROR:", exc)
+            return False
+
+    def _visualizer_playback_changed(self, state):
+        """Drive animation from the REAL QMediaPlayer state."""
+        try:
+            from PySide6.QtMultimedia import QMediaPlayer
+
+            playing = (
+                state == QMediaPlayer.PlaybackState.PlayingState
+            )
+
+            if hasattr(self, "visualizer"):
+                self.visualizer.set_playing(playing)
+
+        except Exception as exc:
+            print("SHOWCASE VISUALIZER STATE ERROR:", exc)
+
+    def _visualizer_media_status(self, status):
+        """Keep visualizer synchronized when media changes."""
+        try:
+            from PySide6.QtMultimedia import QMediaPlayer
+
+            if status == QMediaPlayer.MediaStatus.EndOfMedia:
+                if hasattr(self, "visualizer"):
+                    self.visualizer.set_playing(False)
+
+        except Exception:
+            pass
+
     def load_files(self):
         conn = get_connection()
         try:
@@ -724,6 +1064,12 @@ class MP3ShowcasePage(QWidget):
         self.track_list.clear()
         self.cover.setPixmap(QPixmap())
         self.cover.setText("GEEN COVER")
+
+
+
+
+
+
 
 
 
