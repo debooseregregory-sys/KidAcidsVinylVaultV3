@@ -177,7 +177,7 @@ class VinylDeckWidget(QWidget):
         # STRAIGHT TONEARM. No elbow, no kink, one physical line.
         pivot = QPointF(w - 105, 120)
         rest_stylus = QPointF(cx + r * 1.03, cy - r * .28)
-        play_stylus = QPointF(cx + r * .74, cy + r * .10)
+        play_stylus = QPointF(cx + r * .96, cy - r * .12)
         stylus = QPointF(
             rest_stylus.x() + (play_stylus.x() - rest_stylus.x()) * self.arm_progress,
             rest_stylus.y() + (play_stylus.y() - rest_stylus.y()) * self.arm_progress,
@@ -242,7 +242,7 @@ class VinylDeckWidget(QWidget):
         p.setPen(QPen(QColor("#a0a2a9"), 2))
         p.drawLine(QPointF(pivot.x() + 38, pivot.y() - 12), QPointF(pivot.x() + 48, pivot.y() - 12))
         # REAL PITCH FADER: recessed slot, scale, metal knob.
-        pitch_x = w - 43
+        pitch_x = w - 58
         top = 210
         bottom = h - 145
         center = (top + bottom) / 2
@@ -378,7 +378,7 @@ class VinylDeckWidget(QWidget):
         if hypot(pos.x() - power.x(), pos.y() - power.y()) <= 32:
             self.set_power(not self.power_on)
             return
-        pitch_x = w - 43
+        pitch_x = w - 58
         top, bottom = 210, h - 145
         if abs(pos.x() - pitch_x) <= 35 and top <= pos.y() <= bottom:
             center = (top + bottom) / 2
@@ -473,7 +473,7 @@ class MP3ShowcasePage(QWidget):
         rl.addWidget(self.track_list, 1)
         controls = QHBoxLayout()
         self.previous = QPushButton("VORIGE")
-        self.play = QPushButton("ÔûÂ PLAY")
+        self.play = QPushButton("PLAY")
         self.next = QPushButton("VOLGENDE")
         self.power = QPushButton("POWER")
         controls.addWidget(self.previous)
@@ -548,7 +548,7 @@ class MP3ShowcasePage(QWidget):
             self.vinyl_deck.set_playing(False)
             self.info.setText(f"<b>{artist}</b><br><span style='color:#d84b91;font-size:16px'>{title}</span><br><br>{row[3] or ''}<br>{row[4] or ''}")
             self.track_list.clear()
-            item = QListWidgetItem(f"{artist} ÔÇö {title}")
+            item = QListWidgetItem(f"{artist} - {title}")
             item.setData(Qt.ItemDataRole.UserRole, str(row[0] or ""))
             self.track_list.addItem(item)
             cover = str(row[7] or "")
@@ -594,6 +594,11 @@ class MP3ShowcasePage(QWidget):
         self.track_list.clear()
         self.cover.setPixmap(QPixmap())
         self.cover.setText("GEEN COVER")
+
+
+
+
+
 
 
 
