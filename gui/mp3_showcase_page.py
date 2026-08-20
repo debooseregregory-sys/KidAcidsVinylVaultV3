@@ -65,7 +65,7 @@ class VinylDeckWidget(QWidget):
         w, h = float(self.width()), float(self.height())
         r = max(145.0, min((w - 250.0) * 0.46, (h - 150.0) * 0.45))
         cx = min(w * 0.46, w - r - 100)
-        cy = 300 + max(0.0, h - 610.0) * 0.12
+        cy = 450 + max(0.0, h - 610.0) * 0.12
         return w, h, cx, cy, r
     def _text(self, p, rect, text, size=9, color=MUTED, weight=QFont.Weight.Bold,
               align=Qt.AlignmentFlag.AlignLeft):
@@ -117,25 +117,63 @@ class VinylDeckWidget(QWidget):
         p.save()
         p.translate(cx, cy)
         p.rotate(self.angle)
-        p.setPen(QPen(QColor(255, 255, 255, 24), 2))
-        p.drawLine(QPointF(-r * .78, -r * .23), QPointF(r * .80, -r * .23))
         p.setPen(QPen(QColor(216, 75, 145, 155), 3))
         p.drawArc(QRectF(-r * .90, -r * .90, r * 1.80, r * 1.80), 18 * 16, 52 * 16)
         p.restore()
-        # LABEL + SPINDLE
-        label_r = min(58.0, r * .255)
+        # LABEL + SPINDLE - ROTATES WITH THE VINYL
+        p.save()
+        p.translate(cx, cy)
+        p.rotate(self.angle)
+
+        label_r = min(155.0, r * .65)
+
         p.setPen(QPen(QColor("#e7a0c2"), 2))
         p.setBrush(QBrush(QColor("#66193f")))
-        p.drawEllipse(QPointF(cx, cy), label_r, label_r)
+        p.drawEllipse(QPointF(0, 0), label_r, label_r)
+
         p.setPen(QPen(QColor("#b23c75"), 1))
-        p.drawEllipse(QPointF(cx, cy), label_r * .78, label_r * .78)
-        self._text(p, QRectF(cx - label_r, cy - 9, label_r * 2, 18), "KID ACID", 8, QColor("#f7e6ee"), QFont.Weight.Black, Qt.AlignmentFlag.AlignCenter)
-        self._text(p, QRectF(cx - label_r, cy + 8, label_r * 2, 14), "VINYL VAULT", 5, QColor("#e9a8c6"), QFont.Weight.Bold, Qt.AlignmentFlag.AlignCenter)
+        p.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+        p.drawEllipse(QPointF(0, 0), label_r * .78, label_r * .78)
+
+        self._text(
+            p,
+            QRectF(
+                -label_r * .82,
+                -label_r * .62,
+                label_r * 1.64,
+                42
+            ),
+            "KID ACID",
+            17,
+            QColor("#f7e6ee"),
+            QFont.Weight.Black,
+            Qt.AlignmentFlag.AlignCenter
+        )
+
+        self._text(
+            p,
+            QRectF(
+                -label_r * .82,
+                label_r * .38,
+                label_r * 1.64,
+                34
+            ),
+            "VINYL VAULT",
+            13,
+            QColor("#e9a8c6"),
+            QFont.Weight.Bold,
+            Qt.AlignmentFlag.AlignCenter
+        )
+
+        # Spindle
         p.setPen(QPen(QColor("#cfd0d4"), 1))
         p.setBrush(QBrush(QColor("#bfc0c5")))
-        p.drawEllipse(QPointF(cx, cy), 5, 5)
+        p.drawEllipse(QPointF(0, 0), 5, 5)
+
         p.setBrush(QBrush(QColor("#202126")))
-        p.drawEllipse(QPointF(cx, cy), 2, 2)
+        p.drawEllipse(QPointF(0, 0), 2, 2)
+
+        p.restore()
         # STRAIGHT TONEARM. No elbow, no kink, one physical line.
         pivot = QPointF(w - 105, 120)
         rest_stylus = QPointF(cx + r * 1.03, cy - r * .28)
@@ -228,17 +266,100 @@ class VinylDeckWidget(QWidget):
         self._text(p, QRectF(pitch_x - 35, center - 9, 70, 18), "0", 8, TEXT, QFont.Weight.Black, Qt.AlignmentFlag.AlignCenter)
         self._text(p, QRectF(pitch_x - 35, bottom + 12, 70, 18), "-8", 8, MUTED, QFont.Weight.Bold, Qt.AlignmentFlag.AlignCenter)
         self._text(p, QRectF(pitch_x - 45, bottom + 34, 90, 18), "PITCH", 8, PINK, QFont.Weight.Black, Qt.AlignmentFlag.AlignCenter)
-        # PHYSICAL POWER BUTTON.
-        power = QPointF(70, h - 66)
-        p.setPen(QPen(QColor("#050507"), 3))
-        p.setBrush(QBrush(QColor("#292b32")))
-        p.drawEllipse(power, 24, 24)
-        p.setPen(QPen(QColor("#555862"), 1))
-        p.drawEllipse(power, 19, 19)
-        p.setPen(QPen(PINK if self.power_on else QColor("#555862"), 3))
-        p.drawArc(QRectF(power.x() - 11, power.y() - 11, 22, 22), 45 * 16, 270 * 16)
-        p.drawLine(QPointF(power.x(), power.y() - 14), QPointF(power.x(), power.y() + 1))
-        self._text(p, QRectF(power.x() - 40, power.y() + 28, 80, 18), "POWER", 7, PINK if self.power_on else MUTED, QFont.Weight.Black, Qt.AlignmentFlag.AlignCenter)
+        # REALISTIC SILVER POWER SWITCH
+        # Near-square physical metal button with POWER label above it.
+        power_rect = QRectF(35, h - 82, 54, 44)
+
+        # Small POWER label above the physical switch.
+        self._text(
+            p,
+            QRectF(power_rect.x() - 4, power_rect.y() - 17,
+                   power_rect.width() + 8, 14),
+            "POWER",
+            7,
+            PINK if self.power_on else MUTED,
+            QFont.Weight.Black,
+            Qt.AlignmentFlag.AlignCenter
+        )
+
+        # Deep mounting recess.
+        p.setPen(QPen(QColor("#030406"), 2))
+        p.setBrush(QBrush(QColor("#07080b")))
+        p.drawRoundedRect(power_rect, 5, 5)
+
+        # Brushed silver outer frame.
+        frame = QRectF(
+            power_rect.x() + 2,
+            power_rect.y() + 2,
+            power_rect.width() - 4,
+            power_rect.height() - 4
+        )
+
+        p.setPen(QPen(QColor("#a5a8ae"), 1))
+        p.setBrush(QBrush(QColor("#777a82")))
+        p.drawRoundedRect(frame, 4, 4)
+
+        # Bright metal highlight.
+        p.setPen(QPen(QColor("#e0e1e4"), 1))
+        p.drawLine(
+            QPointF(frame.left() + 5, frame.top() + 2),
+            QPointF(frame.right() - 5, frame.top() + 2)
+        )
+
+        # Recessed dark cavity.
+        cavity = QRectF(
+            frame.x() + 5,
+            frame.y() + 5,
+            frame.width() - 10,
+            frame.height() - 10
+        )
+
+        p.setPen(QPen(QColor("#292b31"), 1))
+        p.setBrush(QBrush(QColor("#111216")))
+        p.drawRoundedRect(cavity, 3, 3)
+
+        # Physical silver rocker.
+        rocker = QRectF(
+            cavity.x() + 4,
+            cavity.y() + 3,
+            cavity.width() - 8,
+            cavity.height() - 6
+        )
+
+        p.setPen(QPen(QColor("#b7bac0"), 1))
+        p.setBrush(QBrush(
+            QColor("#c4c6ca") if self.power_on
+            else QColor("#85888f")
+        ))
+        p.drawRoundedRect(rocker, 3, 3)
+
+        # Physical lower shadow.
+        p.setPen(QPen(QColor("#4a4c52"), 2))
+        p.drawLine(
+            QPointF(rocker.left() + 3, rocker.bottom() - 2),
+            QPointF(rocker.right() - 3, rocker.bottom() - 2)
+        )
+
+        # Top metallic reflection.
+        p.setPen(QPen(QColor("#f1f2f4"), 1))
+        p.drawLine(
+            QPointF(rocker.left() + 4, rocker.top() + 2),
+            QPointF(rocker.right() - 4, rocker.top() + 2)
+        )
+
+        # Small status LED only.
+        led = QRectF(
+            rocker.center().x() - 3,
+            rocker.center().y() - 3,
+            6,
+            6
+        )
+
+        p.setPen(QPen(QColor("#34363c"), 1))
+        p.setBrush(QBrush(
+            PINK if self.power_on else QColor("#393b42")
+        ))
+        p.drawEllipse(led)
         # CLEAN TECHNICAL DISPLAY STRIP.
         strip = QRectF(120, h - 92, max(220.0, w - 300.0), 58)
         p.setPen(QPen(QColor("#2d2f36"), 1))
@@ -473,3 +594,20 @@ class MP3ShowcasePage(QWidget):
         self.track_list.clear()
         self.cover.setPixmap(QPixmap())
         self.cover.setText("GEEN COVER")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
