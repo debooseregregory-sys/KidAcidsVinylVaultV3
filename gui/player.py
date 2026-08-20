@@ -12,7 +12,7 @@ class MP3Player(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.current_path = None
-        self._delegate_player = self._find_parent_player(parent)
+        self._delegate_player = None
 
         self.audio_output = QAudioOutput()
         self.audio_output.setVolume(1.0)
@@ -23,6 +23,13 @@ class MP3Player(QWidget):
         self.player.playbackStateChanged.connect(self.playback_state_changed)
         self.player.errorOccurred.connect(self._player_error)
         self.player.mediaStatusChanged.connect(self._media_status)
+
+        # A child MP3Player (for example the hidden Showcase player) may
+        # delegate to the application's real central player. The central
+        # player itself must NEVER delegate to another MP3Player.
+        if parent is not None:
+            self._delegate_player = self._find_parent_player(parent, exclude=self)
+
         self.build_ui()
 
     @staticmethod
@@ -64,8 +71,11 @@ class MP3Player(QWidget):
         """Resolve the central player again when playback is requested."""
         if self._delegate_player is not None and self._delegate_player is not self:
             return self._delegate_player
-        self._delegate_player = self._find_parent_player(self.parentWidget(), exclude=self)
-        return self._delegate_player
+        if self.parentWidget() is not None:
+            self._delegate_player = self._find_parent_player(self.parentWidget(), exclude=self)
+            if self._delegate_player is not None and self._delegate_player is not self:
+                return self._delegate_player
+        return None
 
     def _player_error(self, error, error_string):
         print("========================================")
@@ -145,7 +155,7 @@ class MP3Player(QWidget):
         self.track_label.setText(file_path.name)
 
         delegate = self._resolve_delegate()
-        if delegate is not None:
+        if delegate is not None and delegate is not self:
             print("MP3 SHOWCASE -> CENTRALE MP3 PLAYER:", self.current_path)
             delegate.play_file(self.current_path)
         else:
@@ -161,7 +171,7 @@ class MP3Player(QWidget):
 
     def toggle_play(self):
         delegate = self._resolve_delegate()
-        if delegate is not None:
+        if delegate is not None and delegate is not self:
             delegate.toggle_play()
             return
         if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
@@ -171,7 +181,7 @@ class MP3Player(QWidget):
 
     def stop(self):
         delegate = self._resolve_delegate()
-        if delegate is not None:
+        if delegate is not None and delegate is not self:
             delegate.stop()
         else:
             self.player.stop()
@@ -181,14 +191,14 @@ class MP3Player(QWidget):
 
     def seek(self, position):
         delegate = self._resolve_delegate()
-        if delegate is not None:
+        if delegate is not None and delegate is not self:
             delegate.seek(position)
         else:
             self.player.setPosition(position)
 
     def change_volume(self, value):
         delegate = self._resolve_delegate()
-        if delegate is not None:
+        if delegate is not None and delegate is not self:
             delegate.change_volume(value)
         else:
             self.audio_output.setVolume(value / 100.0)
