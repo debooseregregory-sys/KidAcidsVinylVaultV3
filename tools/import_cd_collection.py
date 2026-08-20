@@ -6,6 +6,14 @@
 from pathlib import Path
 import sys
 
+# When this file is executed directly as tools/import_cd_collection.py,
+# Python puts the tools directory on sys.path instead of the project root.
+# Add the project root explicitly so the existing database package can be
+# imported reliably from every supported launch location.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 import xlrd
 
 from database.cd_database import ensure_cd_schema, import_cd_rows, count_cd_releases
