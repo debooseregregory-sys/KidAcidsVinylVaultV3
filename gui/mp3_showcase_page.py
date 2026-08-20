@@ -6,11 +6,10 @@ from PySide6.QtGui import QPixmap, QPainter, QPen, QBrush, QColor, QFont, QLinea
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QListWidget, QListWidgetItem, QFrame, QSizePolicy
 
 from database.database import get_connection
-from gui.player import MP3Player
 
 
 class VinylDeckWidget(QWidget):
-    """Visual deck. Playback is handled by the real MP3Player."""
+    """Visual deck. Playback is handled by the application's central MP3 player."""
     def __init__(self, parent=None):
         super().__init__(parent)
         self.artist = "KID ACID"
@@ -134,8 +133,6 @@ class MP3ShowcasePage(QWidget):
     def __init__(self,parent=None):
         super().__init__(parent)
         self.items=[]; self.visible_items=[]; self.current_index=-1
-        self.audio_player=MP3Player(self); self.audio_player.hide()
-        self.audio_player.play_started.connect(self._audio_started); self.audio_player.stopped.connect(self._audio_stopped)
         self.build_ui(); self.load_files()
 
     def build_ui(self):
@@ -143,7 +140,7 @@ class MP3ShowcasePage(QWidget):
         title=QLabel("MP3 SHOWCASE"); title.setStyleSheet("font-size:26px;font-weight:900;color:#fff;"); root.addWidget(title)
         search=QHBoxLayout(); self.search=QLineEdit(); self.search.setPlaceholderText("Zoek artiest, titel, album, genre, release of bestand..."); search.addWidget(self.search,1); self.refresh=QPushButton("VERVERS"); search.addWidget(self.refresh); root.addLayout(search)
         self.status=QLabel("0 MP3's"); self.status.setStyleSheet("color:#9b9ba6;"); root.addWidget(self.status)
-        body=QHBoxLayout(); body.setSpacing(20); self.list=QListWidget(); self.list.setMinimumWidth(360); self.list.currentRowChanged.connect(self.select_index); body.addWidget(self.list)
+        body=QHBoxLayout(); body.setSpacing(20); self.list=QListWidget(); self.list.setMinimumWidth(360); self.list.currentRowChanged.connect(self.select_index); self.list.itemDoubleClicked.connect(self.play_list_item); body.addWidget(self.list)
         card=QFrame(); card.setStyleSheet("QFrame{background:#121219;border:1px solid #2a2532;border-radius:10px;}"); cl=QVBoxLayout(card); cl.setContentsMargins(22,22,22,22); cl.setSpacing(10)
         top=QHBoxLayout(); top.setSpacing(22); self.cover=QLabel("NO COVER"); self.cover.setFixedSize(300,300); self.cover.setAlignment(Qt.AlignmentFlag.AlignCenter); self.cover.setStyleSheet("background:#0b0b0f;color:#666672;border:1px solid #302b39;border-radius:6px;"); top.addWidget(self.cover,0,Qt.AlignmentFlag.AlignTop)
         info=QVBoxLayout(); self.artist_label=QLabel("-"); self.artist_label.setStyleSheet("color:#d84b91;font-size:18px;font-weight:bold;"); self.artist_label.setWordWrap(True); info.addWidget(self.artist_label); self.title_label=QLabel("-"); self.title_label.setWordWrap(True); self.title_label.setStyleSheet("color:#fff;font-size:27px;font-weight:800;"); info.addWidget(self.title_label); self.meta_label=QLabel("-"); self.meta_label.setWordWrap(True); self.meta_label.setStyleSheet("color:#aaaab3;font-size:13px;"); info.addWidget(self.meta_label); self.release_label=QLabel("Release: -"); self.release_label.setWordWrap(True); self.release_label.setStyleSheet("color:#c5b6d4;font-size:14px;font-weight:bold;"); info.addWidget(self.release_label); self.discogs_label=QLabel("Discogs: -"); self.discogs_label.setWordWrap(True); self.discogs_label.setStyleSheet("color:#8f8798;font-size:12px;"); info.addWidget(self.discogs_label); info.addStretch(); top.addLayout(info,1); cl.addLayout(top)
@@ -214,20 +211,24 @@ class MP3ShowcasePage(QWidget):
 
     def _play_path(self,path):
         path=str(path or "")
-        if not path or not Path(path).exists(): return False
-        self.audio_player.play_file(path); self.play_mp3.emit(path); self.vinyl_deck.set_playing(True); return True
+        if not path or not Path(path).exists():
+            self.status.setText("MP3-bestand niet gevonden")
+            return False
+        self.play_mp3.emit(path)
+        self.vinyl_deck.set_playing(True)
+        self.status.setText(f"PLAYING: {Path(path).name}")
+        return True
 
     def play_current(self):
-        if 0<=self.current_index<len(self.visible_items): self._play_path(self.visible_items[self.current_index][0])
+        if 0<=self.current_index<len(self.visible_items):
+            self._play_path(self.visible_items[self.current_index][0])
+
+    def play_list_item(self,item):
+        self.play_current()
 
     def play_track_item(self,item):
         path=item.data(Qt.ItemDataRole.UserRole)
         if not self._play_path(path): self.play_current()
-
-    def _audio_started(self,path):
-        self.vinyl_deck.set_playing(True); self.status.setText(f"PLAYING: {Path(path).name}")
-
-    def _audio_stopped(self): self.vinyl_deck.set_playing(False)
 
     def previous_track(self):
         if self.current_index>0: self.list.setCurrentRow(self.current_index-1); self.play_current()
