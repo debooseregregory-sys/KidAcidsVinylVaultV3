@@ -11,7 +11,6 @@ import io
 import sqlite3
 from contextlib import redirect_stdout
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QMessageBox
 
 from database.database import get_connection
@@ -270,22 +269,8 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
         self.current_media_type = VINYL
 
         # The original Detail/Showcase pages are shared by Vinyl and CD.
-        try:
-            self.detail_page.back_requested.disconnect(self.show_library)
-        except (TypeError, RuntimeError):
-            pass
         self.detail_page.back_requested.connect(self._detail_back)
-
-        try:
-            self.showcase_page.back_requested.disconnect(self.show_board)
-        except (TypeError, RuntimeError):
-            pass
         self.showcase_page.back_requested.connect(self._showcase_back)
-
-        try:
-            self.showcase_page.edit_requested.disconnect(self.open_release)
-        except (TypeError, RuntimeError):
-            pass
         self.showcase_page.edit_requested.connect(self._showcase_edit)
 
         # Reuse the exact same Library/Board/Showcase/Detail stack.
@@ -311,6 +296,10 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
         self.cd_library_button.setEnabled(True)
         self.cd_library_button.setToolTip("CD Library")
         self.cd_library_button.clicked.connect(self.show_cd_library)
+
+        footer = self.findChild(QLabel, "sidebarFooter")
+        if footer is not None:
+            footer.setText("VINYL  •  CD  •  KID ACID")
 
         self._set_collection_badge(VINYL)
 
