@@ -26,25 +26,23 @@ class MP3Player(QWidget):
         self.build_ui()
 
     @staticmethod
-    def _find_parent_player(parent):
-        """Find the application's already-working central MP3Player."""
+    def _find_parent_player(parent, exclude=None):
+        """Find the application's real central MP3Player."""
         widget = parent
         while widget is not None:
             candidate = getattr(widget, "mp3_player", None)
-            if isinstance(candidate, MP3Player) and candidate is not widget:
+            if isinstance(candidate, MP3Player) and candidate is not widget and candidate is not exclude:
                 return candidate
             try:
                 widget = widget.parentWidget()
             except AttributeError:
                 widget = None
 
-        # MP3 Showcase can be created outside the normal parent chain.
-        # In that case use the application's existing central player.
         try:
             active = QApplication.activeWindow()
             while active is not None:
                 candidate = getattr(active, "mp3_player", None)
-                if isinstance(candidate, MP3Player) and candidate is not active:
+                if isinstance(candidate, MP3Player) and candidate is not exclude:
                     return candidate
                 try:
                     active = active.parentWidget()
@@ -53,15 +51,21 @@ class MP3Player(QWidget):
         except RuntimeError:
             pass
 
-        # Last resort: locate an existing MP3Player among live widgets.
         try:
             for widget in QApplication.allWidgets():
-                if isinstance(widget, MP3Player) and widget is not parent:
+                if isinstance(widget, MP3Player) and widget is not exclude:
                     return widget
         except RuntimeError:
             pass
 
         return None
+
+    def _resolve_delegate(self):
+        """Resolve the central player again when playback is requested."""
+        if self._delegate_player is not None and self._delegate_player is not self:
+            return self._delegate_player
+        self._delegate_player = self._find_parent_player(self.parentWidget(), exclude=self)
+        return self._delegate_player
 
     def _player_error(self, error, error_string):
         print("========================================")
@@ -140,9 +144,10 @@ class MP3Player(QWidget):
         self.current_path = str(file_path)
         self.track_label.setText(file_path.name)
 
-        if self._delegate_player is not None:
+        delegate = self._resolve_delegate()
+        if delegate is not None:
             print("MP3 SHOWCASE -> CENTRALE MP3 PLAYER:", self.current_path)
-            self._delegate_player.play_file(self.current_path)
+            delegate.play_file(self.current_path)
         else:
             print("MP3 PLAY:", self.current_path)
             self.player.stop()
@@ -155,8 +160,9 @@ class MP3Player(QWidget):
         self.play_started.emit(self.current_path)
 
     def toggle_play(self):
-        if self._delegate_player is not None:
-            self._delegate_player.toggle_play()
+        delegate = self._resolve_delegate()
+        if delegate is not None:
+            delegate.toggle_play()
             return
         if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.player.pause()
@@ -164,8 +170,9 @@ class MP3Player(QWidget):
             self.player.play()
 
     def stop(self):
-        if self._delegate_player is not None:
-            self._delegate_player.stop()
+        delegate = self._resolve_delegate()
+        if delegate is not None:
+            delegate.stop()
         else:
             self.player.stop()
         self.slider.setValue(0)
@@ -173,14 +180,16 @@ class MP3Player(QWidget):
         self.stopped.emit()
 
     def seek(self, position):
-        if self._delegate_player is not None:
-            self._delegate_player.seek(position)
+        delegate = self._resolve_delegate()
+        if delegate is not None:
+            delegate.seek(position)
         else:
             self.player.setPosition(position)
 
     def change_volume(self, value):
-        if self._delegate_player is not None:
-            self._delegate_player.change_volume(value)
+        delegate = self._resolve_delegate()
+        if delegate is not None:
+            delegate.change_volume(value)
         else:
             self.audio_output.setVolume(value / 100.0)
 
