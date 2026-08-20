@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # KID ACID'S VINYLVAULT V3
 # MAIN WINDOW
 #
@@ -30,6 +30,7 @@ from gui.player import MP3Player
 from gui.mp3_library_page import MP3LibraryPage
 from gui.mp3_showcase_page import MP3ShowcasePage
 from gui.player_bar import PlayerBar
+from gui.mp3_showcase_playback_bridge import install_mp3_showcase_playback_bridge
 
 
 # ============================================================
@@ -676,6 +677,7 @@ class VinylVaultWindow(QMainWindow):
         # ====================================================
 
         self.mp3_showcase_page = MP3ShowcasePage()
+        install_mp3_showcase_playback_bridge()
 
         self.mp3_showcase_page.play_mp3.connect(
             self.player_bar_play
