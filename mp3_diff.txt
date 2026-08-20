@@ -1,0 +1,258 @@
+﻿diff --git a/gui/mp3_showcase_page.py b/gui/mp3_showcase_page.py
+index cad7dad..8b8b507 100644
+--- a/gui/mp3_showcase_page.py
++++ b/gui/mp3_showcase_page.py
+@@ -1,4 +1,4 @@
+-´╗┐from __future__ import annotations
++from __future__ import annotations
+ 
+ from pathlib import Path
+ from math import cos, sin, radians, hypot, atan2, degrees
+@@ -67,7 +67,7 @@ class VinylDeckWidget(QWidget):
+ 
+     def _tick(self):
+         if self.playing:
+-            self.angle = (self.angle + 2.6) % 360.0
++            self.angle = (self.angle + 3.4) % 360.0
+         target = 1.0 if self.playing else 0.0
+         self.arm_progress += (target - self.arm_progress) * 0.08
+         if not self.playing and self.arm_progress < 0.001:
+@@ -79,7 +79,7 @@ class VinylDeckWidget(QWidget):
+         w, h = float(self.width()), float(self.height())
+         r = max(145.0, min((w - 250.0) * 0.46, (h - 150.0) * 0.45))
+         cx = min(w * 0.46, w - r - 100)
+-        cy = 300 + max(0.0, h - 610.0) * 0.12
++        cy = 450 + max(0.0, h - 610.0) * 0.12
+         return w, h, cx, cy, r
+ 
+     def _text(self, p, rect, text, size=9, color=MUTED, weight=QFont.Weight.Bold,
+@@ -138,21 +138,36 @@ class VinylDeckWidget(QWidget):
+         p.save()
+         p.translate(cx, cy)
+         p.rotate(self.angle)
+-        p.setPen(QPen(QColor(255, 255, 255, 24), 2))
+-        p.drawLine(QPointF(-r * .78, -r * .23), QPointF(r * .80, -r * .23))
+         p.setPen(QPen(QColor(216, 75, 145, 155), 3))
+         p.drawArc(QRectF(-r * .90, -r * .90, r * 1.80, r * 1.80), 18 * 16, 52 * 16)
+         p.restore()
+ 
+         # LABEL + SPINDLE
+-        label_r = min(58.0, r * .255)
++        label_r = min(105.0, r * .45)
+         p.setPen(QPen(QColor("#e7a0c2"), 2))
+         p.setBrush(QBrush(QColor("#66193f")))
+         p.drawEllipse(QPointF(cx, cy), label_r, label_r)
+         p.setPen(QPen(QColor("#b23c75"), 1))
+         p.drawEllipse(QPointF(cx, cy), label_r * .78, label_r * .78)
+-        self._text(p, QRectF(cx - label_r, cy - 9, label_r * 2, 18), "KID ACID", 8, QColor("#f7e6ee"), QFont.Weight.Black, Qt.AlignmentFlag.AlignCenter)
+-        self._text(p, QRectF(cx - label_r, cy + 8, label_r * 2, 14), "VINYL VAULT", 5, QColor("#e9a8c6"), QFont.Weight.Bold, Qt.AlignmentFlag.AlignCenter)
++        # LABEL TEXT - larger and spread across the label
++        self._text(
++            p,
++            QRectF(cx - label_r * 0.82, cy - label_r * 0.48, label_r * 1.64, 28),
++            "KID ACID",
++            14,
++            QColor("#f7e6ee"),
++            QFont.Weight.Black,
++            Qt.AlignmentFlag.AlignCenter
++        )
++        self._text(
++            p,
++            QRectF(cx - label_r * 0.82, cy + label_r * 0.30, label_r * 1.64, 22),
++            "VINYL VAULT",
++            10,
++            QColor("#e9a8c6"),
++            QFont.Weight.Bold,
++            Qt.AlignmentFlag.AlignCenter
++        )
+         p.setPen(QPen(QColor("#cfd0d4"), 1))
+         p.setBrush(QBrush(QColor("#bfc0c5")))
+         p.drawEllipse(QPointF(cx, cy), 5, 5)
+@@ -161,17 +176,43 @@ class VinylDeckWidget(QWidget):
+ 
+         # STRAIGHT TONEARM. No elbow, no kink, one physical line.
+         pivot = QPointF(w - 105, 120)
++        # FIXED PHYSICAL ARM LENGTH
++        # The stylus moves on an arc around the fixed pivot.
++        # This keeps the tonearm physically the same length while playing.
+         rest_stylus = QPointF(cx + r * 1.03, cy - r * .28)
+         play_stylus = QPointF(cx + r * .74, cy + r * .10)
++
++        rest_dx = rest_stylus.x() - pivot.x()
++        rest_dy = rest_stylus.y() - pivot.y()
++        play_dx = play_stylus.x() - pivot.x()
++        play_dy = play_stylus.y() - pivot.y()
++
++        arm_length = max(1.0, hypot(rest_dx, rest_dy))
++
++        rest_angle = atan2(rest_dy, rest_dx)
++        play_angle = atan2(play_dy, play_dx)
++
++        # Shortest rotation from rest position to playing position.
++        delta = (
++            (play_angle - rest_angle + 3.141592653589793)
++            % (2 * 3.141592653589793)
++            - 3.141592653589793
++        )
++
++        current_angle = rest_angle + delta * self.arm_progress
++
++        # IMPORTANT:
++        # Always calculate the stylus from the fixed pivot + fixed radius.
+         stylus = QPointF(
+-            rest_stylus.x() + (play_stylus.x() - rest_stylus.x()) * self.arm_progress,
+-            rest_stylus.y() + (play_stylus.y() - rest_stylus.y()) * self.arm_progress,
++            pivot.x() + cos(current_angle) * arm_length,
++            pivot.y() + sin(current_angle) * arm_length,
+         )
++
+         dx = stylus.x() - pivot.x()
+         dy = stylus.y() - pivot.y()
+-        length = max(1.0, hypot(dx, dy))
++        length = arm_length
+         ux, uy = dx / length, dy / length
+-        arm_angle = degrees(atan2(dy, dx))
++        arm_angle = degrees(current_angle)
+ 
+         # Counterweight is collinear with the arm.
+         counter = QPointF(pivot.x() - ux * 54, pivot.y() - uy * 54)
+@@ -234,7 +275,7 @@ class VinylDeckWidget(QWidget):
+         p.drawLine(QPointF(pivot.x() + 38, pivot.y() - 12), QPointF(pivot.x() + 48, pivot.y() - 12))
+ 
+         # REAL PITCH FADER: recessed slot, scale, metal knob.
+-        pitch_x = w - 43
++        pitch_x = w - 75
+         top = 210
+         bottom = h - 145
+         center = (top + bottom) / 2
+@@ -259,85 +300,60 @@ class VinylDeckWidget(QWidget):
+         self._text(p, QRectF(pitch_x - 35, bottom + 12, 70, 18), "-8", 8, MUTED, QFont.Weight.Bold, Qt.AlignmentFlag.AlignCenter)
+         self._text(p, QRectF(pitch_x - 45, bottom + 34, 90, 18), "PITCH", 8, PINK, QFont.Weight.Black, Qt.AlignmentFlag.AlignCenter)
+ 
+-        # PHYSICAL POWER BUTTON.
+-        power = QPointF(70, h - 66)
++        # SQUARE START / POWER BUTTON.
++        power_x = 70.0
++        power_y = h - 66.0
++        power_rect = QRectF(power_x - 34, power_y - 24, 68, 48)
++
+         p.setPen(QPen(QColor("#050507"), 3))
+         p.setBrush(QBrush(QColor("#292b32")))
+-        p.drawEllipse(power, 24, 24)
++        p.drawRoundedRect(power_rect, 7, 7)
++
+         p.setPen(QPen(QColor("#555862"), 1))
+-        p.drawEllipse(power, 19, 19)
+-        p.setPen(QPen(PINK if self.power_on else QColor("#555862"), 3))
+-        p.drawArc(QRectF(power.x() - 11, power.y() - 11, 22, 22), 45 * 16, 270 * 16)
+-        p.drawLine(QPointF(power.x(), power.y() - 14), QPointF(power.x(), power.y() + 1))
+-        self._text(p, QRectF(power.x() - 40, power.y() + 28, 80, 18), "POWER", 7, PINK if self.power_on else MUTED, QFont.Weight.Black, Qt.AlignmentFlag.AlignCenter)
++        p.setBrush(QBrush(QColor("#1d1f25")))
++        p.drawRoundedRect(
++            QRectF(power_x - 28, power_y - 18, 56, 36),
++            5, 5
++        )
++
++        p.setPen(QPen(PINK if self.power_on else QColor("#555862"), 2))
++        p.drawRoundedRect(
++            QRectF(power_x - 22, power_y - 12, 44, 24),
++            4, 4
++        )
++
++        self._text(
++            p,
++            QRectF(power_x - 22, power_y - 10, 44, 20),
++            "START",
++            8,
++            PINK if self.power_on else MUTED,
++            QFont.Weight.Black,
++            Qt.AlignmentFlag.AlignCenter
++        )
+ 
+         # CLEAN TECHNICAL DISPLAY STRIP.
+-        strip = QRectF(120, h - 92, max(250.0, w - 205), 58)
++        # Stops well before the pitch fader.
++        strip = QRectF(120, h - 92, max(220.0, w - 300.0), 58)
++
+         p.setPen(QPen(QColor("#2d2f36"), 1))
+         p.setBrush(QBrush(QColor("#0d0e12")))
+         p.drawRoundedRect(strip, 7, 7)
+-        self._text(p, QRectF(strip.x() + 12, strip.y() + 7, strip.width() - 24, 17), "33├ö├á├┤ RPM   ├ö├ç├│   DIRECT DRIVE   ├ö├ç├│   STABLE PLATTER", 8)
+-        self._text(p, QRectF(strip.x() + 12, strip.y() + 28, strip.width() * .45, 20), self.artist, 10, TEXT, QFont.Weight.Bold)
+-        self._text(p, QRectF(strip.x() + strip.width() * .46, strip.y() + 28, strip.width() * .52 - 12, 20), self.title, 10, PINK, QFont.Weight.Black, Qt.AlignmentFlag.AlignRight)
+-        p.end()
+-
+-    def mousePressEvent(self, event):
+-        if event.button() != Qt.MouseButton.LeftButton:
+-            return super().mousePressEvent(event)
+-        w, h, *_ = self._layout()
+-        pos = event.position()
+-        power = QPointF(70, h - 66)
+-        if hypot(pos.x() - power.x(), pos.y() - power.y()) <= 32:
+-            self.set_power(not self.power_on)
+-            return
+-        pitch_x = w - 43
+-        top, bottom = 210, h - 145
+-        if abs(pos.x() - pitch_x) <= 35 and top <= pos.y() <= bottom:
+-            center = (top + bottom) / 2
+-            step = (bottom - top) / 16
+-            self.pitch = max(-8.0, min(8.0, (center - pos.y()) / step))
+-            self.update()
+-            return
+-        super().mousePressEvent(event)
+-
+-
+-class MP3ShowcasePage(QWidget):
+-    play_mp3 = Signal(str)
+ 
+-    def __init__(self, parent=None):
+-        super().__init__(parent)
+-        self.items = []
+-        self.visible_items = []
+-        self.current_index = -1
+-        ensure_mp3_discogs_columns()
+-        self.build_ui()
+-        self.load_files()
+-
+-    def build_ui(self):
+-        root = QVBoxLayout(self)
+-        root.setContentsMargins(14, 12, 14, 12)
+-        root.setSpacing(10)
+-
+-        header = QHBoxLayout()
+-        title = QLabel("MP3 SHOWCASE")
+-        title.setStyleSheet("font-size:25px;font-weight:900;color:#fff;")
+-        header.addWidget(title)
+-        header.addStretch(1)
+-        self.status = QLabel("Laden...")
+-        self.status.setStyleSheet("color:#9b9ba6;font-weight:700;")
+-        header.addWidget(self.status)
+-        root.addLayout(header)
+-
+-        search = QHBoxLayout()
+-        self.search = QLineEdit()
+-        self.search.setPlaceholderText("Zoek artiest, titel, album, genre, release of bestand...")
+-        search.addWidget(self.search, 1)
+-        self.refresh = QPushButton("VERVERS")
+-        search.addWidget(self.refresh)
+-        root.addLayout(search)
+-
+-        body = QHBoxLayout()
+-        body.setSpacing(12)
++        self._text(
++            p,
++            QRectF(
++                strip.x() + 12,
++                strip.y() + 7,
++                strip.width() - 24,
++                20
++            ),
++            "33 RPM   |   DIRECT DRIVE   |   STABLE PLATTER",
++            8,
++            MUTED,
++            QFont.Weight.Bold,
++            Qt.AlignmentFlag.AlignCenter
++        )
+ 
+         # COLUMN 1: MP3 library.
+         left = QFrame()

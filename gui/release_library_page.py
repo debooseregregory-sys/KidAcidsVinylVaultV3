@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # KID ACID'S VINYLVAULT V3
 # RELEASE LIBRARY
 # ============================================================
@@ -209,6 +209,7 @@ class ReleaseLibraryPage(QWidget):
         self.all_releases = []
 
         self.status_filter = "all"
+        self.media_filter = "VINYL"
 
         self.search_timer = QTimer(self)
         self.search_timer.setSingleShot(True)
@@ -270,7 +271,7 @@ class ReleaseLibraryPage(QWidget):
         # ====================================================
 
         subtitle = QLabel(
-            "Je volledige fysieke vinylcollectie"
+            "Je volledige fysieke collectie"
         )
 
         subtitle.setStyleSheet(
@@ -397,6 +398,48 @@ class ReleaseLibraryPage(QWidget):
 
         status_filter_layout.addWidget(
             self.checked_button
+        )
+
+        # ====================================================
+        # MEDIA FILTER
+        # ====================================================
+
+        self.vinyl_button = QPushButton(
+            "[ VINYL ]"
+        )
+
+        self.cd_button = QPushButton(
+            "[ CD ]"
+        )
+
+        self.media_all_button = QPushButton(
+            "[ VINYL + CD ]"
+        )
+
+        self.vinyl_button.clicked.connect(
+            lambda: self.set_media_filter("VINYL")
+        )
+
+        self.cd_button.clicked.connect(
+            lambda: self.set_media_filter("CD")
+        )
+
+        self.media_all_button.clicked.connect(
+            lambda: self.set_media_filter("ALL")
+        )
+
+        status_filter_layout.addSpacing(20)
+
+        status_filter_layout.addWidget(
+            self.vinyl_button
+        )
+
+        status_filter_layout.addWidget(
+            self.cd_button
+        )
+
+        status_filter_layout.addWidget(
+            self.media_all_button
         )
 
         status_filter_layout.addStretch()
@@ -675,6 +718,7 @@ class ReleaseLibraryPage(QWidget):
                     r.discogs,
                     r.genre,
                     r.checked,
+                    COALESCE(r.media_type, 'VINYL') AS media_type,
 
                     COUNT(
                         DISTINCT t.id
@@ -907,9 +951,17 @@ class ReleaseLibraryPage(QWidget):
 
                 pass
 
+        if self.media_filter == "VINYL":
+            media_label = "VINYL"
+        elif self.media_filter == "CD":
+            media_label = "CD"
+        else:
+            media_label = "VINYL + CD"
+
         self.status_label.setText(
             f"{total} releases  |  "
-            f"{checked_count} klaar"
+            f"{checked_count} klaar  |  "
+            f"{media_label}"
         )
 
     # ========================================================
@@ -922,6 +974,28 @@ class ReleaseLibraryPage(QWidget):
     ):
 
         self.status_filter = status
+
+        self.filter_releases(
+            self.search_input.text()
+        )
+
+    # ========================================================
+    # MEDIA FILTER
+    # ========================================================
+
+    def set_media_filter(
+        self,
+        media_type
+    ):
+
+        media_type = str(
+            media_type or "VINYL"
+        ).strip().upper()
+
+        if media_type not in ("VINYL", "CD", "ALL"):
+            media_type = "VINYL"
+
+        self.media_filter = media_type
 
         self.filter_releases(
             self.search_input.text()
@@ -977,6 +1051,23 @@ class ReleaseLibraryPage(QWidget):
                 checked = False
 
             # ------------------------------------------------
+            # MEDIA FILTER
+            # ------------------------------------------------
+
+            media_type = str(
+                row["media_type"] or "VINYL"
+            ).strip().upper()
+
+            if media_type not in ("VINYL", "CD"):
+                media_type = "VINYL"
+
+            if (
+                self.media_filter != "ALL"
+                and media_type != self.media_filter
+            ):
+                continue
+
+            # ------------------------------------------------
             # STATUS FILTER
             # ------------------------------------------------
 
@@ -1002,6 +1093,7 @@ class ReleaseLibraryPage(QWidget):
                     row["storage_code"],
                     row["discogs"],
                     row["genre"],
+                    row["media_type"],
                 ]
 
                 combined = " ".join(
