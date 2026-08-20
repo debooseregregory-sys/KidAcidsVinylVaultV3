@@ -34,11 +34,17 @@ class MP3Player(QWidget):
 
     @staticmethod
     def _find_parent_player(parent, exclude=None):
-        """Find the application's real central MP3Player."""
+        """Find the application's real central MP3Player.
+
+        Prefer the player owned directly by the main application. This is
+        important because MP3 Showcase used to create a second hidden
+        MP3Player; if that player was found first it could play independently
+        while the visible PlayerBar still said 'Geen track'.
+        """
         widget = parent
         while widget is not None:
             candidate = getattr(widget, "mp3_player", None)
-            if isinstance(candidate, MP3Player) and candidate is not widget and candidate is not exclude:
+            if isinstance(candidate, MP3Player) and candidate is not exclude:
                 return candidate
             try:
                 widget = widget.parentWidget()
@@ -58,10 +64,23 @@ class MP3Player(QWidget):
         except RuntimeError:
             pass
 
+        # The application's central player is currently created without a
+        # QWidget parent, while the Showcase player is a child widget. Prefer
+        # an unparented MP3Player before falling back to any other instance.
         try:
-            for widget in QApplication.allWidgets():
-                if isinstance(widget, MP3Player) and widget is not exclude:
-                    return widget
+            players = [
+                widget
+                for widget in QApplication.allWidgets()
+                if isinstance(widget, MP3Player) and widget is not exclude
+            ]
+            for candidate in players:
+                try:
+                    if candidate.parentWidget() is None:
+                        return candidate
+                except RuntimeError:
+                    continue
+            if players:
+                return players[0]
         except RuntimeError:
             pass
 
