@@ -17,6 +17,7 @@ from database.cd_database import (
 )
 from database.database import get_connection
 from tools.discogs import fetch_release_data
+from gui.cd_track_editor import CDTrackEditorDialog
 
 
 class CDLibraryPage(QWidget):
@@ -119,6 +120,11 @@ class CDLibraryPage(QWidget):
         manual_button.clicked.connect(self.add_manual_cd)
         button_row.addWidget(manual_button)
 
+        tracks_button = QPushButton("TRACKS BEWERKEN")
+        tracks_button.setMinimumHeight(42)
+        tracks_button.clicked.connect(self.edit_selected_tracks)
+        button_row.addWidget(tracks_button)
+
         delete_button = QPushButton("VERWIJDER CD")
         delete_button.setMinimumHeight(42)
         delete_button.clicked.connect(self.delete_selected)
@@ -190,6 +196,30 @@ class CDLibraryPage(QWidget):
             return int(item.text())
         except ValueError:
             return None
+
+    def _selected_row_data(self, release_id):
+        return next((r for r in self.all_rows if int(r["id"]) == int(release_id)), None)
+
+    def edit_selected_tracks(self):
+        release_id = self._selected_release_id()
+        if release_id is None:
+            return
+        row = self._selected_row_data(release_id)
+        if row is None:
+            QMessageBox.warning(self, "CD niet gevonden", "De geselecteerde CD bestaat niet meer in de database.")
+            return
+        dialog = CDTrackEditorDialog(
+            release_id,
+            artist=str(row["artist"] or ""),
+            title=str(row["title"] or ""),
+            parent=self,
+        )
+        if dialog.exec() == dialog.DialogCode.Accepted:
+            QMessageBox.information(
+                self,
+                "Tracks opgeslagen",
+                f"De tracklist van {row['artist']} — {row['title']} is opgeslagen."
+            )
 
     def add_manual_cd(self):
         artist, ok = QInputDialog.getText(self, "CD handmatig toevoegen", "Artiest:", text="")
@@ -275,7 +305,7 @@ class CDLibraryPage(QWidget):
         if release_id is None:
             return
 
-        row = next((r for r in self.all_rows if int(r["id"]) == release_id), None)
+        row = self._selected_row_data(release_id)
         if row is None:
             QMessageBox.warning(self, "CD niet gevonden", "De geselecteerde CD bestaat niet meer in de database.")
             return
@@ -314,7 +344,7 @@ class CDLibraryPage(QWidget):
         if release_id is None:
             return
 
-        row = next((r for r in self.all_rows if int(r["id"]) == release_id), None)
+        row = self._selected_row_data(release_id)
         if row is None:
             QMessageBox.warning(self, "CD niet gevonden", "De geselecteerde CD bestaat niet meer in de database.")
             return
