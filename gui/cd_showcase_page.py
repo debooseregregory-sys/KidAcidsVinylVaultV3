@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from database.database import get_connection
+from database.cd_database import ensure_cd_schema, get_cd_tracks
 
 
 class CDShowcasePage(QWidget):
@@ -76,6 +77,11 @@ class CDShowcasePage(QWidget):
             QLabel#section { color:#ffcf72; font-size:16px; font-weight:900; }
             QFrame#detailHero { background:#121217; border:1px solid #292933; border-radius:12px; }
             QFrame#metaCard { background:#101014; border:1px solid #292933; border-radius:9px; }
+            QFrame#trackRow { background:#101014; border:1px solid #24242d; border-radius:7px; }
+            QLabel#trackPosition { color:#ffcf72; font-size:13px; font-weight:900; }
+            QLabel#trackTitle { color:#fff; font-size:14px; font-weight:800; }
+            QLabel#trackArtist { color:#9b9ba6; font-size:12px; }
+            QLabel#trackDuration { color:#858591; font-size:12px; }
         """)
 
     def _back_clicked(self):
@@ -174,6 +180,41 @@ class CDShowcasePage(QWidget):
         layout.addWidget(text)
         return card
 
+    def _make_track_row(self, track):
+        row = QFrame()
+        row.setObjectName("trackRow")
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(12)
+
+        position = QLabel(str(track[2] or ""))
+        position.setObjectName("trackPosition")
+        position.setFixedWidth(55)
+        layout.addWidget(position)
+
+        text_layout = QVBoxLayout()
+        text_layout.setSpacing(2)
+
+        title = QLabel(str(track[5] or "(geen titel)"))
+        title.setObjectName("trackTitle")
+        title.setWordWrap(True)
+        text_layout.addWidget(title)
+
+        if track[4]:
+            artist = QLabel(str(track[4]))
+            artist.setObjectName("trackArtist")
+            artist.setWordWrap(True)
+            text_layout.addWidget(artist)
+
+        layout.addLayout(text_layout, 1)
+
+        duration = QLabel(str(track[6] or ""))
+        duration.setObjectName("trackDuration")
+        duration.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        layout.addWidget(duration)
+
+        return row
+
     def load_release(self, release_id):
         self.release_id = int(release_id)
         self._clear_grid()
@@ -181,6 +222,7 @@ class CDShowcasePage(QWidget):
 
         conn = get_connection()
         try:
+            ensure_cd_schema(conn)
             release = conn.execute("""
                 SELECT id, artist, title, label, catalog, year, genre,
                        discogs, discogs_link, cover, notes, checked
@@ -204,7 +246,6 @@ class CDShowcasePage(QWidget):
         hero_layout.setContentsMargins(12, 10, 12, 10)
         hero_layout.setSpacing(14)
 
-        # LEFT: release identity and compact metadata.
         info = QVBoxLayout()
         info.setSpacing(7)
 
@@ -255,9 +296,6 @@ class CDShowcasePage(QWidget):
             notes.setWordWrap(True)
             info.addWidget(notes)
 
-
-
-        # RIGHT: compact but dominant cover, aligned to the top.
         cover = QLabel("GEEN COVER")
         cover.setObjectName("cover")
         cover.setFixedSize(260, 260)
@@ -268,8 +306,8 @@ class CDShowcasePage(QWidget):
             if not pix.isNull():
                 cover.setPixmap(
                     pix.scaled(
-                        300,
-                        300,
+                        260,
+                        260,
                         Qt.AspectRatioMode.KeepAspectRatio,
                         Qt.TransformationMode.SmoothTransformation,
                     )
@@ -283,14 +321,24 @@ class CDShowcasePage(QWidget):
         )
         self.grid.addWidget(hero, 0, 0, 1, 2)
 
-        # Reserved full-width area for the track list.
         section = QLabel("TRACKS")
         section.setObjectName("section")
         self.grid.addWidget(section, 1, 0, 1, 2)
 
-        placeholder = QLabel("CD-tracks worden hier weergegeven.")
-        placeholder.setObjectName("meta")
-        self.grid.addWidget(placeholder, 2, 0, 1, 2)
+        tracks = get_cd_tracks(self.release_id)
+        if tracks:
+            for row_index, track in enumerate(tracks, start=2):
+                self.grid.addWidget(
+                    self._make_track_row(track),
+                    row_index,
+                    0,
+                    1,
+                    2,
+                )
+        else:
+            placeholder = QLabel("Nog geen tracks gekoppeld aan deze CD.")
+            placeholder.setObjectName("meta")
+            self.grid.addWidget(placeholder, 2, 0, 1, 2)
 
         self.grid.setColumnStretch(0, 1)
         self.grid.setColumnStretch(1, 1)
