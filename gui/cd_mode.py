@@ -54,6 +54,15 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
         self.cd_showcase_page.release_selected.connect(self._open_cd_detail)
         self.cd_showcase_page.play_mp3.connect(self.player_bar_play)
 
+        # Keep the CD Showcase play buttons synchronized with the real
+        # central MP3 player: dark red when idle/paused/stopped, green
+        # only for the track that is actually playing.
+        self.mp3_player.play_started.connect(self.cd_showcase_page.set_active_track)
+        self.mp3_player.stopped.connect(self.cd_showcase_page.clear_active_track)
+        self.mp3_player.player.playbackStateChanged.connect(
+            self.cd_showcase_page.set_playback_state
+        )
+
         self.cd_library_button.setEnabled(True)
         self.cd_library_button.setToolTip("CD Library")
         self.cd_library_button.clicked.connect(self.show_cd_library)
