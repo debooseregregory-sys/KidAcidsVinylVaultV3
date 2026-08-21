@@ -82,7 +82,10 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
 
     def _open_cd_showcase(self, release_id):
         self.current_cd_id = int(release_id)
-        self.show_cd_showcase()
+        self.cd_showcase_page.load_release(self.current_cd_id)
+        self.pages.setCurrentWidget(self.cd_showcase_page)
+        self.page_title.setText("CD Release")
+        self.set_active_nav(self.cd_showcase_button)
 
     def _open_cd_detail(self, release_id):
         self.current_cd_id = int(release_id)
