@@ -2,438 +2,178 @@
 # KID ACID'S VINYLVAULT V3
 # CD COLLECTION MODE
 #
-# Keeps the existing Vinyl UI and functionality intact while
-# reusing the same Library, Board, Showcase, Detail, Discogs
-# and MP3 flow for releases marked as CD.
+# CD collection uses the dedicated cd_releases table created by
+# the CD module. Vinyl remains completely separate in releases.
 # ============================================================
 
-import io
 import sqlite3
-from contextlib import redirect_stdout
-
-from PySide6.QtWidgets import QLabel, QMessageBox
-
 from database.database import get_connection
-from gui.release_library_page import ReleaseLibraryPage as BaseReleaseLibraryPage
-from gui.release_board_page import ReleaseBoardPage as BaseReleaseBoardPage
-from gui.discogs_import_page import (
-    DiscogsImportPage as BaseDiscogsImportPage,
-    DiscogsImportWorker as BaseDiscogsImportWorker,
-    DB as DISCOGS_DB,
-    get_release as discogs_get_release,
-)
-import gui.discogs_import_page as discogs_import_module
-import gui.main_window as main_window_module
-
 
 VINYL = "VINYL"
 CD = "CD"
 
 
 def normalize_media_type(value):
-    value = str(value or VINYL).strip().upper()
-    return CD if value == CD else VINYL
+    return CD if str(value or VINYL).strip().upper() == CD else VINYL
 
 
 def ensure_media_type_column():
-    """Safely add the media_type column to existing VinylVault databases."""
+    """Compatibility helper for older databases."""
     conn = get_connection()
     try:
-        columns = {
-            row["name"]
-            for row in conn.execute("PRAGMA table_info(releases)").fetchall()
-        }
-
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(releases)").fetchall()}
         if "media_type" not in columns:
-            conn.execute(
-                "ALTER TABLE releases ADD COLUMN media_type TEXT DEFAULT 'VINYL'"
-            )
-
-        conn.execute(
-            """
-            UPDATE releases
-            SET media_type = 'VINYL'
-            WHERE media_type IS NULL OR TRIM(media_type) = ''
-            """
-        )
+            conn.execute("ALTER TABLE releases ADD COLUMN media_type TEXT DEFAULT 'VINYL'")
+        conn.execute("UPDATE releases SET media_type='VINYL' WHERE media_type IS NULL OR TRIM(media_type)=''")
         conn.commit()
     finally:
         conn.close()
 
 
-class MediaReleaseLibraryPage(BaseReleaseLibraryPage):
-    """Existing Release Library filtered by physical media type."""
+def _cd_table_exists(conn):
+    return conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cd_releases'"
+    ).fetchone() is not None
 
-    def __init__(self, parent=None, media_type=VINYL):
+
+def _cd_columns(conn):
+    return {row["name"] for row in conn.execute("PRAGMA table_info(cd_releases)").fetchall()}
+
+
+class MediaReleaseLibraryPage:
+    """Minimal CD library backed by cd_releases."""
+    def __init__(self, parent=None, media_type=CD):
+        from gui.release_library_page import ReleaseLibraryPage
+        self._base = ReleaseLibraryPage(parent)
         self.media_type = normalize_media_type(media_type)
-        super().__init__(parent)
+        self.release_selected = self._base.release_selected
 
-        if self.media_type == CD:
-            for label in self.findChildren(QLabel):
-                if label.text() == "VINYLVAULT RELEASE LIBRARY":
-                    label.setText("VINYLVAULT CD LIBRARY")
-                elif label.text() == "Je volledige fysieke vinylcollectie":
-                    label.setText("Je volledige fysieke CD-collectie")
+    def __getattr__(self, name):
+        return getattr(self._base, name)
 
     def load_releases(self):
-        connection = None
+        conn = get_connection()
         try:
-            connection = get_connection()
-            rows = connection.execute(
-                """
+            if not _cd_table_exists(conn):
+                self._base.all_releases = []
+                self._base.display_releases([])
+                return
+            cols = _cd_columns(conn)
+            # The CD importer has used these core fields. Select only columns
+            # that are guaranteed by the CD schema, with safe fallbacks.
+            def c(name, fallback="NULL"):
+                return f'cd."{name}"' if name in cols else fallback
+            rows = conn.execute(f"""
                 SELECT
-                    r.id,
-                    r.artist,
-                    r.title,
-                    r.label,
-                    r.catalog,
-                    r.year,
-                    r.storage_code,
-                    r.discogs,
-                    r.genre,
-                    r.checked,
-                    COALESCE(r.media_type, 'VINYL') AS media_type,
-                    COUNT(DISTINCT t.id) AS tracks,
-                    COUNT(DISTINCT tm.mp3_id) AS mp3_count
-                FROM releases r
-                LEFT JOIN tracks t ON t.release_id = r.id
-                LEFT JOIN track_mp3 tm ON tm.track_id = t.id
-                WHERE UPPER(COALESCE(r.media_type, 'VINYL')) = ?
-                GROUP BY r.id
-                ORDER BY r.artist COLLATE NOCASE,
-                         r.title COLLATE NOCASE,
-                         r.id
-                """,
-                (self.media_type,),
-            ).fetchall()
-        except Exception as error:
-            QMessageBox.critical(
-                self,
-                "Database fout",
-                f"De {self.media_type} Library kon niet worden geladen.\n\n{error}",
-            )
-            return
+                    {c('id','NULL')} AS id,
+                    {c('artist',"''")} AS artist,
+                    {c('title',"''")} AS title,
+                    {c('label',"''")} AS label,
+                    {c('catalog',"''")} AS catalog,
+                    {c('year','NULL')} AS year,
+                    {c('storage_code',"''")} AS storage_code,
+                    {c('discogs',"''")} AS discogs,
+                    {c('genre',"''")} AS genre,
+                    {c('checked','0')} AS checked,
+                    'CD' AS media_type,
+                    0 AS tracks,
+                    0 AS mp3_count
+                FROM cd_releases cd
+                ORDER BY artist COLLATE NOCASE, title COLLATE NOCASE, id
+            """).fetchall()
         finally:
-            if connection is not None:
-                connection.close()
+            conn.close()
+        self._base.all_releases = rows
+        self._base.display_releases(rows)
 
-        self.all_releases = rows
-        self.display_releases(rows)
+    def __getattribute__(self, name):
+        if name in {"_base", "media_type", "release_selected", "load_releases", "__dict__", "__class__", "__getattr__", "__getattribute__"}:
+            return object.__getattribute__(self, name)
+        return getattr(object.__getattribute__(self, "_base"), name)
 
 
-class MediaReleaseBoardPage(BaseReleaseBoardPage):
-    """Existing cover board filtered by physical media type."""
-
-    def __init__(self, parent=None, media_type=VINYL):
+class MediaReleaseBoardPage:
+    """CD board backed by cd_releases."""
+    def __init__(self, parent=None, media_type=CD):
+        from gui.release_board_page import ReleaseBoardPage
+        self._base = ReleaseBoardPage(parent)
         self.media_type = normalize_media_type(media_type)
-        super().__init__(parent)
+        self.open_release = self._base.open_release
+        self.play_mp3 = self._base.play_mp3
 
-        if self.media_type == CD:
-            for label in self.findChildren(QLabel):
-                if label.text() == "RELEASE BOARD":
-                    label.setText("CD RELEASE BOARD")
-                elif label.text().startswith("Je collectie als cover-board"):
-                    label.setText(
-                        "Je CD-collectie als cover-board — bekijken, openen en afspelen"
-                    )
+    def __getattribute__(self, name):
+        if name in {"_base", "media_type", "open_release", "play_mp3", "load_releases", "__dict__", "__class__", "__getattribute__"}:
+            return object.__getattribute__(self, name)
+        return getattr(object.__getattribute__(self, "_base"), name)
 
     def load_releases(self):
-        connection = None
+        conn = get_connection()
         try:
-            connection = get_connection()
-            rows = connection.execute(
-                """
-                SELECT
-                    r.id,
-                    r.artist,
-                    r.title,
-                    r.label,
-                    r.catalog,
-                    r.year,
-                    r.storage_code,
-                    r.checked,
-                    r.cover,
-                    (
-                        SELECT m.path
-                        FROM track_mp3 tm
-                        JOIN mp3_files m ON m.id = tm.mp3_id
-                        JOIN tracks t ON t.id = tm.track_id
-                        WHERE t.release_id = r.id
-                          AND tm.is_preferred = 1
-                        ORDER BY tm.id
-                        LIMIT 1
-                    ) AS preferred_mp3
-                FROM releases r
-                WHERE UPPER(COALESCE(r.media_type, 'VINYL')) = ?
-                ORDER BY r.artist COLLATE NOCASE,
-                         r.title COLLATE NOCASE,
-                         r.id
-                """,
-                (self.media_type,),
-            ).fetchall()
-        except Exception as error:
-            QMessageBox.critical(
-                self,
-                "Database fout",
-                f"De {self.media_type} Showcase kon niet worden geladen.\n\n{error}",
-            )
-            return
+            if not _cd_table_exists(conn):
+                self._base.all_releases = []
+                self._base.apply_search()
+                return
+            cols = _cd_columns(conn)
+            def c(name, fallback="NULL"):
+                return f'cd."{name}"' if name in cols else fallback
+            rows = conn.execute(f"""
+                SELECT {c('id','NULL')} AS id,
+                       {c('artist',"''")} AS artist,
+                       {c('title',"''")} AS title,
+                       {c('label',"''")} AS label,
+                       {c('catalog',"''")} AS catalog,
+                       {c('year','NULL')} AS year,
+                       {c('storage_code',"''")} AS storage_code,
+                       {c('checked','0')} AS checked,
+                       {c('cover',"''")} AS cover,
+                       NULL AS preferred_mp3
+                FROM cd_releases cd
+                ORDER BY artist COLLATE NOCASE, title COLLATE NOCASE, id
+            """).fetchall()
+            self._base.all_releases = [dict(row) for row in rows]
+            self._base.apply_search()
         finally:
-            if connection is not None:
-                connection.close()
-
-        self.all_releases = [
-            dict(row) if hasattr(row, "keys") else {
-                "id": row[0], "artist": row[1], "title": row[2],
-                "label": row[3], "catalog": row[4], "year": row[5],
-                "storage_code": row[6], "checked": row[7],
-                "cover": row[8], "preferred_mp3": row[9],
-            }
-            for row in rows
-        ]
-        self.apply_search()
+            conn.close()
 
 
-class CDDiscogsImportWorker(BaseDiscogsImportWorker):
-    """Same Discogs importer, but marks newly imported releases as CD."""
+class CDVinylVaultWindow:
+    """CD-enabled window using the existing VinylVault UI."""
+    def __new__(cls, *args, **kwargs):
+        from gui.main_window import VinylVaultWindow
+        obj = VinylVaultWindow(*args, **kwargs)
+        cls._install(obj)
+        return obj
 
-    def run(self):
-        conn = None
-        try:
-            conn = sqlite3.connect(DISCOGS_DB)
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA foreign_keys = ON")
-
-            existing = conn.execute(
-                "SELECT id, media_type FROM releases WHERE discogs = ? LIMIT 1",
-                (str(self.release_id),),
-            ).fetchone()
-
-            buffer = io.StringIO()
-            with redirect_stdout(buffer):
-                release = discogs_get_release(self.release_id)
-                discogs_import_module.import_release(release, conn)
-
-                if existing is None:
-                    conn.execute(
-                        "UPDATE releases SET media_type = 'CD' WHERE discogs = ?",
-                        (str(self.release_id),),
-                    )
-                    conn.commit()
-                    print("Media type: CD")
-                else:
-                    print(
-                        "Bestaande release behouden als "
-                        f"{existing['media_type'] or VINYL}."
-                    )
-
-            self.output.emit(buffer.getvalue())
-            self.finished_ok.emit()
-
-        except Exception as exc:
-            if conn:
-                try:
-                    conn.rollback()
-                except Exception:
-                    pass
-            self.failed.emit(f"{type(exc).__name__}: {exc}")
-        finally:
-            if conn:
-                try:
-                    conn.close()
-                except Exception:
-                    pass
-
-
-class CDDiscogsImportPage(BaseDiscogsImportPage):
-    """The existing Discogs page running in CD mode."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        for label in self.findChildren(QLabel):
-            if label.text() == "Discogs Release Import":
-                label.setText("Discogs CD Import")
-            elif (
-                "importeer" in label.text().lower()
-                and "volledige release" in label.text().lower()
-            ):
-                label.setText(
-                    "Zoek rechtstreeks in Discogs en importeer een volledige CD-release naar VinylVault."
-                )
-
-    def import_selected(self):
-        old_worker = discogs_import_module.DiscogsImportWorker
-        discogs_import_module.DiscogsImportWorker = CDDiscogsImportWorker
-        try:
-            super().import_selected()
-        finally:
-            discogs_import_module.DiscogsImportWorker = old_worker
-
-
-OriginalVinylVaultWindow = main_window_module.VinylVaultWindow
-
-
-class CDVinylVaultWindow(OriginalVinylVaultWindow):
-    """Original main window plus the CD collection routes."""
-
-    def build_ui(self):
-        super().build_ui()
-
-        self.current_media_type = VINYL
-
-        # The original Detail/Showcase pages are shared by Vinyl and CD.
-        self.detail_page.back_requested.connect(self._detail_back)
-        self.showcase_page.back_requested.connect(self._showcase_back)
-        self.showcase_page.edit_requested.connect(self._showcase_edit)
-
-        # Reuse the exact same Library/Board/Showcase/Detail stack.
-        self.cd_library_page = MediaReleaseLibraryPage(media_type=CD)
-        self.cd_library_page.release_selected.connect(self._open_cd_release)
-        self.pages.addWidget(self.cd_library_page)
-
-        self.cd_board_page = MediaReleaseBoardPage(media_type=CD)
-        self.cd_board_page.open_release.connect(self._show_cd_showcase)
-        self.cd_board_page.play_mp3.connect(self.player_bar_play)
-        self.pages.addWidget(self.cd_board_page)
-
-        # Same Discogs UI, same search, same importer, CD media flag.
-        self.cd_discogs_page = CDDiscogsImportPage()
-        self.cd_discogs_page.import_finished.connect(self.refresh_after_import)
-        self.pages.addWidget(self.cd_discogs_page)
-
-        # Activate the CD navigation buttons.
-        self.cd_showcase_button.setEnabled(True)
-        self.cd_showcase_button.setToolTip("CD Showcase")
-        self.cd_showcase_button.clicked.connect(self.show_cd_showcase_board)
-
-        self.cd_library_button.setEnabled(True)
-        self.cd_library_button.setToolTip("CD Library")
-        self.cd_library_button.clicked.connect(self.show_cd_library)
-
-        footer = self.findChild(QLabel, "sidebarFooter")
-        if footer is not None:
+    @staticmethod
+    def _install(window):
+        from PySide6.QtWidgets import QLabel
+        from gui.cd_library_page import CDLibraryPage
+        from gui.cd_board_page import CDBoardPage
+        from gui.cd_discogs_import_page import CDDiscogsImportPage
+        window.current_media_type = VINYL
+        window.cd_library_page = CDLibraryPage()
+        window.cd_board_page = CDBoardPage()
+        window.cd_discogs_page = CDDiscogsImportPage()
+        window.pages.addWidget(window.cd_library_page)
+        window.pages.addWidget(window.cd_board_page)
+        window.pages.addWidget(window.cd_discogs_page)
+        window.cd_library_page.release_selected.connect(window._open_cd_release)
+        window.cd_board_page.open_release.connect(window._show_cd_showcase)
+        window.cd_board_page.play_mp3.connect(window.player_bar_play)
+        window.cd_showcase_button.setEnabled(True)
+        window.cd_library_button.setEnabled(True)
+        window.cd_showcase_button.clicked.connect(window.show_cd_showcase_board)
+        window.cd_library_button.clicked.connect(window.show_cd_library)
+        footer = window.findChild(QLabel, "sidebarFooter")
+        if footer:
             footer.setText("VINYL  •  CD  •  KID ACID")
-
-        self._set_collection_badge(VINYL)
-
-    def _set_collection_badge(self, media_type):
-        badge = self.findChild(QLabel, "collectionBadge")
-        if badge is not None:
-            badge.setText(f"{normalize_media_type(media_type)} COLLECTION")
-
-    def set_active_nav(self, button):
-        super().set_active_nav(button)
-
-        buttons = [
-            self.cd_showcase_button,
-            self.cd_library_button,
-        ]
-        for item in buttons:
-            item.setProperty("active", item is button)
-            item.style().unpolish(item)
-            item.style().polish(item)
-
-        self.current_nav = button
-
-    def show_board(self):
-        """Handle the shared board callback without assuming board_button exists."""
-        if self.current_media_type == CD:
-            self.show_cd_showcase_board()
-            return
-
-        self.pages.setCurrentWidget(self.board_page)
-        self.page_title.setText("Release Board")
-
-        # Some older VinylVault layouts had a board_button; the current
-        # layout does not. Use the Vinyl Showcase navigation as the safe
-        # active navigation target when the board is reached internally.
-        if hasattr(self, "board_button"):
-            self.set_active_nav(self.board_button)
-        else:
-            self.set_active_nav(self.vinyl_showcase_button)
-
-    def show_vinyl_showcase(self):
-        self.current_media_type = VINYL
-        self._set_collection_badge(VINYL)
-        super().show_vinyl_showcase()
-
-    def show_library(self):
-        self.current_media_type = VINYL
-        self._set_collection_badge(VINYL)
-        super().show_library()
-
-    def open_release(self, release_id, release_ids=None):
-        self.current_media_type = VINYL
-        self._set_collection_badge(VINYL)
-        super().open_release(release_id, release_ids)
-
-    def show_showcase(self, release_id):
-        self.current_media_type = VINYL
-        self._set_collection_badge(VINYL)
-        super().show_showcase(release_id)
-
-    def show_cd_showcase_board(self):
-        self.current_media_type = CD
-        self._set_collection_badge(CD)
-        self.pages.setCurrentWidget(self.cd_board_page)
-        self.page_title.setText("CD Showcase")
-        self.set_active_nav(self.cd_showcase_button)
-        self.cd_board_page.load_releases()
-
-    def show_cd_library(self):
-        self.current_media_type = CD
-        self._set_collection_badge(CD)
-        self.pages.setCurrentWidget(self.cd_library_page)
-        self.page_title.setText("CD Library")
-        self.set_active_nav(self.cd_library_button)
-        self.cd_library_page.load_releases()
-
-    def _open_cd_release(self, release_id, release_ids=None):
-        self.current_media_type = CD
-        self._set_collection_badge(CD)
-        self.showcase_page.load_release(release_id)
-        self.pages.setCurrentWidget(self.showcase_page)
-        self.page_title.setText("CD Showcase")
-        self.set_active_nav(self.cd_showcase_button)
-
-    def _show_cd_showcase(self, release_id):
-        self._open_cd_release(release_id)
-
-    def _detail_back(self):
-        if self.current_media_type == CD:
-            self.show_cd_library()
-        else:
-            self.show_library()
-
-    def _showcase_back(self):
-        if self.current_media_type == CD:
-            self.show_cd_showcase_board()
-        else:
-            self.show_vinyl_showcase()
-
-    def _showcase_edit(self, release_id):
-        self.detail_page.load_release(release_id)
-        self.pages.setCurrentWidget(self.detail_page)
-        self.page_title.setText(
-            "CD Detail" if self.current_media_type == CD else "Release Detail"
-        )
-        self._set_collection_badge(self.current_media_type)
-
-    def show_discogs(self):
-        if self.current_media_type == CD:
-            self.pages.setCurrentWidget(self.cd_discogs_page)
-            self.page_title.setText("Discogs CD Import")
-            self.set_active_nav(self.discogs_button)
-        else:
-            super().show_discogs()
-
-    def refresh_after_import(self):
-        super().refresh_after_import()
-        self.cd_library_page.load_releases()
-        self.cd_board_page.load_releases()
+        return window
 
 
 def install_cd_mode():
-    """Install the CD-enabled window before run_v3 calls main()."""
     ensure_media_type_column()
-    main_window_module.VinylVaultWindow = CDVinylVaultWindow
+    import gui.main_window as main_window_module
+    # Prefer the dedicated CD window implementation already present in the
+    # project. This module's table helpers are retained for compatibility.
+    from gui.cd_mode import CDVinylVaultWindow as ExistingCDVinylVaultWindow
+    main_window_module.VinylVaultWindow = ExistingCDVinylVaultWindow
