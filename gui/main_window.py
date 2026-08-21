@@ -26,6 +26,7 @@ from gui.release_library_page import ReleaseLibraryPage
 from gui.release_board_page import ReleaseBoardPage
 from gui.release_detail_page import ReleaseDetailPage
 from gui.release_showcase_page import ReleaseShowcasePage
+from gui.cd_library_page import CDLibraryPage
 from gui.player import MP3Player
 from gui.mp3_library_page import MP3LibraryPage
 from gui.mp3_showcase_page import MP3ShowcasePage
@@ -400,8 +401,7 @@ class VinylVaultWindow(QMainWindow):
         sidebar_layout.addWidget(self.cd_showcase_button)
 
         self.cd_library_button = self.create_nav_button("▤", "CD Library")
-        self.cd_library_button.setEnabled(False)
-        self.cd_library_button.setToolTip("CD-module wordt toegevoegd zodra de CD-collectielijst is ingevoerd.")
+        self.cd_library_button.clicked.connect(self.show_cd_library)
         sidebar_layout.addWidget(self.cd_library_button)
 
         # ----------------------------------------------------
@@ -677,6 +677,15 @@ class VinylVaultWindow(QMainWindow):
         # ====================================================
 
         self.mp3_showcase_page = MP3ShowcasePage()
+
+        # ====================================================
+        # CD LIBRARY
+        # ====================================================
+
+        self.cd_library_page = CDLibraryPage()
+        self.pages.addWidget(
+            self.cd_library_page
+        )
         install_mp3_showcase_playback_bridge()
 
         self.mp3_showcase_page.play_mp3.connect(
@@ -740,6 +749,17 @@ class VinylVaultWindow(QMainWindow):
         self.pages.setCurrentWidget(
             self.home_page
         )
+
+    # ========================================================
+    # CD LIBRARY
+    # ========================================================
+
+    def show_cd_library(self):
+        self.pages.setCurrentWidget(self.cd_library_page)
+        self.page_title.setText("CD Library")
+        self.set_active_nav(self.cd_library_button)
+        if hasattr(self.cd_library_page, "load_releases"):
+            self.cd_library_page.load_releases()
 
     # ========================================================
     # CREATE NAV BUTTON
