@@ -7,6 +7,7 @@ from database.database import get_connection
 import gui.main_window as main_window_module
 from gui.cd_library_page import CDLibraryPage
 from gui.cd_showcase_page import CDShowcasePage
+from gui.livesets_page import LivesetsPage
 
 VINYL = "VINYL"
 CD = "CD"
@@ -34,7 +35,7 @@ OriginalVinylVaultWindow = main_window_module.VinylVaultWindow
 
 
 class CDVinylVaultWindow(OriginalVinylVaultWindow):
-    """Existing VinylVault window extended with the dedicated CD pages."""
+    """Existing VinylVault window extended with CD pages and Livesets."""
 
     def build_ui(self):
         super().build_ui()
@@ -70,6 +71,41 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
         self.cd_showcase_button.setEnabled(True)
         self.cd_showcase_button.setToolTip("CD Showcase")
         self.cd_showcase_button.clicked.connect(self.show_cd_showcase)
+
+        # ----------------------------------------------------
+        # LIVESETS
+        # ----------------------------------------------------
+        self.livesets_page = LivesetsPage()
+        self.pages.addWidget(self.livesets_page)
+        self.livesets_page.play_mp3.connect(self.player_bar_play)
+        self.mp3_player.play_started.connect(self.livesets_page.set_active_track)
+        self.mp3_player.stopped.connect(self.livesets_page.clear_active_track)
+        self.mp3_player.player.playbackStateChanged.connect(
+            self.livesets_page.set_playback_state
+        )
+
+        # The base window owns the sidebar layout locally, so insert the
+        # Livesets button next to the collection navigation without touching
+        # the large main_window.py file.
+        sidebar_layout = self.cd_library_button.parentWidget().layout()
+        self.livesets_button = self.create_nav_button("♫", "Livesets")
+        self.livesets_button.setToolTip("Livesets")
+        insert_at = sidebar_layout.indexOf(self.cd_library_button) + 1
+        sidebar_layout.insertWidget(insert_at, self.livesets_button)
+        self.livesets_button.clicked.connect(self.show_livesets)
+
+    def set_active_nav(self, button):
+        super().set_active_nav(button)
+        if hasattr(self, "livesets_button"):
+            self.livesets_button.setProperty("active", button is self.livesets_button)
+            self.livesets_button.style().unpolish(self.livesets_button)
+            self.livesets_button.style().polish(self.livesets_button)
+
+    def show_livesets(self):
+        self.current_media_type = VINYL
+        self.pages.setCurrentWidget(self.livesets_page)
+        self.page_title.setText("Livesets")
+        self.set_active_nav(self.livesets_button)
 
     def show_board(self):
         self.pages.setCurrentWidget(self.board_page)
