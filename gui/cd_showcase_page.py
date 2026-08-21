@@ -27,6 +27,8 @@ class CDShowcasePage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.release_id = None
+        self._track_buttons = {}
+        self._active_mp3_path = None
         self.build_ui()
 
     def build_ui(self):
@@ -97,6 +99,27 @@ class CDShowcasePage(QWidget):
             QLabel#trackTitle { color:#fff; font-size:14px; font-weight:800; }
             QLabel#trackArtist { color:#8f8f9a; font-size:12px; }
             QLabel#trackDuration { color:#aaaab4; font-size:12px; }
+            QPushButton#cdTrackPlayButton {
+                background:#6b1717;
+                color:#fff;
+                border:1px solid #8f2929;
+                border-radius:7px;
+                padding:4px;
+                font-size:15px;
+                font-weight:900;
+            }
+            QPushButton#cdTrackPlayButton:hover {
+                background:#842020;
+                border-color:#b43a3a;
+            }
+            QPushButton#cdTrackPlayButton[playing="true"] {
+                background:#1f7a3d;
+                border-color:#35a65b;
+            }
+            QPushButton#cdTrackPlayButton[playing="true"]:hover {
+                background:#29934a;
+                border-color:#4fc874;
+            }
         """)
 
     def _back_clicked(self):
@@ -117,6 +140,7 @@ class CDShowcasePage(QWidget):
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
+        self._track_buttons.clear()
 
     @staticmethod
     def _cover_cache_dir():
@@ -174,6 +198,54 @@ class CDShowcasePage(QWidget):
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             ))
+
+    @staticmethod
+    def _normalise_mp3_path(path):
+        path = str(path or "").strip()
+        if not path:
+            return ""
+        try:
+            return str(Path(path).expanduser().resolve()).casefold()
+        except OSError:
+            return path.casefold()
+
+    def _set_play_button_active(self, button, active):
+        if button is None:
+            return
+        button.setProperty("playing", bool(active))
+        style = button.style()
+        style.unpolish(button)
+        style.polish(button)
+        button.update()
+
+    def _set_active_mp3_path(self, path):
+        normalised = self._normalise_mp3_path(path)
+        self._active_mp3_path = normalised or None
+        for button_path, button in self._track_buttons.items():
+            self._set_play_button_active(
+                button,
+                bool(normalised) and button_path == normalised,
+            )
+
+    def set_active_track(self, path):
+        """Mark the currently playing CD track green."""
+        self._set_active_mp3_path(path)
+
+    def clear_active_track(self):
+        """Return all CD track play buttons to dark red."""
+        self._set_active_mp3_path("")
+
+    def set_playback_state(self, state):
+        """Keep the button green only while the central player is playing."""
+        try:
+            from PySide6.QtMultimedia import QMediaPlayer
+            is_playing = state == QMediaPlayer.PlaybackState.PlayingState
+        except Exception:
+            is_playing = False
+        if is_playing:
+            self._set_active_mp3_path(self._active_mp3_path or "")
+        else:
+            self.clear_active_track()
 
     def load_releases(self, search_text=""):
         self.release_id = None
@@ -288,8 +360,16 @@ class CDShowcasePage(QWidget):
         mp3_path = str(track[8] or "").strip()
         if mp3_path:
             play_button = QPushButton("▶")
+            play_button.setObjectName("cdTrackPlayButton")
+            play_button.setProperty("playing", False)
             play_button.setToolTip(f"Speel MP3: {Path(mp3_path).name}")
             play_button.setFixedSize(38, 32)
+            button_path = self._normalise_mp3_path(mp3_path)
+            self._track_buttons[button_path] = play_button
+            self._set_play_button_active(
+                play_button,
+                button_path == self._active_mp3_path,
+            )
             play_button.clicked.connect(
                 lambda _checked=False, path=mp3_path: self.play_mp3.emit(path)
             )
