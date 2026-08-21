@@ -32,7 +32,7 @@ class CDShowcasePage(QWidget):
 
         top = QHBoxLayout()
         self.back_button = QPushButton("← CD LIBRARY")
-        self.back_button.clicked.connect(self.back_requested.emit)
+        self.back_button.clicked.connect(self._back_clicked)
         top.addWidget(self.back_button)
         top.addStretch()
         root.addLayout(top)
@@ -78,6 +78,13 @@ class CDShowcasePage(QWidget):
             QFrame#metaCard { background:#101014; border:1px solid #292933; border-radius:9px; }
         """)
 
+    def _back_clicked(self):
+        if self.release_id is not None:
+            self.release_id = None
+            self.load_releases()
+            return
+        self.back_requested.emit()
+
     def _clear_grid(self):
         while self.grid.count():
             item = self.grid.takeAt(0)
@@ -93,13 +100,11 @@ class CDShowcasePage(QWidget):
 
         conn = get_connection()
         try:
-            rows = conn.execute(
-                """
+            rows = conn.execute("""
                 SELECT id, artist, title, label, catalog, year, genre, cover
                 FROM cd_releases
                 ORDER BY artist COLLATE NOCASE, title COLLATE NOCASE, id
-                """
-            ).fetchall()
+            """).fetchall()
         finally:
             conn.close()
 
@@ -176,14 +181,11 @@ class CDShowcasePage(QWidget):
 
         conn = get_connection()
         try:
-            release = conn.execute(
-                """
+            release = conn.execute("""
                 SELECT id, artist, title, label, catalog, year, genre,
                        discogs, discogs_link, cover, notes, checked
                 FROM cd_releases WHERE id = ?
-                """,
-                (self.release_id,),
-            ).fetchone()
+            """, (self.release_id,)).fetchone()
         finally:
             conn.close()
 
@@ -200,18 +202,7 @@ class CDShowcasePage(QWidget):
         hero.setObjectName("detailHero")
         hero_layout = QHBoxLayout(hero)
         hero_layout.setContentsMargins(20, 20, 20, 20)
-        hero_layout.setSpacing(24)
-
-        cover = QLabel("GEEN COVER")
-        cover.setObjectName("cover")
-        cover.setFixedSize(330, 330)
-        cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        cover_path = str(release[9] or "").strip()
-        if cover_path and Path(cover_path).exists():
-            pix = QPixmap(cover_path)
-            if not pix.isNull():
-                cover.setPixmap(pix.scaled(330, 330, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-        hero_layout.addWidget(cover)
+        hero_layout.setSpacing(28)
 
         info = QVBoxLayout()
         info.setSpacing(8)
@@ -250,9 +241,22 @@ class CDShowcasePage(QWidget):
             notes.setObjectName("meta")
             notes.setWordWrap(True)
             info.addWidget(notes)
-
         info.addStretch()
+
+        # Large cover is the dominant visual element in the upper-right.
+        cover = QLabel("GEEN COVER")
+        cover.setObjectName("cover")
+        cover.setFixedSize(380, 380)
+        cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        cover_path = str(release[9] or "").strip()
+        if cover_path and Path(cover_path).exists():
+            pix = QPixmap(cover_path)
+            if not pix.isNull():
+                cover.setPixmap(pix.scaled(380, 380, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+
+        # Information on the left, complete cover at the top-right.
         hero_layout.addLayout(info, 1)
+        hero_layout.addWidget(cover, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
         self.grid.addWidget(hero, 0, 0, 1, 2)
 
         section = QLabel("RELEASE-INFORMATIE")
