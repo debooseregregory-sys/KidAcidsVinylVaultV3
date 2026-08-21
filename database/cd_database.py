@@ -3,7 +3,6 @@
 # CD DATABASE MODULE
 # ============================================================
 
-import sqlite3
 from database.database import get_connection
 
 
@@ -28,7 +27,6 @@ CREATE TABLE IF NOT EXISTS cd_releases (
 )
 """
 
-
 CD_TRACKS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS cd_tracks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,6 +37,7 @@ CREATE TABLE IF NOT EXISTS cd_tracks (
     title TEXT NOT NULL DEFAULT '',
     duration TEXT NOT NULL DEFAULT '',
     discogs_track_id TEXT NOT NULL DEFAULT '',
+    mp3_path TEXT NOT NULL DEFAULT '',
     FOREIGN KEY(cd_release_id) REFERENCES cd_releases(id) ON DELETE CASCADE
 )
 """
@@ -50,6 +49,16 @@ def ensure_cd_schema(connection=None):
     try:
         connection.execute(CD_SCHEMA)
         connection.execute(CD_TRACKS_SCHEMA)
+
+        columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(cd_tracks)").fetchall()
+        }
+        if "mp3_path" not in columns:
+            connection.execute(
+                "ALTER TABLE cd_tracks ADD COLUMN mp3_path TEXT NOT NULL DEFAULT ''"
+            )
+
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_cd_releases_artist ON cd_releases(artist COLLATE NOCASE)"
         )
@@ -91,7 +100,6 @@ def count_cd_releases():
 
 
 def import_cd_rows(rows):
-    """Insert CD rows safely; existing artist/title/type combinations are skipped."""
     connection = get_connection()
     inserted = 0
     skipped = 0
@@ -113,9 +121,7 @@ def import_cd_rows(rows):
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    artist,
-                    title,
-                    media_type,
+                    artist, title, media_type,
                     str(row.get("label", "") or "").strip(),
                     str(row.get("catalog", "") or "").strip(),
                     row.get("year"),
@@ -145,7 +151,7 @@ def get_cd_tracks(cd_release_id):
         return connection.execute(
             """
             SELECT id, cd_release_id, position, track_order,
-                   artist, title, duration, discogs_track_id
+                   artist, title, duration, discogs_track_id, mp3_path
             FROM cd_tracks
             WHERE cd_release_id = ?
             ORDER BY track_order, id
@@ -157,23 +163,19 @@ def get_cd_tracks(cd_release_id):
 
 
 def replace_cd_tracks(cd_release_id, tracks):
-    """Replace the complete tracklist for one CD release."""
     connection = get_connection()
     try:
         ensure_cd_schema(connection)
         release_id = int(cd_release_id)
-        connection.execute(
-            "DELETE FROM cd_tracks WHERE cd_release_id = ?",
-            (release_id,),
-        )
+        connection.execute("DELETE FROM cd_tracks WHERE cd_release_id = ?", (release_id,))
 
         for index, track in enumerate(tracks, start=1):
             connection.execute(
                 """
                 INSERT INTO cd_tracks
                     (cd_release_id, position, track_order, artist, title,
-                     duration, discogs_track_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                     duration, discogs_track_id, mp3_path)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     release_id,
@@ -183,6 +185,7 @@ def replace_cd_tracks(cd_release_id, tracks):
                     str(track.get("title", "") or "").strip(),
                     str(track.get("duration", "") or "").strip(),
                     str(track.get("discogs_track_id", "") or "").strip(),
+                    str(track.get("mp3_path", "") or "").strip(),
                 ),
             )
 
@@ -192,7 +195,6 @@ def replace_cd_tracks(cd_release_id, tracks):
 
 
 def save_cd_discogs_tracks(cd_release_id, release):
-    """Persist the Discogs tracklist for a CD without touching Vinyl tables."""
     tracks = []
     release_artists = []
     for artist in release.get("artists", []) or []:
@@ -223,6 +225,7 @@ def save_cd_discogs_tracks(cd_release_id, release):
             "title": title,
             "duration": duration,
             "discogs_track_id": str(raw.get("id", "") or "").strip(),
+            "mp3_path": "",
         })
 
     replace_cd_tracks(cd_release_id, tracks)
