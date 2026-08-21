@@ -29,16 +29,35 @@ CREATE TABLE IF NOT EXISTS cd_releases (
 """
 
 
+CD_TRACKS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS cd_tracks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cd_release_id INTEGER NOT NULL,
+    position TEXT NOT NULL DEFAULT '',
+    track_order INTEGER NOT NULL DEFAULT 0,
+    artist TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL DEFAULT '',
+    duration TEXT NOT NULL DEFAULT '',
+    discogs_track_id TEXT NOT NULL DEFAULT '',
+    FOREIGN KEY(cd_release_id) REFERENCES cd_releases(id) ON DELETE CASCADE
+)
+"""
+
+
 def ensure_cd_schema(connection=None):
     own_connection = connection is None
     connection = connection or get_connection()
     try:
         connection.execute(CD_SCHEMA)
+        connection.execute(CD_TRACKS_SCHEMA)
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_cd_releases_artist ON cd_releases(artist COLLATE NOCASE)"
         )
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_cd_releases_title ON cd_releases(title COLLATE NOCASE)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cd_tracks_release ON cd_tracks(cd_release_id, track_order)"
         )
         connection.commit()
     finally:
@@ -115,5 +134,58 @@ def import_cd_rows(rows):
 
         connection.commit()
         return inserted, skipped
+    finally:
+        connection.close()
+
+
+def get_cd_tracks(cd_release_id):
+    connection = get_connection()
+    try:
+        ensure_cd_schema(connection)
+        return connection.execute(
+            """
+            SELECT id, cd_release_id, position, track_order,
+                   artist, title, duration, discogs_track_id
+            FROM cd_tracks
+            WHERE cd_release_id = ?
+            ORDER BY track_order, id
+            """,
+            (int(cd_release_id),),
+        ).fetchall()
+    finally:
+        connection.close()
+
+
+def replace_cd_tracks(cd_release_id, tracks):
+    """Replace the complete tracklist for one CD release."""
+    connection = get_connection()
+    try:
+        ensure_cd_schema(connection)
+        release_id = int(cd_release_id)
+        connection.execute(
+            "DELETE FROM cd_tracks WHERE cd_release_id = ?",
+            (release_id,),
+        )
+
+        for index, track in enumerate(tracks, start=1):
+            connection.execute(
+                """
+                INSERT INTO cd_tracks
+                    (cd_release_id, position, track_order, artist, title,
+                     duration, discogs_track_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    release_id,
+                    str(track.get("position", "") or "").strip(),
+                    int(track.get("track_order", index) or index),
+                    str(track.get("artist", "") or "").strip(),
+                    str(track.get("title", "") or "").strip(),
+                    str(track.get("duration", "") or "").strip(),
+                    str(track.get("discogs_track_id", "") or "").strip(),
+                ),
+            )
+
+        connection.commit()
     finally:
         connection.close()
