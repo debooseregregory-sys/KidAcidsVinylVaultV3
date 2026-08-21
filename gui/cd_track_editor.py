@@ -3,31 +3,26 @@
 # CD TRACK EDITOR
 # ============================================================
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QDialog,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
-    QHeaderView,
-    QInputDialog,
-    QMessageBox,
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QTableWidget, QTableWidgetItem, QHeaderView, QInputDialog,
+    QMessageBox, QFileDialog,
 )
 
 from database.cd_database import get_cd_tracks, replace_cd_tracks
 
 
 class CDTrackEditorDialog(QDialog):
-    """Manual editor for the complete tracklist of one CD release."""
+    """Manual editor for a CD tracklist, including optional MP3 links."""
 
     def __init__(self, cd_release_id, artist="", title="", parent=None):
         super().__init__(parent)
         self.cd_release_id = int(cd_release_id)
         self.setWindowTitle(f"CD TRACKS — {artist} — {title}")
-        self.resize(820, 520)
+        self.resize(1050, 560)
         self.build_ui()
         self.load_tracks()
 
@@ -40,13 +35,15 @@ class CDTrackEditorDialog(QDialog):
         heading.setStyleSheet("font-size:20px; font-weight:900; color:#fff;")
         root.addWidget(heading)
 
-        info = QLabel("Voeg tracks toe, pas ze aan of verwijder ze. Discogs-tracks kunnen hier ook handmatig worden aangepast.")
+        info = QLabel(
+            "Voeg tracks toe, pas ze aan of verwijder ze. Je kunt per track ook een bestaand MP3-bestand uit je MP3-map koppelen."
+        )
         info.setWordWrap(True)
         info.setStyleSheet("color:#999; font-size:12px;")
         root.addWidget(info)
 
-        self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["#", "POSITIE", "ARTIST", "TITEL", "DUUR"])
+        self.table = QTableWidget(0, 6)
+        self.table.setHorizontalHeaderLabels(["#", "POSITIE", "ARTIST", "TITEL", "DUUR", "MP3"])
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -54,9 +51,10 @@ class CDTrackEditorDialog(QDialog):
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
         self.table.doubleClicked.connect(self.edit_selected)
         root.addWidget(self.table, 1)
 
@@ -64,6 +62,14 @@ class CDTrackEditorDialog(QDialog):
         self.add_button = QPushButton("+ TRACK")
         self.add_button.clicked.connect(self.add_track)
         buttons.addWidget(self.add_button)
+
+        self.mp3_button = QPushButton("MP3 KOPPELEN")
+        self.mp3_button.clicked.connect(self.link_selected_mp3)
+        buttons.addWidget(self.mp3_button)
+
+        self.clear_mp3_button = QPushButton("MP3 LOSKOPPELEN")
+        self.clear_mp3_button.clicked.connect(self.clear_selected_mp3)
+        buttons.addWidget(self.clear_mp3_button)
 
         self.edit_button = QPushButton("BEWERK TRACK")
         self.edit_button.clicked.connect(self.edit_selected)
@@ -74,7 +80,6 @@ class CDTrackEditorDialog(QDialog):
         buttons.addWidget(self.delete_button)
 
         buttons.addStretch()
-
         cancel = QPushButton("ANNULEREN")
         cancel.clicked.connect(self.reject)
         buttons.addWidget(cancel)
@@ -105,16 +110,21 @@ class CDTrackEditorDialog(QDialog):
                 artist=track[4],
                 title=track[5],
                 duration=track[6],
+                mp3_path=track[8] if len(track) > 8 else "",
             )
 
-    def _append_row(self, position="", artist="", title="", duration=""):
+    def _append_row(self, position="", artist="", title="", duration="", mp3_path=""):
         row = self.table.rowCount()
         self.table.insertRow(row)
-        values = [row + 1, position, artist, title, duration]
+        display_mp3 = Path(mp3_path).name if mp3_path else ""
+        values = [row + 1, position, artist, title, duration, display_mp3]
         for column, value in enumerate(values):
             item = QTableWidgetItem(str(value or ""))
             if column == 0:
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            if column == 5 and mp3_path:
+                item.setToolTip(mp3_path)
+                item.setData(Qt.ItemDataRole.UserRole, mp3_path)
             self.table.setItem(row, column, item)
         self.table.setRowHeight(row, 34)
 
@@ -138,7 +148,49 @@ class CDTrackEditorDialog(QDialog):
         duration, ok = QInputDialog.getText(self, "Track toevoegen", "Duur:", text="")
         if not ok:
             return
-        self._append_row(position.strip(), artist.strip(), title.strip(), duration.strip())
+        self._append_row(position.strip(), artist.strip(), title.strip(), duration.strip(), "")
+
+        # Select the newly added row so MP3 KOPPELEN can be used immediately.
+        self.table.selectRow(self.table.rowCount() - 1)
+        self.link_selected_mp3(optional=True)
+
+    def link_selected_mp3(self, optional=False):
+        row = self._selected_row()
+        if row is None:
+            if not optional:
+                QMessageBox.information(self, "Geen track geselecteerd", "Selecteer eerst de track waaraan je een MP3 wilt koppelen.")
+            return
+
+        current_item = self.table.item(row, 5)
+        current_path = current_item.data(Qt.ItemDataRole.UserRole) if current_item else ""
+        start_dir = str(Path(r"D:\01. MP3's")) if Path(r"D:\01. MP3's").exists() else ""
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Kies MP3 voor deze track",
+            start_dir,
+            "MP3 bestanden (*.mp3);;Alle bestanden (*.*)",
+        )
+        if not path:
+            return
+
+        item = self.table.item(row, 5)
+        if item is None:
+            item = QTableWidgetItem()
+            self.table.setItem(row, 5, item)
+        item.setText(Path(path).name)
+        item.setToolTip(path)
+        item.setData(Qt.ItemDataRole.UserRole, path)
+
+    def clear_selected_mp3(self):
+        row = self._selected_row()
+        if row is None:
+            QMessageBox.information(self, "Geen track geselecteerd", "Selecteer eerst een track.")
+            return
+        item = self.table.item(row, 5)
+        if item is not None:
+            item.setText("")
+            item.setToolTip("")
+            item.setData(Qt.ItemDataRole.UserRole, "")
 
     def edit_selected(self):
         row = self._selected_row()
@@ -146,25 +198,15 @@ class CDTrackEditorDialog(QDialog):
             QMessageBox.information(self, "Geen track geselecteerd", "Selecteer eerst een track.")
             return
 
-        fields = [
-            ("Positie", 1),
-            ("Artist", 2),
-            ("Titel", 3),
-            ("Duur", 4),
-        ]
+        fields = [("Positie", 1), ("Artist", 2), ("Titel", 3), ("Duur", 4)]
         for label, column in fields:
             current = self.table.item(row, column).text() if self.table.item(row, column) else ""
-            if label == "Titel":
-                value, ok = QInputDialog.getText(self, "Track bewerken", f"{label}:", text=current)
-                if not ok:
-                    return
-                if not value.strip():
-                    QMessageBox.warning(self, "Titel ontbreekt", "Een track moet een titel hebben.")
-                    return
-            else:
-                value, ok = QInputDialog.getText(self, "Track bewerken", f"{label}:", text=current)
-                if not ok:
-                    return
+            value, ok = QInputDialog.getText(self, "Track bewerken", f"{label}:", text=current)
+            if not ok:
+                return
+            if label == "Titel" and not value.strip():
+                QMessageBox.warning(self, "Titel ontbreekt", "Een track moet een titel hebben.")
+                return
             self.table.item(row, column).setText(value.strip())
 
     def delete_selected(self):
@@ -174,9 +216,7 @@ class CDTrackEditorDialog(QDialog):
             return
         title = self.table.item(row, 3).text() if self.table.item(row, 3) else ""
         answer = QMessageBox.question(
-            self,
-            "Track verwijderen",
-            f"Wil je deze track verwijderen?\n\n{title}",
+            self, "Track verwijderen", f"Wil je deze track verwijderen?\n\n{title}",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -193,6 +233,8 @@ class CDTrackEditorDialog(QDialog):
             if not title:
                 QMessageBox.warning(self, "Ongeldige track", f"Track {row + 1} heeft geen titel.")
                 return
+            mp3_item = self.table.item(row, 5)
+            mp3_path = mp3_item.data(Qt.ItemDataRole.UserRole) if mp3_item else ""
             tracks.append({
                 "position": self.table.item(row, 1).text().strip(),
                 "track_order": row + 1,
@@ -200,6 +242,7 @@ class CDTrackEditorDialog(QDialog):
                 "title": title,
                 "duration": self.table.item(row, 4).text().strip(),
                 "discogs_track_id": "",
+                "mp3_path": str(mp3_path or "").strip(),
             })
 
         try:
