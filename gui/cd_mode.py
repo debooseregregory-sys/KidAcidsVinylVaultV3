@@ -13,7 +13,6 @@ CD = "CD"
 
 
 def ensure_media_type_column():
-    """Keep the existing vinyl schema compatible with the media filter."""
     conn = get_connection()
     try:
         columns = {
@@ -21,9 +20,7 @@ def ensure_media_type_column():
             for row in conn.execute("PRAGMA table_info(releases)").fetchall()
         }
         if "media_type" not in columns:
-            conn.execute(
-                "ALTER TABLE releases ADD COLUMN media_type TEXT DEFAULT 'VINYL'"
-            )
+            conn.execute("ALTER TABLE releases ADD COLUMN media_type TEXT DEFAULT 'VINYL'")
         conn.execute(
             "UPDATE releases SET media_type='VINYL' "
             "WHERE media_type IS NULL OR TRIM(media_type)=''"
@@ -54,13 +51,12 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
 
         self.cd_library_page.cd_selected.connect(self._open_cd_showcase)
         self.cd_showcase_page.back_requested.connect(self.show_cd_library)
+        self.cd_showcase_page.release_selected.connect(self._open_cd_detail)
 
         self.cd_library_button.setEnabled(True)
         self.cd_library_button.setToolTip("CD Library")
         self.cd_library_button.clicked.connect(self.show_cd_library)
 
-        # CD Showcase was disabled by the temporary CD-mode implementation.
-        # It is now a real page backed by cd_releases.
         self.cd_showcase_button.setEnabled(True)
         self.cd_showcase_button.setToolTip("CD Showcase")
         self.cd_showcase_button.clicked.connect(self.show_cd_showcase)
@@ -88,24 +84,18 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
         self.current_cd_id = int(release_id)
         self.show_cd_showcase()
 
+    def _open_cd_detail(self, release_id):
+        self.current_cd_id = int(release_id)
+        self.cd_showcase_page.load_release(self.current_cd_id)
+        self.pages.setCurrentWidget(self.cd_showcase_page)
+        self.page_title.setText("CD Showcase")
+        self.set_active_nav(self.cd_showcase_button)
+
     def show_cd_showcase(self):
         self.current_media_type = CD
-
-        # If the user has not selected a CD yet, use the first CD in the
-        # library so the Showcase button always opens a useful page.
-        if self.current_cd_id is None:
-            rows = self.cd_library_page.all_rows
-            if not rows:
-                self.cd_library_page.load_releases()
-                rows = self.cd_library_page.all_rows
-            if rows:
-                self.current_cd_id = int(rows[0]["id"])
-
-        if self.current_cd_id is None:
-            self.show_cd_library()
-            return
-
-        self.cd_showcase_page.load_release(self.current_cd_id)
+        # Showcase behaves like the Vinyl Showcase: show the complete CD
+        # collection, not the first/selected release only.
+        self.cd_showcase_page.load_releases()
         self.pages.setCurrentWidget(self.cd_showcase_page)
         self.page_title.setText("CD Showcase")
         self.set_active_nav(self.cd_showcase_button)
