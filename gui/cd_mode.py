@@ -92,6 +92,7 @@ class MediaReleaseLibraryPage(BaseReleaseLibraryPage):
                     r.discogs,
                     r.genre,
                     r.checked,
+                    COALESCE(r.media_type, 'VINYL') AS media_type,
                     COUNT(DISTINCT t.id) AS tracks,
                     COUNT(DISTINCT tm.mp3_id) AS mp3_count
                 FROM releases r
@@ -132,7 +133,9 @@ class MediaReleaseBoardPage(BaseReleaseBoardPage):
                 if label.text() == "RELEASE BOARD":
                     label.setText("CD RELEASE BOARD")
                 elif label.text().startswith("Je collectie als cover-board"):
-                    label.setText("Je CD-collectie als cover-board — bekijken, openen en afspelen")
+                    label.setText(
+                        "Je CD-collectie als cover-board — bekijken, openen en afspelen"
+                    )
 
     def load_releases(self):
         connection = None
@@ -168,6 +171,13 @@ class MediaReleaseBoardPage(BaseReleaseBoardPage):
                 """,
                 (self.media_type,),
             ).fetchall()
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "Database fout",
+                f"De {self.media_type} Showcase kon niet worden geladen.\n\n{error}",
+            )
+            return
         finally:
             if connection is not None:
                 connection.close()
@@ -243,7 +253,10 @@ class CDDiscogsImportPage(BaseDiscogsImportPage):
         for label in self.findChildren(QLabel):
             if label.text() == "Discogs Release Import":
                 label.setText("Discogs CD Import")
-            elif "importeer" in label.text().lower() and "volledige release" in label.text().lower():
+            elif (
+                "importeer" in label.text().lower()
+                and "volledige release" in label.text().lower()
+            ):
                 label.setText(
                     "Zoek rechtstreeks in Discogs en importeer een volledige CD-release naar VinylVault."
                 )
@@ -288,7 +301,7 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
         self.cd_discogs_page.import_finished.connect(self.refresh_after_import)
         self.pages.addWidget(self.cd_discogs_page)
 
-        # Activate the buttons that were deliberately left disabled as placeholders.
+        # Activate the CD navigation buttons.
         self.cd_showcase_button.setEnabled(True)
         self.cd_showcase_button.setToolTip("CD Showcase")
         self.cd_showcase_button.clicked.connect(self.show_cd_showcase_board)
@@ -321,6 +334,23 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
             item.style().polish(item)
 
         self.current_nav = button
+
+    def show_board(self):
+        """Handle the shared board callback without assuming board_button exists."""
+        if self.current_media_type == CD:
+            self.show_cd_showcase_board()
+            return
+
+        self.pages.setCurrentWidget(self.board_page)
+        self.page_title.setText("Release Board")
+
+        # Some older VinylVault layouts had a board_button; the current
+        # layout does not. Use the Vinyl Showcase navigation as the safe
+        # active navigation target when the board is reached internally.
+        if hasattr(self, "board_button"):
+            self.set_active_nav(self.board_button)
+        else:
+            self.set_active_nav(self.vinyl_showcase_button)
 
     def show_vinyl_showcase(self):
         self.current_media_type = VINYL
