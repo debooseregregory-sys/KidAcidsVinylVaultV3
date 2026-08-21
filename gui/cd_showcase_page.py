@@ -133,18 +133,15 @@ class CDShowcasePage(QWidget):
 
     @classmethod
     def _load_cover_pixmap(cls, cover_value):
-        """Load a cover from a local path or a cached Discogs image URL."""
         cover_value = str(cover_value or "").strip()
         if not cover_value:
             return QPixmap()
-
         if cover_value.lower().startswith(("http://", "https://")):
             cache_path = cls._cached_cover_path(cover_value)
             if cache_path and cache_path.exists():
                 pix = QPixmap(str(cache_path))
                 if not pix.isNull():
                     return pix
-
             try:
                 response = requests.get(
                     cover_value,
@@ -162,33 +159,27 @@ class CDShowcasePage(QWidget):
             except Exception:
                 return QPixmap()
             return QPixmap()
-
         path = Path(cover_value)
         if path.exists():
             pix = QPixmap(str(path))
             if not pix.isNull():
                 return pix
-
         return QPixmap()
 
     def _set_cover(self, label, cover_value, size):
         pix = self._load_cover_pixmap(cover_value)
         if not pix.isNull():
-            label.setPixmap(
-                pix.scaled(
-                    size,
-                    size,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-            )
+            label.setPixmap(pix.scaled(
+                size, size,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            ))
 
     def load_releases(self, search_text=""):
         self.release_id = None
         self._clear_grid()
         self.title_label.setText("CD SHOWCASE")
         self.back_button.setText("← CD LIBRARY")
-
         search_text = str(search_text or "").strip()
         conn = get_connection()
         try:
@@ -197,8 +188,7 @@ class CDShowcasePage(QWidget):
                 rows = conn.execute("""
                     SELECT id, artist, title, label, catalog, year, genre, cover
                     FROM cd_releases
-                    WHERE artist LIKE ? COLLATE NOCASE
-                       OR title LIKE ? COLLATE NOCASE
+                    WHERE artist LIKE ? COLLATE NOCASE OR title LIKE ? COLLATE NOCASE
                     ORDER BY artist COLLATE NOCASE, title COLLATE NOCASE, id
                 """, (pattern, pattern)).fetchall()
             else:
@@ -209,19 +199,13 @@ class CDShowcasePage(QWidget):
                 """).fetchall()
         finally:
             conn.close()
-
-        if search_text:
-            self.info_label.setText(f"{len(rows)} resultaten voor ‘{search_text}’")
-        else:
-            self.info_label.setText(f"{len(rows)} CD-releases")
-
+        self.info_label.setText(
+            f"{len(rows)} resultaten voor ‘{search_text}’" if search_text else f"{len(rows)} CD-releases"
+        )
         if not rows:
-            message = "Geen CD-releases gevonden."
-            if search_text:
-                message = f"Geen CD-releases gevonden voor ‘{search_text}’."
+            message = f"Geen CD-releases gevonden voor ‘{search_text}’." if search_text else "Geen CD-releases gevonden."
             self.grid.addWidget(QLabel(message), 0, 0)
             return
-
         columns = 5
         for index, row in enumerate(rows):
             self.grid.addWidget(self._create_card(row), index // columns, index % columns)
@@ -234,34 +218,28 @@ class CDShowcasePage(QWidget):
         card.setCursor(Qt.CursorShape.PointingHandCursor)
         card.setMinimumWidth(180)
         card.setMaximumWidth(260)
-
         layout = QVBoxLayout(card)
         layout.setContentsMargins(10, 10, 10, 12)
         layout.setSpacing(7)
-
         cover = QLabel("GEEN COVER")
         cover.setObjectName("cover")
         cover.setFixedSize(190, 190)
         cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._set_cover(cover, row[7], 190)
         layout.addWidget(cover, 0, Qt.AlignmentFlag.AlignHCenter)
-
         artist = QLabel(str(row[1] or "Onbekend"))
         artist.setObjectName("artist")
         artist.setWordWrap(True)
         layout.addWidget(artist)
-
         title = QLabel(str(row[2] or "(geen titel)"))
         title.setObjectName("title")
         title.setWordWrap(True)
         layout.addWidget(title)
-
         meta = [str(value) for value in (row[3], row[4], row[5]) if value]
         meta_label = QLabel(" • ".join(meta))
         meta_label.setObjectName("meta")
         meta_label.setWordWrap(True)
         layout.addWidget(meta_label)
-
         card.mousePressEvent = lambda event, rid=int(row[0]): self.release_selected.emit(rid)
         return card
 
@@ -285,19 +263,16 @@ class CDShowcasePage(QWidget):
         layout = QHBoxLayout(row)
         layout.setContentsMargins(10, 7, 10, 7)
         layout.setSpacing(12)
-
         position = QLabel(str(track[2] or ""))
         position.setObjectName("trackPosition")
         position.setFixedWidth(52)
         layout.addWidget(position)
-
         middle = QVBoxLayout()
         middle.setSpacing(2)
         title = QLabel(str(track[5] or "(geen titel)"))
         title.setObjectName("trackTitle")
         title.setWordWrap(True)
         middle.addWidget(title)
-
         artist = str(track[4] or "").strip()
         if artist:
             artist_label = QLabel(artist)
@@ -305,19 +280,32 @@ class CDShowcasePage(QWidget):
             artist_label.setWordWrap(True)
             middle.addWidget(artist_label)
         layout.addLayout(middle, 1)
-
         duration = QLabel(str(track[6] or ""))
         duration.setObjectName("trackDuration")
         duration.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         duration.setFixedWidth(55)
         layout.addWidget(duration)
+        mp3_path = str(track[8] or "").strip()
+        if mp3_path:
+            play_button = QPushButton("▶")
+            play_button.setToolTip(f"Speel MP3: {Path(mp3_path).name}")
+            play_button.setFixedSize(38, 32)
+            play_button.clicked.connect(
+                lambda _checked=False, path=mp3_path: self.play_mp3.emit(path)
+            )
+            layout.addWidget(play_button)
+        else:
+            no_mp3 = QLabel("GEEN MP3")
+            no_mp3.setObjectName("meta")
+            no_mp3.setFixedWidth(62)
+            no_mp3.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            layout.addWidget(no_mp3)
         return row
 
     def load_release(self, release_id):
         self.release_id = int(release_id)
         self._clear_grid()
         self.back_button.setText("← TERUG NAAR CD SHOWCASE")
-
         conn = get_connection()
         try:
             release = conn.execute("""
@@ -327,11 +315,9 @@ class CDShowcasePage(QWidget):
             """, (self.release_id,)).fetchone()
         finally:
             conn.close()
-
         if release is None:
             self.info_label.setText("CD niet gevonden")
             return
-
         tracks = get_cd_tracks(self.release_id)
         if not tracks and str(release[7] or "").strip().isdigit():
             try:
@@ -342,96 +328,67 @@ class CDShowcasePage(QWidget):
                 self.info_label.setText(
                     f"{release[1] or 'Onbekend'} — {release[2] or '(geen titel)'} | Discogs tracks niet geladen: {error}"
                 )
-
         artist = str(release[1] or "Onbekend")
         title = str(release[2] or "(geen titel)")
         self.title_label.setText("CD RELEASE")
         self.info_label.setText(f"{artist} — {title}")
-
         hero = QFrame()
         hero.setObjectName("detailHero")
         hero_layout = QHBoxLayout(hero)
         hero_layout.setContentsMargins(12, 10, 12, 10)
         hero_layout.setSpacing(14)
-
         info = QVBoxLayout()
         info.setSpacing(7)
-
         artist_label = QLabel(artist)
         artist_label.setObjectName("detailArtist")
         info.addWidget(artist_label)
-
         title_label = QLabel(title)
         title_label.setObjectName("detailTitle")
         title_label.setWordWrap(True)
         info.addWidget(title_label)
-
         meta_grid = QGridLayout()
         meta_grid.setHorizontalSpacing(10)
         meta_grid.setVerticalSpacing(8)
         fields = [
-            ("LABEL", release[3]),
-            ("CATALOGUS", release[4]),
-            ("JAAR", release[5]),
-            ("GENRE", release[6]),
-            ("TYPE", "CD"),
+            ("LABEL", release[3]), ("CATALOGUS", release[4]), ("JAAR", release[5]),
+            ("GENRE", release[6]), ("TYPE", "CD"),
             ("STATUS", "GEKOPPELD" if int(release[11] or 0) else "NIET GEKOPPELD"),
         ]
         for index, (label, value) in enumerate(fields):
-            meta_grid.addWidget(
-                self._make_value_card(label, value),
-                index // 3,
-                index % 3,
-            )
+            meta_grid.addWidget(self._make_value_card(label, value), index // 3, index % 3)
         info.addLayout(meta_grid)
-
         if release[7]:
             discogs = QLabel(f"Discogs ID: {release[7]}")
             discogs.setObjectName("meta")
             info.addWidget(discogs)
-
         if release[8]:
             discogs_button = QPushButton("OPEN DISCOGS")
             url = str(release[8])
-            discogs_button.clicked.connect(
-                lambda _checked=False, u=url: QDesktopServices.openUrl(QUrl(u))
-            )
+            discogs_button.clicked.connect(lambda _checked=False, u=url: QDesktopServices.openUrl(QUrl(u)))
             info.addWidget(discogs_button, 0, Qt.AlignmentFlag.AlignLeft)
-
         if release[10]:
             notes = QLabel(str(release[10]))
             notes.setObjectName("meta")
             notes.setWordWrap(True)
             info.addWidget(notes)
-
         cover = QLabel("GEEN COVER")
         cover.setObjectName("cover")
         cover.setFixedSize(260, 260)
         cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._set_cover(cover, release[9], 260)
-
         hero_layout.addLayout(info, 1)
-        hero_layout.addWidget(
-            cover,
-            0,
-            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight,
-        )
+        hero_layout.addWidget(cover, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
         self.grid.addWidget(hero, 0, 0, 1, 2)
-
         section = QLabel(f"TRACKS  •  {len(tracks)}")
         section.setObjectName("section")
         self.grid.addWidget(section, 1, 0, 1, 2)
-
         if tracks:
             for index, track in enumerate(tracks, start=2):
                 self.grid.addWidget(self._make_track_row(track), index, 0, 1, 2)
         else:
-            placeholder = QLabel(
-                "Geen tracks gekoppeld. Deze CD heeft nog geen Discogs Release ID."
-            )
+            placeholder = QLabel("Geen tracks gekoppeld. Deze CD heeft nog geen Discogs Release ID.")
             placeholder.setObjectName("meta")
             placeholder.setWordWrap(True)
             self.grid.addWidget(placeholder, 2, 0, 1, 2)
-
         self.grid.setColumnStretch(0, 1)
         self.grid.setColumnStretch(1, 1)
