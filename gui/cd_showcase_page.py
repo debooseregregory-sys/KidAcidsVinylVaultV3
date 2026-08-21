@@ -72,7 +72,7 @@ class CDShowcasePage(QWidget):
             QLabel#title { color:#fff; font-size:16px; font-weight:900; }
             QLabel#meta { color:#858591; font-size:12px; }
             QLabel#detailArtist { color:#ffcf72; font-size:20px; font-weight:900; }
-            QLabel#detailTitle { color:#fff; font-size:32px; font-weight:900; }
+            QLabel#detailTitle { color:#fff; font-size:30px; font-weight:900; }
             QLabel#section { color:#ffcf72; font-size:16px; font-weight:900; }
             QFrame#detailHero { background:#121217; border:1px solid #292933; border-radius:12px; }
             QFrame#metaCard { background:#101014; border:1px solid #292933; border-radius:9px; }
@@ -164,7 +164,7 @@ class CDShowcasePage(QWidget):
         card = QFrame()
         card.setObjectName("metaCard")
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setContentsMargins(12, 9, 12, 9)
         small = QLabel(label.upper())
         small.setObjectName("meta")
         text = QLabel(str(value or "—"))
@@ -201,70 +201,96 @@ class CDShowcasePage(QWidget):
         hero = QFrame()
         hero.setObjectName("detailHero")
         hero_layout = QHBoxLayout(hero)
-        hero_layout.setContentsMargins(20, 20, 20, 20)
-        hero_layout.setSpacing(28)
+        hero_layout.setContentsMargins(18, 16, 18, 16)
+        hero_layout.setSpacing(22)
 
+        # LEFT: release identity and compact metadata.
         info = QVBoxLayout()
-        info.setSpacing(8)
+        info.setSpacing(7)
+
         artist_label = QLabel(artist)
         artist_label.setObjectName("detailArtist")
+        info.addWidget(artist_label)
+
         title_label = QLabel(title)
         title_label.setObjectName("detailTitle")
         title_label.setWordWrap(True)
-        info.addWidget(artist_label)
         info.addWidget(title_label)
+
+        meta_grid = QGridLayout()
+        meta_grid.setHorizontalSpacing(10)
+        meta_grid.setVerticalSpacing(8)
+        fields = [
+            ("LABEL", release[3]),
+            ("CATALOGUS", release[4]),
+            ("JAAR", release[5]),
+            ("GENRE", release[6]),
+            ("TYPE", "CD"),
+            ("STATUS", "GEKOPPELD" if int(release[11] or 0) else "NIET GEKOPPELD"),
+        ]
+        for index, (label, value) in enumerate(fields):
+            meta_grid.addWidget(
+                self._make_value_card(label, value),
+                index // 3,
+                index % 3,
+            )
+        info.addLayout(meta_grid)
 
         if release[7]:
             discogs = QLabel(f"Discogs ID: {release[7]}")
             discogs.setObjectName("meta")
             info.addWidget(discogs)
 
-        info.addSpacing(10)
-        meta_grid = QGridLayout()
-        fields = [
-            ("LABEL", release[3]), ("CATALOGUS", release[4]),
-            ("JAAR", release[5]), ("GENRE", release[6]),
-        ]
-        for index, (label, value) in enumerate(fields):
-            meta_grid.addWidget(self._make_value_card(label, value), index // 2, index % 2)
-        info.addLayout(meta_grid)
-
         if release[8]:
             discogs_button = QPushButton("OPEN DISCOGS")
             url = str(release[8])
-            discogs_button.clicked.connect(lambda _checked=False, u=url: QDesktopServices.openUrl(QUrl(u)))
+            discogs_button.clicked.connect(
+                lambda _checked=False, u=url: QDesktopServices.openUrl(QUrl(u))
+            )
             info.addWidget(discogs_button, 0, Qt.AlignmentFlag.AlignLeft)
 
         if release[10]:
-            info.addSpacing(8)
             notes = QLabel(str(release[10]))
             notes.setObjectName("meta")
             notes.setWordWrap(True)
             info.addWidget(notes)
+
         info.addStretch()
 
-        # Large cover is the dominant visual element in the upper-right.
+        # RIGHT: compact but dominant cover, aligned to the top.
         cover = QLabel("GEEN COVER")
         cover.setObjectName("cover")
-        cover.setFixedSize(380, 380)
+        cover.setFixedSize(300, 300)
         cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cover_path = str(release[9] or "").strip()
         if cover_path and Path(cover_path).exists():
             pix = QPixmap(cover_path)
             if not pix.isNull():
-                cover.setPixmap(pix.scaled(380, 380, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+                cover.setPixmap(
+                    pix.scaled(
+                        300,
+                        300,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                )
 
-        # Information on the left, complete cover at the top-right.
         hero_layout.addLayout(info, 1)
-        hero_layout.addWidget(cover, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
+        hero_layout.addWidget(
+            cover,
+            0,
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight,
+        )
         self.grid.addWidget(hero, 0, 0, 1, 2)
 
-        section = QLabel("RELEASE-INFORMATIE")
+        # Reserved full-width area for the track list.
+        section = QLabel("TRACKS")
         section.setObjectName("section")
         self.grid.addWidget(section, 1, 0, 1, 2)
 
-        status = "GEKOPPELD" if int(release[11] or 0) else "NIET GEKOPPELD"
-        self.grid.addWidget(self._make_value_card("STATUS", status), 2, 0)
-        self.grid.addWidget(self._make_value_card("TYPE", "CD"), 2, 1)
+        placeholder = QLabel("CD-tracks worden hier weergegeven.")
+        placeholder.setObjectName("meta")
+        self.grid.addWidget(placeholder, 2, 0, 1, 2)
+
         self.grid.setColumnStretch(0, 1)
         self.grid.setColumnStretch(1, 1)
