@@ -11,7 +11,7 @@ from PySide6.QtCore import Qt, Signal, QUrl
 from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QFrame, QGridLayout,
+    QScrollArea, QFrame, QGridLayout, QLineEdit,
 )
 
 from database.database import get_connection
@@ -45,6 +45,15 @@ class CDShowcasePage(QWidget):
         self.title_label.setObjectName("showcaseTitle")
         root.addWidget(self.title_label)
 
+        search_row = QHBoxLayout()
+        search_row.setSpacing(10)
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText("Zoek CD op artiest of titel...")
+        self.search_edit.setClearButtonEnabled(True)
+        self.search_edit.textChanged.connect(self._search_changed)
+        search_row.addWidget(self.search_edit, 1)
+        root.addLayout(search_row)
+
         self.info_label = QLabel("Alle CD-releases")
         self.info_label.setObjectName("showcaseInfo")
         root.addWidget(self.info_label)
@@ -67,6 +76,9 @@ class CDShowcasePage(QWidget):
             QPushButton { background:#18181f; color:#fff; border:1px solid #30303a;
                 border-radius:7px; padding:8px 14px; font-size:12px; font-weight:800; }
             QPushButton:hover { background:#24242c; border-color:#555563; }
+            QLineEdit { background:#121217; color:#fff; border:1px solid #30303a;
+                border-radius:8px; padding:10px 12px; font-size:13px; }
+            QLineEdit:focus { border-color:#5b5b6b; }
             QLabel#showcaseTitle { color:#fff; font-size:26px; font-weight:900; }
             QLabel#showcaseInfo { color:#9b9ba6; font-size:13px; }
             QFrame#releaseCard { background:#121217; border:1px solid #292933; border-radius:10px; }
@@ -93,6 +105,11 @@ class CDShowcasePage(QWidget):
             self.load_releases()
             return
         self.back_requested.emit()
+
+    def _search_changed(self, text):
+        if self.release_id is not None:
+            return
+        self.load_releases(text)
 
     def _clear_grid(self):
         while self.grid.count():
@@ -143,25 +160,43 @@ class CDShowcasePage(QWidget):
                 )
             )
 
-    def load_releases(self):
+    def load_releases(self, search_text=""):
         self.release_id = None
         self._clear_grid()
         self.title_label.setText("CD SHOWCASE")
         self.back_button.setText("← CD LIBRARY")
 
+        search_text = str(search_text or "").strip()
         conn = get_connection()
         try:
-            rows = conn.execute("""
-                SELECT id, artist, title, label, catalog, year, genre, cover
-                FROM cd_releases
-                ORDER BY artist COLLATE NOCASE, title COLLATE NOCASE, id
-            """).fetchall()
+            if search_text:
+                pattern = f"%{search_text}%"
+                rows = conn.execute("""
+                    SELECT id, artist, title, label, catalog, year, genre, cover
+                    FROM cd_releases
+                    WHERE artist LIKE ? COLLATE NOCASE
+                       OR title LIKE ? COLLATE NOCASE
+                    ORDER BY artist COLLATE NOCASE, title COLLATE NOCASE, id
+                """, (pattern, pattern)).fetchall()
+            else:
+                rows = conn.execute("""
+                    SELECT id, artist, title, label, catalog, year, genre, cover
+                    FROM cd_releases
+                    ORDER BY artist COLLATE NOCASE, title COLLATE NOCASE, id
+                """).fetchall()
         finally:
             conn.close()
 
-        self.info_label.setText(f"{len(rows)} CD-releases")
+        if search_text:
+            self.info_label.setText(f"{len(rows)} resultaten voor ‘{search_text}’")
+        else:
+            self.info_label.setText(f"{len(rows)} CD-releases")
+
         if not rows:
-            self.grid.addWidget(QLabel("Geen CD-releases gevonden."), 0, 0)
+            message = "Geen CD-releases gevonden."
+            if search_text:
+                message = f"Geen CD-releases gevonden voor ‘{search_text}’."
+            self.grid.addWidget(QLabel(message), 0, 0)
             return
 
         columns = 5
