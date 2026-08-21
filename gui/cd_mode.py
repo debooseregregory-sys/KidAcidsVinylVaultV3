@@ -6,6 +6,7 @@
 from database.database import get_connection
 import gui.main_window as main_window_module
 from gui.cd_library_page import CDLibraryPage
+from gui.cd_showcase_page import CDShowcasePage
 
 VINYL = "VINYL"
 CD = "CD"
@@ -36,27 +37,33 @@ OriginalVinylVaultWindow = main_window_module.VinylVaultWindow
 
 
 class CDVinylVaultWindow(OriginalVinylVaultWindow):
-    """Existing VinylVault window extended with the dedicated CD Library."""
+    """Existing VinylVault window extended with the dedicated CD pages."""
 
     def build_ui(self):
         super().build_ui()
 
         self.current_media_type = VINYL
+        self.current_cd_id = None
 
-        # main_window already creates a CDLibraryPage. Reuse that page
-        # instead of creating a second one.
         if not hasattr(self, "cd_library_page"):
             self.cd_library_page = CDLibraryPage()
             self.pages.addWidget(self.cd_library_page)
+
+        self.cd_showcase_page = CDShowcasePage()
+        self.pages.addWidget(self.cd_showcase_page)
+
+        self.cd_library_page.cd_selected.connect(self._open_cd_showcase)
+        self.cd_showcase_page.back_requested.connect(self.show_cd_library)
 
         self.cd_library_button.setEnabled(True)
         self.cd_library_button.setToolTip("CD Library")
         self.cd_library_button.clicked.connect(self.show_cd_library)
 
-        # CD Showcase is not implemented yet; do not create references to
-        # files that do not exist.
-        self.cd_showcase_button.setEnabled(False)
-        self.cd_showcase_button.setToolTip("CD Showcase wordt later toegevoegd")
+        # CD Showcase was disabled by the temporary CD-mode implementation.
+        # It is now a real page backed by cd_releases.
+        self.cd_showcase_button.setEnabled(True)
+        self.cd_showcase_button.setToolTip("CD Showcase")
+        self.cd_showcase_button.clicked.connect(self.show_cd_showcase)
 
     def show_board(self):
         self.pages.setCurrentWidget(self.board_page)
@@ -76,6 +83,32 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
         self.page_title.setText("CD Library")
         self.set_active_nav(self.cd_library_button)
         self.cd_library_page.load_releases()
+
+    def _open_cd_showcase(self, release_id):
+        self.current_cd_id = int(release_id)
+        self.show_cd_showcase()
+
+    def show_cd_showcase(self):
+        self.current_media_type = CD
+
+        # If the user has not selected a CD yet, use the first CD in the
+        # library so the Showcase button always opens a useful page.
+        if self.current_cd_id is None:
+            rows = self.cd_library_page.all_rows
+            if not rows:
+                self.cd_library_page.load_releases()
+                rows = self.cd_library_page.all_rows
+            if rows:
+                self.current_cd_id = int(rows[0]["id"])
+
+        if self.current_cd_id is None:
+            self.show_cd_library()
+            return
+
+        self.cd_showcase_page.load_release(self.current_cd_id)
+        self.pages.setCurrentWidget(self.cd_showcase_page)
+        self.page_title.setText("CD Showcase")
+        self.set_active_nav(self.cd_showcase_button)
 
 
 def install_cd_mode():
