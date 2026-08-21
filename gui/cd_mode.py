@@ -50,7 +50,7 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
         self.pages.addWidget(self.cd_showcase_page)
 
         self.cd_library_page.cd_selected.connect(self._open_cd_showcase)
-        self.cd_showcase_page.back_requested.connect(self.show_cd_library)
+        self.cd_showcase_page.back_requested.connect(self.show_cd_showcase)
         self.cd_showcase_page.release_selected.connect(self._open_cd_detail)
 
         self.cd_library_button.setEnabled(True)
@@ -88,13 +88,11 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
         self.current_cd_id = int(release_id)
         self.cd_showcase_page.load_release(self.current_cd_id)
         self.pages.setCurrentWidget(self.cd_showcase_page)
-        self.page_title.setText("CD Showcase")
+        self.page_title.setText("CD Release")
         self.set_active_nav(self.cd_showcase_button)
 
     def show_cd_showcase(self):
         self.current_media_type = CD
-        # Showcase behaves like the Vinyl Showcase: show the complete CD
-        # collection, not the first/selected release only.
         self.cd_showcase_page.load_releases()
         self.pages.setCurrentWidget(self.cd_showcase_page)
         self.page_title.setText("CD Showcase")
