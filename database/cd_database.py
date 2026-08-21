@@ -189,3 +189,41 @@ def replace_cd_tracks(cd_release_id, tracks):
         connection.commit()
     finally:
         connection.close()
+
+
+def save_cd_discogs_tracks(cd_release_id, release):
+    """Persist the Discogs tracklist for a CD without touching Vinyl tables."""
+    tracks = []
+    release_artists = []
+    for artist in release.get("artists", []) or []:
+        name = str(artist.get("name", "") or "").strip()
+        if name:
+            release_artists.append(name)
+    default_artist = ", ".join(release_artists)
+
+    order = 0
+    for raw in release.get("tracklist", []) or []:
+        title = str(raw.get("title", "") or "").strip()
+        if not title:
+            continue
+
+        position = str(raw.get("position", "") or "").strip()
+        duration = str(raw.get("duration", "") or "").strip()
+        artist_names = []
+        for artist in raw.get("artists", []) or []:
+            name = str(artist.get("name", "") or "").strip()
+            if name:
+                artist_names.append(name)
+
+        order += 1
+        tracks.append({
+            "position": position,
+            "track_order": order,
+            "artist": ", ".join(artist_names) or default_artist,
+            "title": title,
+            "duration": duration,
+            "discogs_track_id": str(raw.get("id", "") or "").strip(),
+        })
+
+    replace_cd_tracks(cd_release_id, tracks)
+    return len(tracks)
