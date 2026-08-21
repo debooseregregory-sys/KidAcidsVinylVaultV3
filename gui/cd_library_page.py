@@ -119,6 +119,11 @@ class CDLibraryPage(QWidget):
         manual_button.clicked.connect(self.add_manual_cd)
         button_row.addWidget(manual_button)
 
+        delete_button = QPushButton("VERWIJDER CD")
+        delete_button.setMinimumHeight(42)
+        delete_button.clicked.connect(self.delete_selected)
+        button_row.addWidget(delete_button)
+
         root.addLayout(button_row)
 
     def load_releases(self):
@@ -187,9 +192,7 @@ class CDLibraryPage(QWidget):
             return None
 
     def add_manual_cd(self):
-        artist, ok = QInputDialog.getText(
-            self, "CD handmatig toevoegen", "Artiest:", text=""
-        )
+        artist, ok = QInputDialog.getText(self, "CD handmatig toevoegen", "Artiest:", text="")
         if not ok:
             return
         artist = artist.strip()
@@ -197,9 +200,7 @@ class CDLibraryPage(QWidget):
             QMessageBox.warning(self, "Ontbrekende artiest", "Vul een artiest in.")
             return
 
-        title, ok = QInputDialog.getText(
-            self, "CD handmatig toevoegen", "Titel:", text=""
-        )
+        title, ok = QInputDialog.getText(self, "CD handmatig toevoegen", "Titel:", text="")
         if not ok:
             return
         title = title.strip()
@@ -225,17 +226,13 @@ class CDLibraryPage(QWidget):
 
         cover = ""
         choose_cover = QMessageBox.question(
-            self,
-            "Cover",
-            "Wil je een lokale coverafbeelding toevoegen?",
+            self, "Cover", "Wil je een lokale coverafbeelding toevoegen?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,
         )
         if choose_cover == QMessageBox.StandardButton.Yes:
             cover, _ = QFileDialog.getOpenFileName(
-                self,
-                "Kies CD-cover",
-                "",
+                self, "Kies CD-cover", "",
                 "Afbeeldingen (*.jpg *.jpeg *.png *.webp *.bmp);;Alle bestanden (*.*)",
             )
 
@@ -257,38 +254,60 @@ class CDLibraryPage(QWidget):
                          discogs, discogs_link, cover, notes, checked)
                     VALUES (?, ?, 'CD', ?, ?, ?, ?, '', '', ?, ?, 0)
                     """,
-                    (
-                        artist,
-                        title,
-                        label.strip(),
-                        catalog.strip(),
-                        year,
-                        genre.strip(),
-                        cover.strip(),
-                        notes.strip(),
-                    ),
+                    (artist, title, label.strip(), catalog.strip(), year, genre.strip(), cover.strip(), notes.strip()),
                 )
                 connection.commit()
                 new_id = cursor.lastrowid
             except Exception as error:
                 connection.rollback()
                 if "UNIQUE" in str(error).upper():
-                    QMessageBox.warning(
-                        self,
-                        "CD bestaat al",
-                        f"Deze CD bestaat al:\n\n{artist} — {title}",
-                    )
+                    QMessageBox.warning(self, "CD bestaat al", f"Deze CD bestaat al:\n\n{artist} — {title}")
                     return
                 raise
         finally:
             connection.close()
 
         self.load_releases()
-        QMessageBox.information(
+        QMessageBox.information(self, "CD toegevoegd", f"{artist} — {title}\n\nCD ID: {new_id}\n\nDe CD staat nu in de CD Library.")
+
+    def delete_selected(self):
+        release_id = self._selected_release_id()
+        if release_id is None:
+            return
+
+        row = next((r for r in self.all_rows if int(r["id"]) == release_id), None)
+        if row is None:
+            QMessageBox.warning(self, "CD niet gevonden", "De geselecteerde CD bestaat niet meer in de database.")
+            return
+
+        artist = str(row["artist"] or "Onbekend")
+        title = str(row["title"] or "(geen titel)")
+        answer = QMessageBox.warning(
             self,
-            "CD toegevoegd",
-            f"{artist} — {title}\n\nCD ID: {new_id}\n\nDe CD staat nu in de CD Library.",
+            "CD verwijderen",
+            f"Wil je deze CD definitief verwijderen?\n\n{artist} — {title}\n\n"
+            "De CD en de bijbehorende CD-tracks worden verwijderd. Deze actie kan niet ongedaan worden gemaakt.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        connection = get_connection()
+        try:
+            ensure_cd_schema(connection)
+            connection.execute("DELETE FROM cd_tracks WHERE cd_release_id = ?", (release_id,))
+            connection.execute("DELETE FROM cd_releases WHERE id = ?", (release_id,))
+            connection.commit()
+        except Exception as error:
+            connection.rollback()
+            QMessageBox.critical(self, "Verwijderen mislukt", f"De CD kon niet worden verwijderd.\n\n{error}")
+            return
+        finally:
+            connection.close()
+
+        self.load_releases()
+        QMessageBox.information(self, "CD verwijderd", f"{artist} — {title}\n\nDe CD is verwijderd uit de CD Library.")
 
     def link_selected_discogs(self):
         release_id = self._selected_release_id()
@@ -305,12 +324,7 @@ class CDLibraryPage(QWidget):
         if current_discogs:
             prompt += f"\n(huidig: {current_discogs})"
 
-        discogs_id, ok = QInputDialog.getText(
-            self,
-            "CD aan Discogs koppelen",
-            prompt,
-            text=current_discogs,
-        )
+        discogs_id, ok = QInputDialog.getText(self, "CD aan Discogs koppelen", prompt, text=current_discogs)
         if not ok:
             return
 
@@ -322,7 +336,6 @@ class CDLibraryPage(QWidget):
         try:
             data = fetch_release_data(discogs_id)
             release = data["release"]
-
             release_artist = data["artist"] or str(row["artist"] or "")
             release_title = data["title"] or str(row["title"] or "")
 
@@ -336,18 +349,7 @@ class CDLibraryPage(QWidget):
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
                     """,
-                    (
-                        release_artist,
-                        release_title,
-                        data["label"],
-                        data["catalog"],
-                        data["year"],
-                        data["genre"],
-                        data["discogs"],
-                        data["discogs_link"],
-                        data["cover"],
-                        release_id,
-                    ),
+                    (release_artist, release_title, data["label"], data["catalog"], data["year"], data["genre"], data["discogs"], data["discogs_link"], data["cover"], release_id),
                 )
                 connection.commit()
             finally:
@@ -355,21 +357,9 @@ class CDLibraryPage(QWidget):
 
             track_count = save_cd_discogs_tracks(release_id, release)
             self.load_releases()
-
-            QMessageBox.information(
-                self,
-                "Discogs gekoppeld",
-                f"{release_artist} — {release_title}\n\n"
-                f"Discogs ID: {discogs_id}\n"
-                f"Tracks geïmporteerd: {track_count}",
-            )
-
+            QMessageBox.information(self, "Discogs gekoppeld", f"{release_artist} — {release_title}\n\nDiscogs ID: {discogs_id}\nTracks geïmporteerd: {track_count}")
         except Exception as error:
-            QMessageBox.critical(
-                self,
-                "Discogs fout",
-                f"De CD kon niet aan Discogs worden gekoppeld.\n\n{error}",
-            )
+            QMessageBox.critical(self, "Discogs fout", f"De CD kon niet aan Discogs worden gekoppeld.\n\n{error}")
 
     def _emit_selected(self, row):
         item = self.table.item(row, 0)
