@@ -201,8 +201,8 @@ class CDShowcasePage(QWidget):
         hero = QFrame()
         hero.setObjectName("detailHero")
         hero_layout = QHBoxLayout(hero)
-        hero_layout.setContentsMargins(18, 16, 18, 16)
-        hero_layout.setSpacing(22)
+        hero_layout.setContentsMargins(12, 10, 12, 10)
+        hero_layout.setSpacing(14)
 
         # LEFT: release identity and compact metadata.
         info = QVBoxLayout()
@@ -255,12 +255,12 @@ class CDShowcasePage(QWidget):
             notes.setWordWrap(True)
             info.addWidget(notes)
 
-        info.addStretch()
+
 
         # RIGHT: compact but dominant cover, aligned to the top.
         cover = QLabel("GEEN COVER")
         cover.setObjectName("cover")
-        cover.setFixedSize(300, 300)
+        cover.setFixedSize(260, 260)
         cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cover_path = str(release[9] or "").strip()
         if cover_path and Path(cover_path).exists():
