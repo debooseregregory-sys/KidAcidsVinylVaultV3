@@ -5,6 +5,8 @@
 
 from pathlib import Path
 
+import requests
+
 from PySide6.QtCore import Qt, Signal, QUrl
 from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtWidgets import (
@@ -99,6 +101,48 @@ class CDShowcasePage(QWidget):
             if widget is not None:
                 widget.deleteLater()
 
+    @staticmethod
+    def _load_cover_pixmap(cover_value):
+        """Load a cover from either a local path or a Discogs image URL."""
+        cover_value = str(cover_value or "").strip()
+        if not cover_value:
+            return QPixmap()
+
+        if cover_value.lower().startswith(("http://", "https://")):
+            try:
+                response = requests.get(
+                    cover_value,
+                    timeout=15,
+                    headers={"User-Agent": "KidAcidsVinylVaultV3/1.0"},
+                )
+                response.raise_for_status()
+                pix = QPixmap()
+                if pix.loadFromData(response.content):
+                    return pix
+            except Exception:
+                return QPixmap()
+            return QPixmap()
+
+        path = Path(cover_value)
+        if path.exists():
+            pix = QPixmap(str(path))
+            if not pix.isNull():
+                return pix
+
+        return QPixmap()
+
+    def _set_cover(self, label, cover_value, size):
+        pix = self._load_cover_pixmap(cover_value)
+        if not pix.isNull():
+            label.setPixmap(
+                pix.scaled(
+                    size,
+                    size,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+
     def load_releases(self):
         self.release_id = None
         self._clear_grid()
@@ -141,11 +185,7 @@ class CDShowcasePage(QWidget):
         cover.setObjectName("cover")
         cover.setFixedSize(190, 190)
         cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        cover_path = str(row[7] or "").strip()
-        if cover_path and Path(cover_path).exists():
-            pix = QPixmap(cover_path)
-            if not pix.isNull():
-                cover.setPixmap(pix.scaled(190, 190, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        self._set_cover(cover, row[7], 190)
         layout.addWidget(cover, 0, Qt.AlignmentFlag.AlignHCenter)
 
         artist = QLabel(str(row[1] or "Onbekend"))
@@ -234,8 +274,6 @@ class CDShowcasePage(QWidget):
             self.info_label.setText("CD niet gevonden")
             return
 
-        # If this CD has a Discogs release ID but no stored tracks yet,
-        # fetch the release once and persist its tracklist in cd_tracks.
         tracks = get_cd_tracks(self.release_id)
         if not tracks and str(release[7] or "").strip().isdigit():
             try:
@@ -312,18 +350,7 @@ class CDShowcasePage(QWidget):
         cover.setObjectName("cover")
         cover.setFixedSize(260, 260)
         cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        cover_path = str(release[9] or "").strip()
-        if cover_path and Path(cover_path).exists():
-            pix = QPixmap(cover_path)
-            if not pix.isNull():
-                cover.setPixmap(
-                    pix.scaled(
-                        260,
-                        260,
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation,
-                    )
-                )
+        self._set_cover(cover, release[9], 260)
 
         hero_layout.addLayout(info, 1)
         hero_layout.addWidget(
