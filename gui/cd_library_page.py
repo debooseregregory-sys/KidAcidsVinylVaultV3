@@ -7,7 +7,7 @@ from PySide6.QtCore import Signal, Qt, QTimer
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
-    QMessageBox, QInputDialog,
+    QMessageBox, QInputDialog, QFileDialog,
 )
 
 from database.cd_database import (
@@ -114,6 +114,11 @@ class CDLibraryPage(QWidget):
         discogs_button.clicked.connect(self.link_selected_discogs)
         button_row.addWidget(discogs_button)
 
+        manual_button = QPushButton("+ CD HANDMATIG")
+        manual_button.setMinimumHeight(42)
+        manual_button.clicked.connect(self.add_manual_cd)
+        button_row.addWidget(manual_button)
+
         root.addLayout(button_row)
 
     def load_releases(self):
@@ -180,6 +185,110 @@ class CDLibraryPage(QWidget):
             return int(item.text())
         except ValueError:
             return None
+
+    def add_manual_cd(self):
+        artist, ok = QInputDialog.getText(
+            self, "CD handmatig toevoegen", "Artiest:", text=""
+        )
+        if not ok:
+            return
+        artist = artist.strip()
+        if not artist:
+            QMessageBox.warning(self, "Ontbrekende artiest", "Vul een artiest in.")
+            return
+
+        title, ok = QInputDialog.getText(
+            self, "CD handmatig toevoegen", "Titel:", text=""
+        )
+        if not ok:
+            return
+        title = title.strip()
+        if not title:
+            QMessageBox.warning(self, "Ontbrekende titel", "Vul een titel in.")
+            return
+
+        label, ok = QInputDialog.getText(self, "CD handmatig toevoegen", "Label:")
+        if not ok:
+            return
+        catalog, ok = QInputDialog.getText(self, "CD handmatig toevoegen", "Catalogusnummer:")
+        if not ok:
+            return
+        year_text, ok = QInputDialog.getText(self, "CD handmatig toevoegen", "Jaar:")
+        if not ok:
+            return
+        genre, ok = QInputDialog.getText(self, "CD handmatig toevoegen", "Genre:")
+        if not ok:
+            return
+        notes, ok = QInputDialog.getMultiLineText(self, "CD handmatig toevoegen", "Notities:")
+        if not ok:
+            return
+
+        cover = ""
+        choose_cover = QMessageBox.question(
+            self,
+            "Cover",
+            "Wil je een lokale coverafbeelding toevoegen?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if choose_cover == QMessageBox.StandardButton.Yes:
+            cover, _ = QFileDialog.getOpenFileName(
+                self,
+                "Kies CD-cover",
+                "",
+                "Afbeeldingen (*.jpg *.jpeg *.png *.webp *.bmp);;Alle bestanden (*.*)",
+            )
+
+        year = None
+        if year_text.strip():
+            try:
+                year = int(year_text.strip())
+            except ValueError:
+                QMessageBox.warning(self, "Ongeldig jaar", "Het jaar moet een nummer zijn. De CD wordt zonder jaar opgeslagen.")
+
+        connection = get_connection()
+        try:
+            ensure_cd_schema(connection)
+            try:
+                cursor = connection.execute(
+                    """
+                    INSERT INTO cd_releases
+                        (artist, title, media_type, label, catalog, year, genre,
+                         discogs, discogs_link, cover, notes, checked)
+                    VALUES (?, ?, 'CD', ?, ?, ?, ?, '', '', ?, ?, 0)
+                    """,
+                    (
+                        artist,
+                        title,
+                        label.strip(),
+                        catalog.strip(),
+                        year,
+                        genre.strip(),
+                        cover.strip(),
+                        notes.strip(),
+                    ),
+                )
+                connection.commit()
+                new_id = cursor.lastrowid
+            except Exception as error:
+                connection.rollback()
+                if "UNIQUE" in str(error).upper():
+                    QMessageBox.warning(
+                        self,
+                        "CD bestaat al",
+                        f"Deze CD bestaat al:\n\n{artist} — {title}",
+                    )
+                    return
+                raise
+        finally:
+            connection.close()
+
+        self.load_releases()
+        QMessageBox.information(
+            self,
+            "CD toegevoegd",
+            f"{artist} — {title}\n\nCD ID: {new_id}\n\nDe CD staat nu in de CD Library.",
+        )
 
     def link_selected_discogs(self):
         release_id = self._selected_release_id()
