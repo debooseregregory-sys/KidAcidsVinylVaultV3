@@ -13,7 +13,8 @@ from PySide6.QtWidgets import (
 )
 
 from database.database import get_connection
-from database.cd_database import ensure_cd_schema, get_cd_tracks
+from database.cd_database import get_cd_tracks, save_cd_discogs_tracks
+from tools.discogs import get_release
 
 
 class CDShowcasePage(QWidget):
@@ -77,11 +78,11 @@ class CDShowcasePage(QWidget):
             QLabel#section { color:#ffcf72; font-size:16px; font-weight:900; }
             QFrame#detailHero { background:#121217; border:1px solid #292933; border-radius:12px; }
             QFrame#metaCard { background:#101014; border:1px solid #292933; border-radius:9px; }
-            QFrame#trackRow { background:#101014; border:1px solid #24242d; border-radius:7px; }
-            QLabel#trackPosition { color:#ffcf72; font-size:13px; font-weight:900; }
+            QFrame#trackRow { background:#101014; border:1px solid #292933; border-radius:7px; }
+            QLabel#trackPosition { color:#ffcf72; font-size:12px; font-weight:900; }
             QLabel#trackTitle { color:#fff; font-size:14px; font-weight:800; }
-            QLabel#trackArtist { color:#9b9ba6; font-size:12px; }
-            QLabel#trackDuration { color:#858591; font-size:12px; }
+            QLabel#trackArtist { color:#8f8f9a; font-size:12px; }
+            QLabel#trackDuration { color:#aaaab4; font-size:12px; }
         """)
 
     def _back_clicked(self):
@@ -184,35 +185,34 @@ class CDShowcasePage(QWidget):
         row = QFrame()
         row.setObjectName("trackRow")
         layout = QHBoxLayout(row)
-        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setContentsMargins(10, 7, 10, 7)
         layout.setSpacing(12)
 
         position = QLabel(str(track[2] or ""))
         position.setObjectName("trackPosition")
-        position.setFixedWidth(55)
+        position.setFixedWidth(52)
         layout.addWidget(position)
 
-        text_layout = QVBoxLayout()
-        text_layout.setSpacing(2)
-
+        middle = QVBoxLayout()
+        middle.setSpacing(2)
         title = QLabel(str(track[5] or "(geen titel)"))
         title.setObjectName("trackTitle")
         title.setWordWrap(True)
-        text_layout.addWidget(title)
+        middle.addWidget(title)
 
-        if track[4]:
-            artist = QLabel(str(track[4]))
-            artist.setObjectName("trackArtist")
-            artist.setWordWrap(True)
-            text_layout.addWidget(artist)
-
-        layout.addLayout(text_layout, 1)
+        artist = str(track[4] or "").strip()
+        if artist:
+            artist_label = QLabel(artist)
+            artist_label.setObjectName("trackArtist")
+            artist_label.setWordWrap(True)
+            middle.addWidget(artist_label)
+        layout.addLayout(middle, 1)
 
         duration = QLabel(str(track[6] or ""))
         duration.setObjectName("trackDuration")
         duration.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        duration.setFixedWidth(55)
         layout.addWidget(duration)
-
         return row
 
     def load_release(self, release_id):
@@ -222,7 +222,6 @@ class CDShowcasePage(QWidget):
 
         conn = get_connection()
         try:
-            ensure_cd_schema(conn)
             release = conn.execute("""
                 SELECT id, artist, title, label, catalog, year, genre,
                        discogs, discogs_link, cover, notes, checked
@@ -234,6 +233,19 @@ class CDShowcasePage(QWidget):
         if release is None:
             self.info_label.setText("CD niet gevonden")
             return
+
+        # If this CD has a Discogs release ID but no stored tracks yet,
+        # fetch the release once and persist its tracklist in cd_tracks.
+        tracks = get_cd_tracks(self.release_id)
+        if not tracks and str(release[7] or "").strip().isdigit():
+            try:
+                discogs_release = get_release(str(release[7]).strip())
+                save_cd_discogs_tracks(self.release_id, discogs_release)
+                tracks = get_cd_tracks(self.release_id)
+            except Exception as error:
+                self.info_label.setText(
+                    f"{release[1] or 'Onbekend'} — {release[2] or '(geen titel)'} | Discogs tracks niet geladen: {error}"
+                )
 
         artist = str(release[1] or "Onbekend")
         title = str(release[2] or "(geen titel)")
@@ -321,23 +333,19 @@ class CDShowcasePage(QWidget):
         )
         self.grid.addWidget(hero, 0, 0, 1, 2)
 
-        section = QLabel("TRACKS")
+        section = QLabel(f"TRACKS  •  {len(tracks)}")
         section.setObjectName("section")
         self.grid.addWidget(section, 1, 0, 1, 2)
 
-        tracks = get_cd_tracks(self.release_id)
         if tracks:
-            for row_index, track in enumerate(tracks, start=2):
-                self.grid.addWidget(
-                    self._make_track_row(track),
-                    row_index,
-                    0,
-                    1,
-                    2,
-                )
+            for index, track in enumerate(tracks, start=2):
+                self.grid.addWidget(self._make_track_row(track), index, 0, 1, 2)
         else:
-            placeholder = QLabel("Nog geen tracks gekoppeld aan deze CD.")
+            placeholder = QLabel(
+                "Geen tracks gekoppeld. Deze CD heeft nog geen Discogs Release ID."
+            )
             placeholder.setObjectName("meta")
+            placeholder.setWordWrap(True)
             self.grid.addWidget(placeholder, 2, 0, 1, 2)
 
         self.grid.setColumnStretch(0, 1)
