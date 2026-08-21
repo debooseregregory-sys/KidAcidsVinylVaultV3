@@ -7,10 +7,16 @@ from PySide6.QtCore import Signal, Qt, QTimer
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
-    QMessageBox,
+    QMessageBox, QInputDialog,
 )
 
-from database.cd_database import get_cd_releases, ensure_cd_schema
+from database.cd_database import (
+    get_cd_releases,
+    ensure_cd_schema,
+    save_cd_discogs_tracks,
+)
+from database.database import get_connection
+from tools.discogs import fetch_release_data
 
 
 class CDLibraryPage(QWidget):
@@ -95,10 +101,20 @@ class CDLibraryPage(QWidget):
         header.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
         root.addWidget(self.table, 1)
 
+        button_row = QHBoxLayout()
+        button_row.setSpacing(10)
+
         open_button = QPushButton("OPEN CD")
         open_button.setMinimumHeight(42)
         open_button.clicked.connect(self.open_selected)
-        root.addWidget(open_button)
+        button_row.addWidget(open_button)
+
+        discogs_button = QPushButton("DISCOGS KOPPELEN")
+        discogs_button.setMinimumHeight(42)
+        discogs_button.clicked.connect(self.link_selected_discogs)
+        button_row.addWidget(discogs_button)
+
+        root.addLayout(button_row)
 
     def load_releases(self):
         try:
@@ -151,6 +167,100 @@ class CDLibraryPage(QWidget):
             QMessageBox.information(self, "Geen CD geselecteerd", "Selecteer eerst een CD.")
             return
         self._emit_selected(selected[0].row())
+
+    def _selected_release_id(self):
+        selected = self.table.selectionModel().selectedRows()
+        if not selected:
+            QMessageBox.information(self, "Geen CD geselecteerd", "Selecteer eerst een CD.")
+            return None
+        item = self.table.item(selected[0].row(), 0)
+        if item is None:
+            return None
+        try:
+            return int(item.text())
+        except ValueError:
+            return None
+
+    def link_selected_discogs(self):
+        release_id = self._selected_release_id()
+        if release_id is None:
+            return
+
+        row = next((r for r in self.all_rows if int(r["id"]) == release_id), None)
+        if row is None:
+            QMessageBox.warning(self, "CD niet gevonden", "De geselecteerde CD bestaat niet meer in de database.")
+            return
+
+        current_discogs = str(row["discogs"] or "").strip()
+        prompt = "Discogs Release ID:"
+        if current_discogs:
+            prompt += f"\n(huidig: {current_discogs})"
+
+        discogs_id, ok = QInputDialog.getText(
+            self,
+            "CD aan Discogs koppelen",
+            prompt,
+            text=current_discogs,
+        )
+        if not ok:
+            return
+
+        discogs_id = discogs_id.strip()
+        if not discogs_id.isdigit():
+            QMessageBox.warning(self, "Ongeldig Discogs ID", "Een Discogs Release ID moet een nummer zijn.")
+            return
+
+        try:
+            data = fetch_release_data(discogs_id)
+            release = data["release"]
+
+            release_artist = data["artist"] or str(row["artist"] or "")
+            release_title = data["title"] or str(row["title"] or "")
+
+            connection = get_connection()
+            try:
+                connection.execute(
+                    """
+                    UPDATE cd_releases
+                    SET artist = ?, title = ?, label = ?, catalog = ?, year = ?,
+                        genre = ?, discogs = ?, discogs_link = ?, cover = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (
+                        release_artist,
+                        release_title,
+                        data["label"],
+                        data["catalog"],
+                        data["year"],
+                        data["genre"],
+                        data["discogs"],
+                        data["discogs_link"],
+                        data["cover"],
+                        release_id,
+                    ),
+                )
+                connection.commit()
+            finally:
+                connection.close()
+
+            track_count = save_cd_discogs_tracks(release_id, release)
+            self.load_releases()
+
+            QMessageBox.information(
+                self,
+                "Discogs gekoppeld",
+                f"{release_artist} — {release_title}\n\n"
+                f"Discogs ID: {discogs_id}\n"
+                f"Tracks geïmporteerd: {track_count}",
+            )
+
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "Discogs fout",
+                f"De CD kon niet aan Discogs worden gekoppeld.\n\n{error}",
+            )
 
     def _emit_selected(self, row):
         item = self.table.item(row, 0)
