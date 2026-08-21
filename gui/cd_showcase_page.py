@@ -119,22 +119,45 @@ class CDShowcasePage(QWidget):
                 widget.deleteLater()
 
     @staticmethod
-    def _load_cover_pixmap(cover_value):
-        """Load a cover from either a local path or a Discogs image URL."""
+    def _cover_cache_dir():
+        cache_dir = Path(__file__).resolve().parent.parent / "data" / "cd_covers"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        return cache_dir
+
+    @classmethod
+    def _cached_cover_path(cls, cover_value):
+        cover_value = str(cover_value or "").strip()
+        if not cover_value.lower().startswith(("http://", "https://")):
+            return Path(cover_value) if cover_value else None
+        return cls._cover_cache_dir() / f"{abs(hash(cover_value))}.jpg"
+
+    @classmethod
+    def _load_cover_pixmap(cls, cover_value):
+        """Load a cover from a local path or a cached Discogs image URL."""
         cover_value = str(cover_value or "").strip()
         if not cover_value:
             return QPixmap()
 
         if cover_value.lower().startswith(("http://", "https://")):
+            cache_path = cls._cached_cover_path(cover_value)
+            if cache_path and cache_path.exists():
+                pix = QPixmap(str(cache_path))
+                if not pix.isNull():
+                    return pix
+
             try:
                 response = requests.get(
                     cover_value,
-                    timeout=15,
+                    timeout=10,
                     headers={"User-Agent": "KidAcidsVinylVaultV3/1.0"},
                 )
                 response.raise_for_status()
                 pix = QPixmap()
                 if pix.loadFromData(response.content):
+                    try:
+                        cache_path.write_bytes(response.content)
+                    except OSError:
+                        pass
                     return pix
             except Exception:
                 return QPixmap()
