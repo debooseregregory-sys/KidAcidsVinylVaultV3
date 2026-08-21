@@ -52,6 +52,7 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
         self.cd_library_page.cd_selected.connect(self._open_cd_showcase)
         self.cd_showcase_page.back_requested.connect(self.show_cd_showcase)
         self.cd_showcase_page.release_selected.connect(self._open_cd_detail)
+        self.cd_showcase_page.play_mp3.connect(self.player_bar_play)
 
         self.cd_library_button.setEnabled(True)
         self.cd_library_button.setToolTip("CD Library")
