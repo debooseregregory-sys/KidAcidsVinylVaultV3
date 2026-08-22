@@ -10,6 +10,8 @@ import gui.main_window as main_window_module
 from gui.cd_library_page import CDLibraryPage
 from gui.cd_showcase_page import CDShowcasePage
 from gui.livesets_library_page import LivesetsLibraryPage
+from gui.livesets_showcase_page import LivesetsShowcasePage
+from gui.livesets_edit_page import LivesetsEditPage
 from gui.liveset_detail_page import LivesetDetailPage
 
 VINYL = "VINYL"
@@ -32,7 +34,7 @@ OriginalVinylVaultWindow = main_window_module.VinylVaultWindow
 
 
 class CDVinylVaultWindow(OriginalVinylVaultWindow):
-    """CD support plus one independent Livesets section."""
+    """CD support plus a dedicated Livesets Library, Showcase and detail view."""
 
     def build_ui(self):
         super().build_ui()
@@ -61,18 +63,20 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
         self.cd_showcase_button.clicked.connect(self.show_cd_showcase)
 
         # ----------------------------------------------------
-        # LIVESETS: ONE section, ONE overview/showcase page.
-        # Editing is done directly from the cards; playback
-        # opens a dedicated detail/player page.
+        # LIVESETS: one sidebar section with Library and Showcase,
+        # exactly like the other media collections. The Showcase
+        # opens a separate Liveset detail/player page.
         # ----------------------------------------------------
-        self.livesets_page = LivesetsLibraryPage()
+        self.livesets_library_page = LivesetsEditPage()
+        self.livesets_showcase_page = LivesetsShowcasePage()
         self.liveset_detail_page = LivesetDetailPage()
-        self.pages.addWidget(self.livesets_page)
+        self.pages.addWidget(self.livesets_library_page)
+        self.pages.addWidget(self.livesets_showcase_page)
         self.pages.addWidget(self.liveset_detail_page)
 
-        self.livesets_page.open_requested.connect(self._open_liveset_detail)
-        self.livesets_page.changed.connect(self.livesets_page.reload)
-        self.liveset_detail_page.back_requested.connect(self.show_livesets)
+        self.livesets_library_page.changed.connect(self._reload_livesets_views)
+        self.livesets_showcase_page.open_requested.connect(self._open_liveset_detail)
+        self.liveset_detail_page.back_requested.connect(self.show_livesets_showcase)
         self.liveset_detail_page.play_mp3.connect(self.player_bar_play)
         self.mp3_player.play_started.connect(self.liveset_detail_page.set_active_track)
         self.mp3_player.stopped.connect(self.liveset_detail_page.clear_active_track)
@@ -84,31 +88,44 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
         livesets_label.setObjectName("collectionSectionLabel")
         sidebar_layout.insertWidget(insert_after_cd + 1, livesets_label)
 
-        self.livesets_button = self.create_nav_button("♫", "Livesets")
         label_index = sidebar_layout.indexOf(livesets_label)
-        sidebar_layout.insertWidget(label_index + 1, self.livesets_button)
-        self.livesets_button.clicked.connect(self.show_livesets)
+        self.livesets_library_button = self.create_nav_button("▣", "Library")
+        self.livesets_showcase_button = self.create_nav_button("▶", "Showcase")
+        sidebar_layout.insertWidget(label_index + 1, self.livesets_library_button)
+        sidebar_layout.insertWidget(label_index + 2, self.livesets_showcase_button)
+        self.livesets_library_button.clicked.connect(self.show_livesets_library)
+        self.livesets_showcase_button.clicked.connect(self.show_livesets_showcase)
 
     def set_active_nav(self, button):
         super().set_active_nav(button)
-        btn = getattr(self, "livesets_button", None)
-        if btn is not None:
-            btn.setProperty("active", button is btn)
-            btn.style().unpolish(btn)
-            btn.style().polish(btn)
+        for name in ("livesets_library_button", "livesets_showcase_button"):
+            btn = getattr(self, name, None)
+            if btn is not None:
+                btn.setProperty("active", button is btn)
+                btn.style().unpolish(btn)
+                btn.style().polish(btn)
 
-    def show_livesets(self):
-        self.current_media_type = VINYL
-        self.livesets_page.reload()
-        self.pages.setCurrentWidget(self.livesets_page)
-        self.page_title.setText("Livesets")
-        self.set_active_nav(self.livesets_button)
+    def _reload_livesets_views(self):
+        self.livesets_library_page.reload()
+        self.livesets_showcase_page.reload()
+
+    def show_livesets_library(self):
+        self.livesets_library_page.reload()
+        self.pages.setCurrentWidget(self.livesets_library_page)
+        self.page_title.setText("Livesets Library")
+        self.set_active_nav(self.livesets_library_button)
+
+    def show_livesets_showcase(self):
+        self.livesets_showcase_page.reload()
+        self.pages.setCurrentWidget(self.livesets_showcase_page)
+        self.page_title.setText("Livesets Showcase")
+        self.set_active_nav(self.livesets_showcase_button)
 
     def _open_liveset_detail(self, data):
         self.liveset_detail_page.load_liveset(data)
         self.pages.setCurrentWidget(self.liveset_detail_page)
         self.page_title.setText("Liveset")
-        self.set_active_nav(self.livesets_button)
+        self.set_active_nav(self.livesets_showcase_button)
 
     def show_board(self):
         self.pages.setCurrentWidget(self.board_page)
