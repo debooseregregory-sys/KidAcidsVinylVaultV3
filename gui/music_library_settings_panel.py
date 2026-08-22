@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
     QFileDialog,
+    QApplication,
 )
 
 from database.database import get_connection
@@ -174,15 +175,19 @@ class MusicLibrarySettingsPanel(QWidget):
         buttons = QHBoxLayout()
 
         library_btn = QPushButton("Open MP3 Library")
-        library_btn.clicked.connect(lambda: self.action_requested.emit("library"))
+        library_btn.clicked.connect(lambda: self._request_action("library"))
         buttons.addWidget(library_btn)
+
+        scan_btn = QPushButton("Scan Library")
+        scan_btn.clicked.connect(lambda: self._request_action("scan"))
+        buttons.addWidget(scan_btn)
 
         missing_btn = QPushButton("Find Missing")
         missing_btn.clicked.connect(self._find_missing)
         buttons.addWidget(missing_btn)
 
         matches_btn = QPushButton("Review Matches")
-        matches_btn.clicked.connect(lambda: self.action_requested.emit("matches"))
+        matches_btn.clicked.connect(lambda: self._request_action("matches"))
         buttons.addWidget(matches_btn)
 
         refresh_btn = QPushButton("Refresh")
@@ -192,6 +197,58 @@ class MusicLibrarySettingsPanel(QWidget):
         wl.addLayout(buttons)
         root.addWidget(workflow)
         root.addStretch()
+
+    def _request_action(self, action):
+        """Emit the action and provide a safe fallback for older main windows."""
+        self.action_requested.emit(action)
+
+        # SettingsPage historically created this panel without a parent and
+        # therefore some older MainWindow versions did not connect the signal.
+        # Keep the panel functional on those versions too.
+        window = QApplication.activeWindow()
+        if window is None:
+            return
+
+        if action == "library" and hasattr(window, "show_mp3_library"):
+            window.show_mp3_library()
+            return
+
+        if action == "scan":
+            # The existing scan scripts in this project are read-only matching
+            # diagnostics, not a safe GUI scanner. Do not run one silently from
+            # Settings. Open the MP3 Library where its existing library tools
+            # are available instead.
+            if hasattr(window, "show_mp3_library"):
+                window.show_mp3_library()
+            QMessageBox.information(
+                self,
+                "Scan Library",
+                "De bestaande MP3 Library wordt geopend.\n\n"
+                "MusicVault voert vanuit Settings geen automatische database- of MP3-koppeling uit."
+            )
+            return
+
+        if action == "matches":
+            self._open_match_reviewer(window)
+
+    def _open_match_reviewer(self, window):
+        """Open the existing full Discogs review window inside the app workflow."""
+        try:
+            from review_discogs_matches import FullReviewWindow
+
+            reviewer = FullReviewWindow()
+            self._review_window = reviewer
+            reviewer.setAttribute(reviewer.WidgetAttribute.WA_DeleteOnClose, True)
+            reviewer.show()
+            reviewer.raise_()
+            reviewer.activateWindow()
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "Review Matches",
+                "De bestaande Match Reviewer kon niet worden geopend.\n\n"
+                f"{exc}"
+            )
 
     def refresh(self):
         """Refresh path and database statistics without changing any records."""
