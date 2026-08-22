@@ -3,12 +3,10 @@
 # LIVESETS SHOWCASE
 # ============================================================
 
-"""Modern dark Livesets page.
+"""Livesets section matching the existing CD Showcase visual language.
 
-The project is a PySide6 desktop application, so this component uses
-native Qt widgets rather than introducing a separate React/Tailwind UI.
-Liveset metadata is kept in a small JSON file and cover images are copied
-into data/liveset_covers so the feature remains completely local.
+VinylVault V3 is a native PySide6 desktop application, so this page uses
+Qt widgets instead of introducing a separate React/Tailwind frontend.
 """
 
 from __future__ import annotations
@@ -17,17 +15,9 @@ import json
 import shutil
 from pathlib import Path
 
-from PySide6.QtCore import (
-    QEasingCurve,
-    QMimeData,
-    QPropertyAnimation,
-    QTimer,
-    Qt,
-    Signal,
-)
+from PySide6.QtCore import QEasingCurve, QMimeData, QPropertyAnimation, QTimer, Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPixmap
 from PySide6.QtWidgets import (
-    QApplication,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -48,10 +38,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 LIVESETS_FILE = DATA_DIR / "livesets.json"
 LIVESETS_COVERS = DATA_DIR / "liveset_covers"
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 
 
 class CoverDropZone(QFrame):
-    """Clickable + drag/drop cover uploader with visual drag-over state."""
+    """Click/drag-and-drop cover picker used by the liveset editor."""
 
     file_selected = Signal(str)
 
@@ -59,13 +50,14 @@ class CoverDropZone(QFrame):
         super().__init__(parent)
         self.setAcceptDrops(True)
         self.setObjectName("coverDropZone")
-        self.setMinimumHeight(180)
+        self.setMinimumHeight(150)
         self._build()
 
     def _build(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 16, 20, 16)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.setSpacing(6)
+        layout.setSpacing(4)
 
         self.icon = QLabel("＋")
         self.icon.setObjectName("uploadIcon")
@@ -80,7 +72,6 @@ class CoverDropZone(QFrame):
         hint = QLabel("Sleep een afbeelding hierheen of klik om te kiezen")
         hint.setObjectName("uploadHint")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        hint.setWordWrap(True)
         layout.addWidget(hint)
 
     def mousePressEvent(self, event):
@@ -99,153 +90,180 @@ class CoverDropZone(QFrame):
         if self._has_image(event.mimeData()):
             event.acceptProposedAction()
             self.setProperty("dragging", True)
-            self.style().unpolish(self)
-            self.style().polish(self)
+            self._polish()
             self.icon.setText("✦")
         else:
             event.ignore()
 
     def dragLeaveEvent(self, event):
         self.setProperty("dragging", False)
-        self.style().unpolish(self)
-        self.style().polish(self)
+        self._polish()
         self.icon.setText("＋")
         event.accept()
 
     def dropEvent(self, event: QDropEvent):
-        urls = event.mimeData().urls()
-        for url in urls:
+        for url in event.mimeData().urls():
             path = url.toLocalFile()
-            if path and Path(path).suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".bmp"}:
+            if path and Path(path).suffix.lower() in IMAGE_EXTENSIONS:
                 self.file_selected.emit(path)
                 break
         self.setProperty("dragging", False)
-        self.style().unpolish(self)
-        self.style().polish(self)
+        self._polish()
         self.icon.setText("＋")
         event.acceptProposedAction()
 
+    def _polish(self):
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()
+
     @staticmethod
     def _has_image(mime: QMimeData) -> bool:
-        for url in mime.urls():
-            if Path(url.toLocalFile()).suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".bmp"}:
-                return True
-        return False
+        return any(
+            Path(url.toLocalFile()).suffix.lower() in IMAGE_EXTENSIONS
+            for url in mime.urls()
+        )
 
 
 class LiveSetCard(QFrame):
-    """Responsive liveset card with hover, upload and playback feedback."""
+    """Liveset card deliberately follows CD Showcase card proportions."""
 
     play_requested = Signal(str)
     cover_requested = Signal(str)
 
-    def __init__(self, data: dict, parent=None):
+    def __init__(self, data: dict, delay_ms: int = 0, parent=None):
         super().__init__(parent)
         self.data = data
         self._playing = False
         self._fade = None
-        self.setObjectName("livesetCard")
-        self.setMinimumWidth(300)
-        self.setMaximumWidth(460)
+        self._cover_pixmap = QPixmap()
         self._build()
-        self._fade_in()
+        QTimer.singleShot(delay_ms, self._fade_in)
 
     def _build(self):
+        self.setObjectName("releaseCard")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setMinimumWidth(230)
+        self.setMaximumWidth(340)
+        self.setMinimumHeight(360)
+
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 12, 12, 14)
-        root.setSpacing(10)
+        root.setContentsMargins(10, 10, 10, 12)
+        root.setSpacing(7)
 
-        cover_wrap = QFrame()
-        cover_wrap.setObjectName("coverWrap")
-        cover_layout = QVBoxLayout(cover_wrap)
-        cover_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.cover = QLabel()
-        self.cover.setObjectName("livesetCover")
-        self.cover.setMinimumHeight(170)
+        # 16:9 cover, larger than the CD Showcase card while keeping all
+        # information immediately below the image. The pixmap is center-cropped.
+        self.cover = QLabel("GEEN COVER")
+        self.cover.setObjectName("cover")
+        self.cover.setFixedHeight(185)
         self.cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.cover.setScaledContents(False)
-        cover_layout.addWidget(self.cover)
+        root.addWidget(self.cover)
 
-        self.cover_overlay = QLabel("VERVANG FOTO")
-        self.cover_overlay.setObjectName("coverOverlay")
-        self.cover_overlay.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.cover_overlay.hide()
-        cover_layout.addWidget(self.cover_overlay)
-        root.addWidget(cover_wrap)
+        self._load_cover(self.data.get("cover", ""))
 
-        self._set_cover(self.data.get("cover", ""))
+        artist = QLabel(str(self.data.get("artist") or self.data.get("location") or "LIVESET"))
+        artist.setObjectName("artist")
+        artist.setWordWrap(True)
+        root.addWidget(artist)
 
-        title_row = QHBoxLayout()
-        title_col = QVBoxLayout()
-        title_col.setSpacing(2)
-
-        title = QLabel(str(self.data.get("title") or "Untitled Liveset"))
-        title.setObjectName("livesetTitle")
+        title = QLabel(str(self.data.get("title") or "(geen titel)"))
+        title.setObjectName("title")
         title.setWordWrap(True)
-        title_col.addWidget(title)
+        root.addWidget(title)
 
-        meta = " • ".join(
-            value for value in (
-                str(self.data.get("date") or "").strip(),
-                str(self.data.get("location") or self.data.get("artist") or "").strip(),
-            ) if value
-        )
-        meta_label = QLabel(meta or "Geen datum / locatie")
-        meta_label.setObjectName("livesetMeta")
-        meta_label.setWordWrap(True)
-        title_col.addWidget(meta_label)
-        title_row.addLayout(title_col, 1)
+        meta_parts = [
+            str(self.data.get("date") or "").strip(),
+            str(self.data.get("location") or "").strip(),
+        ]
+        meta = QLabel(" • ".join(part for part in meta_parts if part))
+        meta.setObjectName("meta")
+        meta.setWordWrap(True)
+        if not meta.text():
+            meta.setText("Geen datum / locatie")
+        root.addWidget(meta)
+
+        action_row = QHBoxLayout()
+        action_row.setContentsMargins(0, 2, 0, 0)
+        action_row.setSpacing(8)
+
+        detail_parts = []
+        if str(self.data.get("duration") or "").strip():
+            detail_parts.append(str(self.data["duration"]).strip())
+        if self.data.get("tracks") not in (None, ""):
+            detail_parts.append(f"{self.data['tracks']} TRACKS")
+        detail = QLabel(" • ".join(detail_parts) if detail_parts else "LIVESET")
+        detail.setObjectName("meta")
+        action_row.addWidget(detail, 1)
 
         self.play_button = QPushButton("▶")
-        self.play_button.setObjectName("livesetPlayButton")
-        self.play_button.setFixedSize(48, 48)
+        self.play_button.setObjectName("cdTrackPlayButton")
+        self.play_button.setProperty("playing", False)
+        self.play_button.setFixedSize(42, 34)
         self.play_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.play_button.setToolTip("Speel liveset")
         self.play_button.clicked.connect(self._play_clicked)
-        title_row.addWidget(self.play_button, 0, Qt.AlignmentFlag.AlignCenter)
-        root.addLayout(title_row)
+        action_row.addWidget(self.play_button)
+        root.addLayout(action_row)
 
-        bottom = QHBoxLayout()
-        details = []
-        duration = str(self.data.get("duration") or "").strip()
-        tracks = self.data.get("tracks")
-        if duration:
-            details.append(duration)
-        if tracks not in (None, ""):
-            details.append(f"{tracks} tracks")
-        detail_label = QLabel(" • ".join(details) if details else "LIVESET")
-        detail_label.setObjectName("livesetDetail")
-        bottom.addWidget(detail_label)
-        bottom.addStretch()
-
-        self.replace_button = QPushButton("Vervang foto")
+        self.replace_button = QPushButton("VERVANG FOTO")
         self.replace_button.setObjectName("coverButton")
         self.replace_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.replace_button.clicked.connect(self._cover_clicked)
-        bottom.addWidget(self.replace_button)
-        root.addLayout(bottom)
+        root.addWidget(self.replace_button)
 
         self.upload_progress = QProgressBar()
         self.upload_progress.setObjectName("uploadProgress")
         self.upload_progress.setRange(0, 100)
-        self.upload_progress.setValue(0)
         self.upload_progress.setTextVisible(False)
+        self.upload_progress.setFixedHeight(3)
         self.upload_progress.hide()
         root.addWidget(self.upload_progress)
 
-    def _set_cover(self, path):
-        pix = QPixmap(str(path)) if path and Path(path).exists() else QPixmap()
-        if pix.isNull():
-            self.cover.setText("GEEN COVER")
-            return
-        scaled = pix.scaled(
-            720,
-            405,
+    @staticmethod
+    def _crop_cover(pixmap: QPixmap, width: int, height: int) -> QPixmap:
+        if pixmap.isNull():
+            return QPixmap()
+        scaled = pixmap.scaled(
+            width,
+            height,
             Qt.AspectRatioMode.KeepAspectRatioByExpanding,
             Qt.TransformationMode.SmoothTransformation,
         )
-        self.cover.setPixmap(scaled)
+        x = max(0, (scaled.width() - width) // 2)
+        y = max(0, (scaled.height() - height) // 2)
+        return scaled.copy(x, y, width, height)
+
+    def _load_cover(self, path: str):
+        self._cover_pixmap = QPixmap()
+        if path and Path(path).exists():
+            self._cover_pixmap = QPixmap(str(path))
+        self._render_cover(False)
+
+    def _render_cover(self, zoom: bool):
+        if self._cover_pixmap.isNull():
+            self.cover.setPixmap(QPixmap())
+            self.cover.setText("GEEN COVER")
+            return
+        width = 370 if zoom else 340
+        height = 205 if zoom else 185
+        cropped = self._crop_cover(self._cover_pixmap, width, height)
+        self.cover.setText("")
+        self.cover.setPixmap(cropped)
+
+    def enterEvent(self, event):
+        self.setProperty("hovered", True)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self._render_cover(True)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.setProperty("hovered", False)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self._render_cover(False)
+        super().leaveEvent(event)
 
     def _play_clicked(self):
         path = str(self.data.get("audio") or "").strip()
@@ -272,21 +290,33 @@ class LiveSetCard(QFrame):
         self.play_button.update()
 
     def set_cover(self, path: str):
-        self._set_cover(path)
+        self.data["cover"] = path
+        self._load_cover(path)
+
+    def animate_upload(self):
+        self.upload_progress.setValue(0)
+        self.upload_progress.show()
+        animation = QPropertyAnimation(self.upload_progress, b"value", self)
+        animation.setDuration(520)
+        animation.setStartValue(0)
+        animation.setEndValue(100)
+        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        animation.finished.connect(self.upload_progress.hide)
+        self._upload_animation = animation
+        animation.start()
 
     def _fade_in(self):
-        # Staggered fade-in without an external animation dependency.
         self.setWindowOpacity(0.0)
         self._fade = QPropertyAnimation(self, b"windowOpacity", self)
         self._fade.setDuration(360)
         self._fade.setStartValue(0.0)
         self._fade.setEndValue(1.0)
         self._fade.setEasingCurve(QEasingCurve.Type.OutCubic)
-        QTimer.singleShot(40, self._fade.start)
+        self._fade.start()
 
 
 class LiveSetDialog(QDialog):
-    """Small editor used to add a local liveset and its cover."""
+    """Editor for a new liveset, including drag/drop cover preview."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -299,33 +329,37 @@ class LiveSetDialog(QDialog):
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(22, 22, 22, 22)
-        root.setSpacing(12)
+        root.setSpacing(10)
 
-        title = QLabel("Nieuwe Liveset")
-        title.setObjectName("dialogTitle")
-        root.addWidget(title)
+        heading = QLabel("Nieuwe Liveset")
+        heading.setObjectName("detailTitle")
+        root.addWidget(heading)
 
         self.title_edit = QLineEdit()
         self.title_edit.setPlaceholderText("Titel van de liveset")
         root.addWidget(self.title_edit)
 
+        self.artist_edit = QLineEdit()
+        self.artist_edit.setPlaceholderText("Artiest / DJ")
+        root.addWidget(self.artist_edit)
+
         self.date_edit = QLineEdit()
-        self.date_edit.setPlaceholderText("Datum — bijvoorbeeld 22-08-2026")
+        self.date_edit.setPlaceholderText("Datum")
         root.addWidget(self.date_edit)
 
         self.location_edit = QLineEdit()
-        self.location_edit.setPlaceholderText("Locatie of artiest")
+        self.location_edit.setPlaceholderText("Locatie")
         root.addWidget(self.location_edit)
 
         self.details_edit = QLineEdit()
-        self.details_edit.setPlaceholderText("Duur / aantal tracks — optioneel")
+        self.details_edit.setPlaceholderText("Duur of aantal tracks — optioneel")
         root.addWidget(self.details_edit)
 
         audio_row = QHBoxLayout()
-        self.audio_label = QLabel("Geen liveset-audio gekozen")
-        self.audio_label.setObjectName("dialogMuted")
+        self.audio_label = QLabel("Geen audio gekozen")
+        self.audio_label.setObjectName("meta")
         audio_row.addWidget(self.audio_label, 1)
-        audio_button = QPushButton("Kies audio")
+        audio_button = QPushButton("KIES AUDIO")
         audio_button.clicked.connect(self._choose_audio)
         audio_row.addWidget(audio_button)
         root.addLayout(audio_row)
@@ -334,8 +368,8 @@ class LiveSetDialog(QDialog):
         self.drop_zone.file_selected.connect(self._cover_selected)
         root.addWidget(self.drop_zone)
 
-        self.preview = QLabel("Preview verschijnt hier")
-        self.preview.setObjectName("dialogPreview")
+        self.preview = QLabel("PREVIEW")
+        self.preview.setObjectName("cover")
         self.preview.setFixedHeight(180)
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(self.preview)
@@ -361,19 +395,16 @@ class LiveSetDialog(QDialog):
     def _cover_selected(self, path):
         self.cover_path = path
         pix = QPixmap(path)
-        if not pix.isNull():
-            self.preview.setPixmap(
-                pix.scaled(
-                    320,
-                    180,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-            )
+        if pix.isNull():
+            return
+        scaled = LiveSetCard._crop_cover(pix, 320, 180)
+        self.preview.setText("")
+        self.preview.setPixmap(scaled)
 
     def get_data(self):
         return {
             "title": self.title_edit.text().strip(),
+            "artist": self.artist_edit.text().strip(),
             "date": self.date_edit.text().strip(),
             "location": self.location_edit.text().strip(),
             "duration": self.details_edit.text().strip(),
@@ -389,7 +420,7 @@ class LiveSetDialog(QDialog):
 
 
 class LivesetsPage(QWidget):
-    """Dark, modern Livesets section integrated with VinylVault's MP3 player."""
+    """Standalone Livesets section, visually aligned with CD Showcase."""
 
     play_mp3 = Signal(str)
 
@@ -412,9 +443,8 @@ class LivesetsPage(QWidget):
             self.items = []
             return
         try:
-            self.items = json.loads(LIVESETS_FILE.read_text(encoding="utf-8"))
-            if not isinstance(self.items, list):
-                self.items = []
+            data = json.loads(LIVESETS_FILE.read_text(encoding="utf-8"))
+            self.items = data if isinstance(data, list) else []
         except (OSError, json.JSONDecodeError):
             self.items = []
 
@@ -427,30 +457,27 @@ class LivesetsPage(QWidget):
 
     def _build_ui(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(30, 24, 30, 24)
-        root.setSpacing(18)
+        root.setContentsMargins(24, 22, 24, 20)
+        root.setSpacing(14)
 
+        # Same title scale, spacing and accent language as CD Showcase.
         header = QHBoxLayout()
-        heading_col = QVBoxLayout()
-        heading_col.setSpacing(4)
-
-        heading = QLabel("Livesets")
-        heading.setObjectName("livesetsHeading")
-        heading_col.addWidget(heading)
-
+        title_col = QVBoxLayout()
+        title_col.setSpacing(4)
+        title = QLabel("LIVESETS")
+        title.setObjectName("showcaseTitle")
+        title_col.addWidget(title)
         underline = QFrame()
-        underline.setObjectName("headingGlow")
+        underline.setObjectName("showcaseUnderline")
         underline.setFixedHeight(2)
-        underline.setMaximumWidth(180)
-        heading_col.addWidget(underline)
+        underline.setMaximumWidth(150)
+        title_col.addWidget(underline)
+        subtitle = QLabel("DJ sets, recordings en live sessions")
+        subtitle.setObjectName("showcaseInfo")
+        title_col.addWidget(subtitle)
+        header.addLayout(title_col, 1)
 
-        subtitle = QLabel("Je favoriete DJ-sets, recordings en live sessions op één plek.")
-        subtitle.setObjectName("livesetsSubtitle")
-        heading_col.addWidget(subtitle)
-        header.addLayout(heading_col, 1)
-
-        add_button = QPushButton("＋  NIEUWE LIVESET")
-        add_button.setObjectName("addLivesetButton")
+        add_button = QPushButton("+ NIEUWE LIVESET")
         add_button.setCursor(Qt.CursorShape.PointingHandCursor)
         add_button.clicked.connect(self._new_liveset)
         header.addWidget(add_button, 0, Qt.AlignmentFlag.AlignTop)
@@ -458,14 +485,14 @@ class LivesetsPage(QWidget):
 
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
-        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll.setStyleSheet("QScrollArea { border:none; background:transparent; }")
 
         self.content = QWidget()
         self.grid = QGridLayout(self.content)
-        self.grid.setContentsMargins(2, 4, 8, 20)
+        self.grid.setContentsMargins(10, 10, 10, 20)
         self.grid.setHorizontalSpacing(16)
-        self.grid.setVerticalSpacing(16)
+        self.grid.setVerticalSpacing(18)
         self.scroll.setWidget(self.content)
         root.addWidget(self.scroll, 1)
 
@@ -476,41 +503,29 @@ class LivesetsPage(QWidget):
         while self.grid.count():
             item = self.grid.takeAt(0)
             widget = item.widget()
-            if widget:
+            if widget is not None:
                 widget.deleteLater()
         self.cards.clear()
 
         if not self.items:
-            empty = QFrame()
-            empty.setObjectName("emptyLivesets")
-            layout = QVBoxLayout(empty)
-            layout.setContentsMargins(30, 40, 30, 40)
-            icon = QLabel("♫")
-            icon.setObjectName("emptyIcon")
-            icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            layout.addWidget(icon)
-            text = QLabel("Nog geen livesets")
-            text.setObjectName("emptyTitle")
-            text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            layout.addWidget(text)
-            hint = QLabel("Klik op NIEUWE LIVESET om je eerste set toe te voegen.")
-            hint.setObjectName("emptyHint")
-            hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            layout.addWidget(hint)
-            self.grid.addWidget(empty, 0, 0, 1, 3)
+            empty = QLabel("Geen livesets gevonden. Klik op + NIEUWE LIVESET om er één toe te voegen.")
+            empty.setObjectName("showcaseInfo")
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.grid.addWidget(empty, 0, 0, 1, 4)
             return
 
-        columns = 3
+        columns = 4
         for index, data in enumerate(self.items):
-            card = LiveSetCard(data)
+            card = LiveSetCard(data, delay_ms=45 * index)
             card.play_requested.connect(self._play_requested)
-            card.cover_requested.connect(lambda path, d=data, c=card: self._replace_cover(d, c, path))
+            card.cover_requested.connect(
+                lambda path, d=data, c=card: self._replace_cover(d, c, path)
+            )
             self.cards.append(card)
             self.grid.addWidget(card, index // columns, index % columns)
 
         for column in range(columns):
             self.grid.setColumnStretch(column, 1)
-
         self._sync_playing_buttons()
 
     def _new_liveset(self):
@@ -527,7 +542,7 @@ class LivesetsPage(QWidget):
         self._copy_cover_and_store(data, source)
         self._save_data()
         card.set_cover(data.get("cover", ""))
-        self._animate_upload(card)
+        card.animate_upload()
 
     def _copy_cover_and_store(self, data, source):
         if not source:
@@ -544,29 +559,23 @@ class LivesetsPage(QWidget):
         except OSError:
             pass
 
-    def _animate_upload(self, card):
-        progress = card.upload_progress
-        progress.setValue(0)
-        progress.show()
-        animation = QPropertyAnimation(progress, b"value", progress)
-        animation.setDuration(500)
-        animation.setStartValue(0)
-        animation.setEndValue(100)
-        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
-        animation.finished.connect(progress.hide)
-        progress._animation = animation
-        animation.start()
+    @staticmethod
+    def _normalise(path):
+        path = str(path or "").strip()
+        if not path:
+            return ""
+        try:
+            return str(Path(path).expanduser().resolve()).casefold()
+        except OSError:
+            return path.casefold()
 
     def _play_requested(self, path):
-        self.active_path = str(Path(path).resolve()).casefold()
+        self.active_path = self._normalise(path) or None
         self._sync_playing_buttons()
         self.play_mp3.emit(path)
 
     def set_active_track(self, path):
-        try:
-            self.active_path = str(Path(path).resolve()).casefold()
-        except OSError:
-            self.active_path = str(path or "").casefold()
+        self.active_path = self._normalise(path) or None
         self._sync_playing_buttons()
 
     def clear_active_track(self):
@@ -578,59 +587,55 @@ class LivesetsPage(QWidget):
             from PySide6.QtMultimedia import QMediaPlayer
             if state != QMediaPlayer.PlaybackState.PlayingState:
                 self.clear_active_track()
-            else:
-                self._sync_playing_buttons()
         except Exception:
             self.clear_active_track()
 
     def _sync_playing_buttons(self):
         for card in self.cards:
-            path = str(card.data.get("audio") or "").strip()
-            try:
-                normalised = str(Path(path).resolve()).casefold()
-            except OSError:
-                normalised = path.casefold()
-            card.set_playing(bool(self.active_path and normalised == self.active_path))
+            card.set_playing(
+                bool(self.active_path)
+                and self._normalise(card.data.get("audio")) == self.active_path
+            )
 
     @staticmethod
     def _style():
         return """
-        QWidget { background:#0b0b0f; color:#f3f3f6; font-family:'Segoe UI'; }
-        QLabel#livesetsHeading { color:#ffffff; font-size:30px; font-weight:900; }
-        QLabel#livesetsSubtitle { color:#777784; font-size:13px; }
-        QFrame#headingGlow { background:#4d5dff; border-radius:1px; }
-        QPushButton#addLivesetButton { background:#171721; color:#e8e9ff; border:1px solid #343450; border-radius:9px; padding:10px 15px; font-weight:800; }
-        QPushButton#addLivesetButton:hover { background:#202034; border-color:#5968ff; }
-        QFrame#livesetCard { background:#111117; border:1px solid #272733; border-radius:14px; }
-        QFrame#livesetCard:hover { background:#15151c; border-color:#41415a; }
-        QFrame#coverWrap { background:#08080c; border-radius:10px; }
-        QLabel#livesetCover { background:#08080c; color:#62626e; border-radius:10px; min-height:170px; }
-        QPushButton#livesetPlayButton { background:#6b1717; color:white; border:1px solid #922e2e; border-radius:24px; font-size:18px; font-weight:900; }
-        QPushButton#livesetPlayButton:hover { background:#842020; border-color:#bd4444; }
-        QPushButton#livesetPlayButton[playing="true"] { background:#1f7a3d; border-color:#42bd69; }
-        QPushButton#livesetPlayButton[playing="true"]:hover { background:#29934a; }
-        QLabel#livesetTitle { color:#ffffff; font-size:17px; font-weight:900; }
-        QLabel#livesetMeta { color:#9696a4; font-size:12px; }
-        QLabel#livesetDetail { color:#686875; font-size:11px; font-weight:800; letter-spacing:1px; }
-        QPushButton#coverButton { background:transparent; color:#8f90a0; border:1px solid #2d2d38; border-radius:7px; padding:6px 9px; font-size:11px; }
-        QPushButton#coverButton:hover { color:#ffffff; border-color:#5968ff; }
-        QProgressBar#uploadProgress { background:#181820; border:0; border-radius:2px; height:3px; }
-        QProgressBar#uploadProgress::chunk { background:#5968ff; border-radius:2px; }
-        QFrame#emptyLivesets { background:#101016; border:1px dashed #343443; border-radius:14px; }
-        QLabel#emptyIcon { color:#5968ff; font-size:42px; }
-        QLabel#emptyTitle { color:#ffffff; font-size:20px; font-weight:900; }
-        QLabel#emptyHint { color:#777784; font-size:13px; }
-        QFrame#coverDropZone { background:#111119; border:2px dashed #343450; border-radius:12px; }
-        QFrame#coverDropZone[dragging="true"] { background:#17172a; border-color:#5968ff; }
-        QLabel#uploadIcon { color:#5968ff; font-size:34px; font-weight:300; }
-        QLabel#uploadTitle { color:#f0f0f6; font-size:14px; font-weight:900; }
-        QLabel#uploadHint { color:#777784; font-size:11px; }
-        QLabel#dialogTitle { color:#fff; font-size:22px; font-weight:900; }
-        QLabel#dialogMuted { color:#777784; }
-        QLabel#dialogPreview { background:#09090d; border:1px solid #292933; border-radius:9px; color:#666672; }
-        QLineEdit { background:#121219; color:#fff; border:1px solid #30303c; border-radius:8px; padding:9px 11px; }
-        QLineEdit:focus { border-color:#5968ff; }
-        QScrollBar:vertical { background:#0b0b0f; width:10px; margin:0; }
-        QScrollBar::handle:vertical { background:#2c2c38; border-radius:5px; min-height:30px; }
-        QScrollBar::handle:vertical:hover { background:#414151; }
+        QWidget { background:#0b0b0f; color:#f5f5f7; font-family:'Segoe UI Semibold'; }
+        QPushButton { background:#18181f; color:#fff; border:1px solid #30303a;
+            border-radius:7px; padding:8px 14px; font-size:12px; font-weight:800; }
+        QPushButton:hover { background:#24242c; border-color:#555563; }
+        QLineEdit { background:#121217; color:#fff; border:1px solid #30303a;
+            border-radius:8px; padding:10px 12px; font-size:13px; }
+        QLabel#showcaseTitle { color:#fff; font-size:26px; font-weight:900; }
+        QLabel#showcaseInfo { color:#9b9ba6; font-size:13px; }
+        QFrame#showcaseUnderline { background:#ffcf72; border-radius:1px; }
+        QFrame#releaseCard { background:#121217; border:1px solid #292933; border-radius:10px; }
+        QFrame#releaseCard[hovered="true"] { background:#17171e; border-color:#5b5b6b; }
+        QLabel#cover { background:#07070a; color:#666671; border:1px solid #2a2a33; border-radius:6px; }
+        QLabel#artist { color:#ffcf72; font-size:13px; font-weight:800; }
+        QLabel#title { color:#fff; font-size:16px; font-weight:900; }
+        QLabel#meta { color:#858591; font-size:12px; }
+        QPushButton#cdTrackPlayButton {
+            background:#6b1717; color:#fff; border:1px solid #8f2929;
+            border-radius:7px; padding:4px; font-size:15px; font-weight:900;
+        }
+        QPushButton#cdTrackPlayButton:hover { background:#842020; border-color:#b43a3a; }
+        QPushButton#cdTrackPlayButton[playing="true"] {
+            background:#1f7a3d; border-color:#35a65b;
+        }
+        QPushButton#cdTrackPlayButton[playing="true"]:hover {
+            background:#29934a; border-color:#4fc874;
+        }
+        QPushButton#coverButton { background:transparent; color:#858591;
+            border:1px solid #30303a; border-radius:6px; padding:5px 9px; font-size:10px; }
+        QPushButton#coverButton:hover { color:#fff; border-color:#ffcf72; background:#1a1a20; }
+        QProgressBar#uploadProgress { background:#202027; border:0; border-radius:1px; }
+        QProgressBar#uploadProgress::chunk { background:#ffcf72; border-radius:1px; }
+        QFrame#coverDropZone { background:#101014; border:2px dashed #34343f; border-radius:9px; }
+        QFrame#coverDropZone[dragging="true"] { background:#18181e; border-color:#ffcf72; }
+        QLabel#uploadIcon { color:#ffcf72; font-size:32px; }
+        QLabel#uploadTitle { color:#fff; font-size:14px; font-weight:900; }
+        QLabel#uploadHint { color:#777782; font-size:11px; }
+        QScrollBar:vertical { background:#0b0b0f; width:10px; }
+        QScrollBar::handle:vertical { background:#2c2c36; border-radius:5px; min-height:30px; }
         """
