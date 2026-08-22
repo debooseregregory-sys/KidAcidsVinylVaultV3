@@ -21,7 +21,7 @@ from database.database import get_connection
 
 
 class ReleaseShowcasePage(QWidget):
-    """Vinyl release showcase with compact track rows."""
+    """Vinyl release showcase with the same compact track rows as CD Showcase."""
 
     back_requested = Signal()
     edit_requested = Signal(int)
@@ -69,10 +69,10 @@ class ReleaseShowcasePage(QWidget):
             QPushButton:hover { background:#24242c; border-color:#555563; }
 
             QFrame#trackRow { background: transparent; border: none; border-radius: 0px; }
-            QLabel#trackPosition { color:#ffcf72; font-size:12px; font-weight:900; }
-            QLabel#trackTitle { color:#fff; font-size:14px; font-weight:800; background:transparent; border:none; }
-            QLabel#trackArtist { color:#8f8f9a; font-size:12px; background:transparent; border:none; }
-            QLabel#trackDuration { color:#aaaab4; font-size:12px; background:transparent; border:none; }
+            QLabel#trackPosition { color:#ff4fa3; font-size:12px; font-weight:800; }
+            QLabel#trackTitle { color:#f2f2f5; font-size:14px; font-weight:600; background:transparent; border:none; }
+            QLabel#trackArtist { color:#7a7a86; font-size:12px; background:transparent; border:none; }
+            QLabel#trackDuration { color:#6e6e7a; font-size:12px; background:transparent; border:none; }
 
             QPushButton#cdTrackPlayButton {
                 background:#6b1717;
@@ -82,6 +82,8 @@ class ReleaseShowcasePage(QWidget):
                 padding:4px;
                 font-size:15px;
                 font-weight:900;
+                min-width:32px;
+                min-height:32px;
             }
             QPushButton#cdTrackPlayButton:hover {
                 background:#842020;
@@ -172,7 +174,7 @@ class ReleaseShowcasePage(QWidget):
             self.clear_active_track()
 
     def _make_track_row(self, track, release_artist):
-        """Compact Vinyl row: track number | title + artist | duration | play."""
+        """Match the CD Showcase track row exactly: play | position | title/artist | duration."""
         row = QFrame()
         row.setObjectName("trackRow")
 
@@ -180,13 +182,38 @@ class ReleaseShowcasePage(QWidget):
         layout.setContentsMargins(2, 4, 8, 4)
         layout.setSpacing(12)
 
-        # Track number first.
+        mp3_path = str(track[5] or "").strip()
+
+        # Play / pause on the left, exactly like CD Showcase.
+        if mp3_path:
+            play_button = QPushButton("▶")
+            play_button.setObjectName("cdTrackPlayButton")
+            play_button.setProperty("playing", False)
+            play_button.setToolTip(f"Speel MP3: {Path(mp3_path).name}")
+            play_button.setFixedSize(32, 32)
+            play_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button_path = self._normalise_mp3_path(mp3_path)
+            self._track_buttons[button_path] = play_button
+            self._set_play_button_active(
+                play_button,
+                button_path == self._active_mp3_path,
+            )
+            play_button.clicked.connect(
+                lambda _checked=False, path=mp3_path: self.play_mp3.emit(path)
+            )
+            layout.addWidget(play_button)
+        else:
+            spacer = QLabel("")
+            spacer.setFixedWidth(32)
+            layout.addWidget(spacer)
+
+        # Track number follows the play button, exactly like CD Showcase.
         position = QLabel(str(track[1] or ""))
         position.setObjectName("trackPosition")
         position.setFixedWidth(40)
         layout.addWidget(position)
 
-        # Title and artist in the flexible middle column.
+        # Flexible title / artist column.
         middle = QVBoxLayout()
         middle.setSpacing(1)
         middle.setContentsMargins(0, 0, 0, 0)
@@ -204,37 +231,12 @@ class ReleaseShowcasePage(QWidget):
 
         layout.addLayout(middle, 1)
 
-        # Duration immediately before the compact play button.
+        # Duration is the final column, exactly like CD Showcase.
         duration = QLabel(self._format_duration(track[4]))
         duration.setObjectName("trackDuration")
         duration.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         duration.setFixedWidth(48)
         layout.addWidget(duration)
-
-        mp3_path = str(track[5] or "").strip()
-        if mp3_path:
-            play_button = QPushButton("▶")
-            play_button.setObjectName("cdTrackPlayButton")
-            play_button.setProperty("playing", False)
-            play_button.setToolTip(f"Speel MP3: {Path(mp3_path).name}")
-            play_button.setFixedSize(38, 32)
-            play_button.setCursor(Qt.CursorShape.PointingHandCursor)
-            button_path = self._normalise_mp3_path(mp3_path)
-            self._track_buttons[button_path] = play_button
-            self._set_play_button_active(
-                play_button,
-                button_path == self._active_mp3_path,
-            )
-            play_button.clicked.connect(
-                lambda _checked=False, path=mp3_path: self.play_mp3.emit(path)
-            )
-            layout.addWidget(play_button)
-        else:
-            no_mp3 = QLabel("—")
-            no_mp3.setObjectName("trackDuration")
-            no_mp3.setFixedWidth(38)
-            no_mp3.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            layout.addWidget(no_mp3)
 
         return row
 
