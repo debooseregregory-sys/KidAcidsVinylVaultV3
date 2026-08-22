@@ -3,8 +3,8 @@ Kid Acid's VinylVault V3
 Compact Vinyl track presentation adapter.
 
 This package intentionally shadows the legacy gui/release_detail_page.py
-module while loading that complete implementation underneath.  Only the
-visual TrackCard is replaced.  The existing ReleaseDetailPage, dialogs,
+module while loading that complete implementation underneath. Only the
+visual TrackCard is replaced. The existing ReleaseDetailPage, dialogs,
 MP3 linking, preferred-MP3 handling, unlinking and database behaviour remain
 available from the original implementation.
 """
@@ -13,11 +13,6 @@ from pathlib import Path
 import importlib.util
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QMenu
-
-
-# ---------------------------------------------------------------------------
-# Load the original implementation under a private module name.
-# ---------------------------------------------------------------------------
 
 _original_path = Path(__file__).resolve().parent.parent / "release_detail_page.py"
 _original_spec = importlib.util.spec_from_file_location(
@@ -146,7 +141,12 @@ class CompactTrackCard(_legacy.TrackCard):
                 self.mp3s[0],
             )
 
-        mp3_path = str((preferred or {}).get("path") or "").strip() if preferred else ""
+        mp3_path = ""
+        if preferred is not None:
+            try:
+                mp3_path = str(preferred["path"] or "").strip()
+            except (KeyError, TypeError):
+                mp3_path = ""
 
         if mp3_path:
             button = QPushButton("▶")
@@ -218,12 +218,8 @@ class CompactTrackCard(_legacy.TrackCard):
             self.delete_track()
 
 
-# Make the complete legacy page use the compact card without touching its
-# database/editor/MP3-linking implementation.
 _legacy.TrackCard = CompactTrackCard
 
-
-# Re-export the original public page and supporting classes.
 TrackCard = CompactTrackCard
 ReleaseDetailPage = _legacy.ReleaseDetailPage
 TrackEditDialog = _legacy.TrackEditDialog
