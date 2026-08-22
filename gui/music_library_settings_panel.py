@@ -4,22 +4,45 @@
 # ============================================================
 
 from pathlib import Path
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget
+import os
+import sqlite3
+
+from PySide6.QtCore import QDesktopServices, QSettings, QUrl, Signal
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
+
+from database.database import DB_PATH, get_connection
 
 
 class MusicLibrarySettingsPanel(QWidget):
-    """Modern, read-only Music Library settings panel.
-
-    This first version deliberately exposes library information without
-    changing the database or MP3 links. Actions can be wired safely later.
-    """
+    """Live Music Library controls without changing MP3 links automatically."""
 
     action_requested = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._settings = QSettings("Kid Acid", "MusicVault")
+        self._stat_labels = {}
+        self._path_label = None
+        self._health_label = None
         self._build_ui()
+        self.refresh()
+
+    def _music_folder(self):
+        """Return the configured music folder, with the legacy path as fallback."""
+        for key in ("music_folder", "mp3_folder", "mp3_root", "library_path"):
+            value = self._settings.value(key, "")
+            if value:
+                return Path(str(value)).expanduser()
+        return Path(r"D:\01. MP3’s")
 
     def _card(self):
         card = QFrame()
@@ -31,7 +54,6 @@ class MusicLibrarySettingsPanel(QWidget):
                 border-radius: 18px;
             }
             QLabel { color: #f4f4f7; }
-            QLabel.muted { color: #92929d; }
             QPushButton {
                 background: #24242d;
                 color: #f5f5f7;
@@ -44,7 +66,7 @@ class MusicLibrarySettingsPanel(QWidget):
         """)
         return card
 
-    def _stat(self, value, label):
+    def _stat(self, value, label, key):
         box = QFrame()
         box.setStyleSheet("QFrame { background:#111116; border-radius:14px; }")
         lay = QVBoxLayout(box)
@@ -55,13 +77,13 @@ class MusicLibrarySettingsPanel(QWidget):
         caption.setStyleSheet("font-size:10px;font-weight:800;letter-spacing:1px;color:#8d8d98;")
         lay.addWidget(value_label)
         lay.addWidget(caption)
+        self._stat_labels[key] = value_label
         return box
 
     def _section_title(self, title, subtitle):
         title_label = QLabel(title)
         title_label.setStyleSheet("font-size:21px;font-weight:900;color:#ffffff;")
         subtitle_label = QLabel(subtitle)
-        subtitle_label.setProperty("class", "muted")
         subtitle_label.setStyleSheet("font-size:12px;color:#90909b;")
         return title_label, subtitle_label
 
@@ -76,7 +98,7 @@ class MusicLibrarySettingsPanel(QWidget):
 
         title, subtitle = self._section_title(
             "Your collection, at a glance",
-            "Manage your music sources and matching workflow from one place."
+            "Live information from your MusicVault database and configured MP3 source."
         )
         root.addWidget(title)
         root.addWidget(subtitle)
@@ -87,21 +109,21 @@ class MusicLibrarySettingsPanel(QWidget):
         ol.setSpacing(14)
 
         health_row = QHBoxLayout()
-        health = QLabel("●  LIBRARY READY")
-        health.setStyleSheet("font-size:11px;font-weight:900;letter-spacing:1px;color:#72d69a;")
-        health_row.addWidget(health)
+        self._health_label = QLabel("●  CHECKING LIBRARY")
+        self._health_label.setStyleSheet("font-size:11px;font-weight:900;letter-spacing:1px;color:#e6b84d;")
+        health_row.addWidget(self._health_label)
         health_row.addStretch()
-        source = QLabel("MP3 SOURCE")
+        source = QLabel("LIVE DATABASE")
         source.setStyleSheet("font-size:10px;font-weight:800;letter-spacing:1px;color:#777782;")
         health_row.addWidget(source)
         ol.addLayout(health_row)
 
         stats = QHBoxLayout()
         stats.setSpacing(10)
-        stats.addWidget(self._stat("33,409", "MP3 FILES"))
-        stats.addWidget(self._stat("15,683", "TRACKS"))
-        stats.addWidget(self._stat("3,210", "LINKED TRACKS"))
-        stats.addWidget(self._stat("—", "MISSING LINKS"))
+        stats.addWidget(self._stat("—", "MP3 FILES", "mp3"))
+        stats.addWidget(self._stat("—", "TRACKS", "tracks"))
+        stats.addWidget(self._stat("—", "LINKED TRACKS", "linked"))
+        stats.addWidget(self._stat("—", "MISSING LINKS", "missing"))
         ol.addLayout(stats)
         root.addWidget(overview)
 
@@ -109,16 +131,17 @@ class MusicLibrarySettingsPanel(QWidget):
         fl = QVBoxLayout(folders)
         fl.setContentsMargins(20, 20, 20, 20)
         fl.setSpacing(12)
-        ft, fs = self._section_title("Music folder", "The source location used by your MusicVault library.")
+        ft, fs = self._section_title("Music folder", "The source location stored in MusicVault's local settings.")
         fl.addWidget(ft)
         fl.addWidget(fs)
         path_row = QHBoxLayout()
-        path_label = QLabel(r"D:\01. MP3’s")
-        path_label.setStyleSheet("background:#111116;border-radius:10px;padding:12px;color:#d5d5dc;font-family:Consolas;font-size:12px;")
-        path_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        path_row.addWidget(path_label)
+        self._path_label = QLabel()
+        self._path_label.setStyleSheet("background:#111116;border-radius:10px;padding:12px;color:#d5d5dc;font-family:Consolas;font-size:12px;")
+        self._path_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self._path_label.setTextInteractionFlags(self._path_label.textInteractionFlags())
+        path_row.addWidget(self._path_label)
         open_btn = QPushButton("Open Folder")
-        open_btn.clicked.connect(lambda: self.action_requested.emit("open_folder"))
+        open_btn.clicked.connect(self._open_folder)
         path_row.addWidget(open_btn)
         fl.addLayout(path_row)
         root.addWidget(folders)
@@ -127,14 +150,117 @@ class MusicLibrarySettingsPanel(QWidget):
         wl = QVBoxLayout(workflow)
         wl.setContentsMargins(20, 20, 20, 20)
         wl.setSpacing(12)
-        wt, ws = self._section_title("Library workflow", "Safe shortcuts for the tools already in MusicVault.")
+        wt, ws = self._section_title("Library workflow", "Existing tools are exposed without silently modifying your collection.")
         wl.addWidget(wt)
         wl.addWidget(ws)
         buttons = QHBoxLayout()
-        for text, action in (("Scan Library", "scan"), ("Find Missing", "missing"), ("Review Matches", "matches")):
-            button = QPushButton(text)
-            button.clicked.connect(lambda checked=False, a=action: self.action_requested.emit(a))
-            buttons.addWidget(button)
+        scan_btn = QPushButton("Scan Library")
+        scan_btn.clicked.connect(lambda: self.action_requested.emit("scan"))
+        buttons.addWidget(scan_btn)
+        missing_btn = QPushButton("Find Missing")
+        missing_btn.clicked.connect(self._find_missing)
+        buttons.addWidget(missing_btn)
+        matches_btn = QPushButton("Review Matches")
+        matches_btn.clicked.connect(lambda: self.action_requested.emit("matches"))
+        buttons.addWidget(matches_btn)
         wl.addLayout(buttons)
         root.addWidget(workflow)
         root.addStretch()
+
+    def refresh(self):
+        """Refresh path and database statistics without changing any records."""
+        folder = self._music_folder()
+        self._path_label.setText(str(folder))
+        self._path_label.setToolTip(str(folder))
+
+        try:
+            connection = get_connection()
+            try:
+                mp3_count = connection.execute("SELECT COUNT(*) FROM mp3_files").fetchone()[0]
+                track_count = connection.execute("SELECT COUNT(*) FROM tracks").fetchone()[0]
+                linked_count = connection.execute(
+                    "SELECT COUNT(DISTINCT track_id) FROM track_mp3"
+                ).fetchone()[0]
+                missing_count = connection.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM track_mp3 x
+                    INNER JOIN mp3_files m ON m.id = x.mp3_id
+                    WHERE m.path IS NULL OR TRIM(m.path) = '' OR NOT EXISTS (
+                        SELECT 1
+                        FROM pragma_database_list
+                        WHERE name = 'temp'
+                    ) AND 0
+                    """
+                ).fetchone()[0]
+
+                # SQLite cannot reliably test Windows filesystem paths in SQL.
+                # Do that small, read-only check in Python instead.
+                rows = connection.execute(
+                    """
+                    SELECT DISTINCT m.path
+                    FROM track_mp3 x
+                    INNER JOIN mp3_files m ON m.id = x.mp3_id
+                    WHERE m.path IS NOT NULL AND TRIM(m.path) <> ''
+                    """
+                ).fetchall()
+                missing_count = sum(1 for row in rows if not Path(str(row[0])).exists())
+            finally:
+                connection.close()
+
+            self._stat_labels["mp3"].setText(f"{mp3_count:,}")
+            self._stat_labels["tracks"].setText(f"{track_count:,}")
+            self._stat_labels["linked"].setText(f"{linked_count:,}")
+            self._stat_labels["missing"].setText(f"{missing_count:,}")
+
+            if folder.exists() and folder.is_dir():
+                self._health_label.setText("●  LIBRARY READY")
+                self._health_label.setStyleSheet("font-size:11px;font-weight:900;letter-spacing:1px;color:#72d69a;")
+            else:
+                self._health_label.setText("●  MUSIC FOLDER NOT FOUND")
+                self._health_label.setStyleSheet("font-size:11px;font-weight:900;letter-spacing:1px;color:#e6b84d;")
+        except (sqlite3.Error, OSError) as exc:
+            for key in self._stat_labels:
+                self._stat_labels[key].setText("—")
+            self._health_label.setText("●  DATABASE CHECK FAILED")
+            self._health_label.setStyleSheet("font-size:11px;font-weight:900;letter-spacing:1px;color:#e35d6a;")
+            self._health_label.setToolTip(str(exc))
+
+    def _open_folder(self):
+        folder = self._music_folder()
+        if folder.exists() and folder.is_dir():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
+            return
+        QMessageBox.warning(self, "Music folder", f"De MP3-map bestaat niet:\n\n{folder}")
+
+    def _find_missing(self):
+        """Show a safe, read-only summary of broken MP3 paths."""
+        try:
+            connection = get_connection()
+            try:
+                rows = connection.execute(
+                    """
+                    SELECT DISTINCT m.path
+                    FROM track_mp3 x
+                    INNER JOIN mp3_files m ON m.id = x.mp3_id
+                    WHERE m.path IS NOT NULL AND TRIM(m.path) <> ''
+                    """
+                ).fetchall()
+            finally:
+                connection.close()
+
+            missing = [str(row[0]) for row in rows if not Path(str(row[0])).exists()]
+            if not missing:
+                QMessageBox.information(self, "Find Missing", "Er zijn geen ontbrekende MP3-paden gevonden.")
+                return
+
+            preview = "\n".join(missing[:25])
+            if len(missing) > 25:
+                preview += f"\n\n... en nog {len(missing) - 25}."
+            QMessageBox.warning(
+                self,
+                "Find Missing",
+                f"{len(missing):,} unieke MP3-paden bestaan niet meer.\n\n{preview}"
+            )
+        except sqlite3.Error as exc:
+            QMessageBox.critical(self, "Find Missing", f"Databasecontrole mislukt:\n\n{exc}")
