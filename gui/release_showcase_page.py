@@ -92,7 +92,7 @@ class ReleaseShowcasePage(QWidget):
                 border: 1px solid #ff4fa3;
                 border-radius: 16px;
             }
-            /* Active = green small play button, NOT a green pause box */
+            /* Active = green small button */
             QPushButton#cdTrackPlayButton[playing="true"] {
                 background: transparent;
                 color: #35a65b;
@@ -147,8 +147,8 @@ class ReleaseShowcasePage(QWidget):
             return
         active = bool(active)
         button.setProperty("playing", active)
-        # Keep the CD-style play triangle. Never turn it into a pause box.
-        button.setText("▶")
+        # Small CD-style button: ▶ when idle, ❚❚ when playing.
+        button.setText("❚❚" if active else "▶")
         style = button.style()
         style.unpolish(button)
         style.polish(button)
@@ -162,6 +162,22 @@ class ReleaseShowcasePage(QWidget):
                 button,
                 bool(normalised) and button_path == normalised,
             )
+
+    def _track_button_clicked(self, button, path):
+        """Toggle the selected track while keeping the small CD-style button in sync."""
+        button_path = self._normalise_mp3_path(path)
+        was_active = button.property("playing") is True
+
+        if was_active:
+            # MP3Player receives the same path and toggles the current track
+            # from playing to paused.
+            self.play_mp3.emit(path)
+            self._set_active_mp3_path("")
+            return
+
+        # Selecting another track immediately clears the previous green state.
+        self._set_active_mp3_path(button_path)
+        self.play_mp3.emit(path)
 
     def set_active_track(self, path):
         self._set_active_mp3_path(path)
@@ -205,7 +221,8 @@ class ReleaseShowcasePage(QWidget):
                 button_path == self._active_mp3_path,
             )
             play_button.clicked.connect(
-                lambda _checked=False, path=mp3_path: self.play_mp3.emit(path)
+                lambda _checked=False, button=play_button, path=mp3_path:
+                    self._track_button_clicked(button, path)
             )
             layout.addWidget(play_button)
         else:
