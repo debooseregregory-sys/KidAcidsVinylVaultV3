@@ -236,9 +236,22 @@ class MusicLibrarySettingsPanel(QWidget):
         """Open the existing full Discogs match reviewer and keep it alive."""
         try:
             try:
-                from review_discogs_matches import FullReviewWindow
+                import review_discogs_matches as reviewer_module
             except ModuleNotFoundError:
-                from gui.review_discogs_matches import FullReviewWindow
+                from gui import review_discogs_matches as reviewer_module
+
+            # The existing reviewer uses LOCAL_RESULTS in local_candidates(),
+            # but that constant is missing from the legacy standalone module.
+            # Supply the intended limit here without modifying the reviewer
+            # logic or touching the database.
+            if not hasattr(reviewer_module, "LOCAL_RESULTS"):
+                reviewer_module.LOCAL_RESULTS = getattr(
+                    reviewer_module,
+                    "MAX_CANDIDATES",
+                    12,
+                )
+
+            FullReviewWindow = reviewer_module.FullReviewWindow
 
             if self._review_window is not None:
                 try:
