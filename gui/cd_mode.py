@@ -9,9 +9,8 @@ from database.database import get_connection
 import gui.main_window as main_window_module
 from gui.cd_library_page import CDLibraryPage
 from gui.cd_showcase_page import CDShowcasePage
-from gui.livesets_library_page import LivesetsLibraryPage
-from gui.livesets_showcase_page import LivesetsShowcasePage
 from gui.livesets_edit_page import LivesetsEditPage
+from gui.livesets_showcase_page import LivesetsShowcasePage
 from gui.liveset_detail_page import LivesetDetailPage
 
 VINYL = "VINYL"
@@ -34,7 +33,7 @@ OriginalVinylVaultWindow = main_window_module.VinylVaultWindow
 
 
 class CDVinylVaultWindow(OriginalVinylVaultWindow):
-    """CD support plus a dedicated Livesets Library, Showcase and detail view."""
+    """CD pages plus an independent Livesets section."""
 
     def build_ui(self):
         super().build_ui()
@@ -63,9 +62,9 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
         self.cd_showcase_button.clicked.connect(self.show_cd_showcase)
 
         # ----------------------------------------------------
-        # LIVESETS: one sidebar section with Library and Showcase,
-        # exactly like the other media collections. The Showcase
-        # opens a separate Liveset detail/player page.
+        # LIVESETS: one sidebar section with SHOWCASE FIRST,
+        # followed by LIBRARY. Showcase opens a separate detail
+        # / player view, while Library remains the edit page.
         # ----------------------------------------------------
         self.livesets_library_page = LivesetsEditPage()
         self.livesets_showcase_page = LivesetsShowcasePage()
@@ -89,16 +88,18 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
         sidebar_layout.insertWidget(insert_after_cd + 1, livesets_label)
 
         label_index = sidebar_layout.indexOf(livesets_label)
-        self.livesets_library_button = self.create_nav_button("▣", "Library")
+
+        # Requested order: SHOWCASE first, LIBRARY second.
         self.livesets_showcase_button = self.create_nav_button("▶", "Showcase")
-        sidebar_layout.insertWidget(label_index + 1, self.livesets_library_button)
-        sidebar_layout.insertWidget(label_index + 2, self.livesets_showcase_button)
-        self.livesets_library_button.clicked.connect(self.show_livesets_library)
+        self.livesets_library_button = self.create_nav_button("▣", "Library")
+        sidebar_layout.insertWidget(label_index + 1, self.livesets_showcase_button)
+        sidebar_layout.insertWidget(label_index + 2, self.livesets_library_button)
         self.livesets_showcase_button.clicked.connect(self.show_livesets_showcase)
+        self.livesets_library_button.clicked.connect(self.show_livesets_library)
 
     def set_active_nav(self, button):
         super().set_active_nav(button)
-        for name in ("livesets_library_button", "livesets_showcase_button"):
+        for name in ("livesets_showcase_button", "livesets_library_button"):
             btn = getattr(self, name, None)
             if btn is not None:
                 btn.setProperty("active", button is btn)
