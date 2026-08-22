@@ -60,7 +60,7 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
         self.cd_showcase_button.clicked.connect(self.show_cd_showcase)
 
         # ----------------------------------------------------
-        # LIVESETS: three separate pages
+        # LIVESETS: three completely separate pages
         # ----------------------------------------------------
         self.livesets_library_page = LivesetsLibraryPage()
         self.livesets_showcase_page = LivesetsShowcasePage()
@@ -78,14 +78,24 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
         self.livesets_library_page.edit_requested.connect(self.show_livesets_edit)
 
         sidebar_layout = self.cd_library_button.parentWidget().layout()
-        # A dedicated navigation group: Livesets Library, Showcase and Edit.
-        self.livesets_button = self.create_nav_button("♫", "Livesets")
-        self.livesets_showcase_button = self.create_nav_button("▶", "Livesets Showcase")
-        self.livesets_edit_button = self.create_nav_button("✎", "Livesets Bewerken")
-        insert_at = sidebar_layout.indexOf(self.cd_library_button) + 1
-        sidebar_layout.insertWidget(insert_at, self.livesets_button)
-        sidebar_layout.insertWidget(insert_at + 1, self.livesets_showcase_button)
-        sidebar_layout.insertWidget(insert_at + 2, self.livesets_edit_button)
+
+        # Keep CD as its own section. Livesets starts AFTER the CD section,
+        # with its own visible section header and its own three destinations.
+        livesets_label = QLabel("LIVESETS")
+        livesets_label.setObjectName("collectionSectionLabel")
+        sidebar_layout.insertSpacing(sidebar_layout.indexOf(self.cd_library_button) + 1, 14)
+        sidebar_layout.insertWidget(sidebar_layout.indexOf(self.cd_library_button) + 2, livesets_label)
+
+        self.livesets_button = self.create_nav_button("♫", "Library")
+        self.livesets_showcase_button = self.create_nav_button("▶", "Showcase")
+        self.livesets_edit_button = self.create_nav_button("✎", "Bewerken")
+
+        # Recalculate indexes after inserting the section label.
+        label_index = sidebar_layout.indexOf(livesets_label)
+        sidebar_layout.insertWidget(label_index + 1, self.livesets_button)
+        sidebar_layout.insertWidget(label_index + 2, self.livesets_showcase_button)
+        sidebar_layout.insertWidget(label_index + 3, self.livesets_edit_button)
+
         self.livesets_button.clicked.connect(self.show_livesets)
         self.livesets_showcase_button.clicked.connect(self.show_livesets_showcase)
         self.livesets_edit_button.clicked.connect(self.show_livesets_edit)
