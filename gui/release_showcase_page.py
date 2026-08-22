@@ -74,30 +74,36 @@ class ReleaseShowcasePage(QWidget):
             QLabel#trackArtist { color:#7a7a86; font-size:12px; background:transparent; border:none; }
             QLabel#trackDuration { color:#6e6e7a; font-size:12px; background:transparent; border:none; }
 
+            /* EXACT CD Showcase play-button appearance */
             QPushButton#cdTrackPlayButton {
-                background:#6b1717;
-                color:#fff;
-                border:1px solid #8f2929;
-                border-radius:7px;
-                padding:4px;
-                font-size:15px;
-                font-weight:900;
-                min-width:32px;
-                min-height:32px;
+                background: transparent;
+                color: #ff4fa3;
+                border: 1px solid transparent;
+                border-radius: 16px;
+                padding: 0px;
+                font-size: 13px;
+                font-weight: 900;
+                min-width: 32px;
+                min-height: 32px;
             }
             QPushButton#cdTrackPlayButton:hover {
-                background:#842020;
-                border-color:#b43a3a;
+                background: #ff4fa3;
+                color: #0e0e12;
+                border: 1px solid #ff4fa3;
+                border-radius: 16px;
             }
+            /* Active = green small play button, NOT a green pause box */
             QPushButton#cdTrackPlayButton[playing="true"] {
-                background:#1f7a3d;
-                border-color:#35a65b;
-                color:#fff;
+                background: transparent;
+                color: #35a65b;
+                border: 1px solid transparent;
+                border-radius: 16px;
             }
             QPushButton#cdTrackPlayButton[playing="true"]:hover {
-                background:#29934a;
-                border-color:#4fc874;
-                color:#fff;
+                background: #35a65b;
+                color: #0e0e12;
+                border: 1px solid #35a65b;
+                border-radius: 16px;
             }
 
             QLabel#showcaseArtist { color:#ffcf72; font-size:18px; font-weight:800; }
@@ -141,7 +147,8 @@ class ReleaseShowcasePage(QWidget):
             return
         active = bool(active)
         button.setProperty("playing", active)
-        button.setText("❚❚" if active else "▶")
+        # Keep the CD-style play triangle. Never turn it into a pause box.
+        button.setText("▶")
         style = button.style()
         style.unpolish(button)
         style.polish(button)
@@ -174,7 +181,7 @@ class ReleaseShowcasePage(QWidget):
             self.clear_active_track()
 
     def _make_track_row(self, track, release_artist):
-        """Match the CD Showcase track row exactly: play | position | title/artist | duration."""
+        """CD-style row: play | position | title/artist | duration."""
         row = QFrame()
         row.setObjectName("trackRow")
 
@@ -184,7 +191,6 @@ class ReleaseShowcasePage(QWidget):
 
         mp3_path = str(track[5] or "").strip()
 
-        # Play / pause on the left, exactly like CD Showcase.
         if mp3_path:
             play_button = QPushButton("▶")
             play_button.setObjectName("cdTrackPlayButton")
@@ -207,13 +213,11 @@ class ReleaseShowcasePage(QWidget):
             spacer.setFixedWidth(32)
             layout.addWidget(spacer)
 
-        # Track number follows the play button, exactly like CD Showcase.
         position = QLabel(str(track[1] or ""))
         position.setObjectName("trackPosition")
         position.setFixedWidth(40)
         layout.addWidget(position)
 
-        # Flexible title / artist column.
         middle = QVBoxLayout()
         middle.setSpacing(1)
         middle.setContentsMargins(0, 0, 0, 0)
@@ -231,7 +235,6 @@ class ReleaseShowcasePage(QWidget):
 
         layout.addLayout(middle, 1)
 
-        # Duration is the final column, exactly like CD Showcase.
         duration = QLabel(self._format_duration(track[4]))
         duration.setObjectName("trackDuration")
         duration.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
