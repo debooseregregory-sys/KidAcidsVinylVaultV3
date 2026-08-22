@@ -201,10 +201,6 @@ class MusicLibrarySettingsPanel(QWidget):
     def _request_action(self, action):
         """Emit the action and provide a safe fallback for older main windows."""
         self.action_requested.emit(action)
-
-        # SettingsPage historically created this panel without a parent and
-        # therefore some older MainWindow versions did not connect the signal.
-        # Keep the panel functional on those versions too.
         window = QApplication.activeWindow()
         if window is None:
             return
@@ -214,10 +210,6 @@ class MusicLibrarySettingsPanel(QWidget):
             return
 
         if action == "scan":
-            # The existing scan scripts in this project are read-only matching
-            # diagnostics, not a safe GUI scanner. Do not run one silently from
-            # Settings. Open the MP3 Library where its existing library tools
-            # are available instead.
             if hasattr(window, "show_mp3_library"):
                 window.show_mp3_library()
             QMessageBox.information(
@@ -232,13 +224,12 @@ class MusicLibrarySettingsPanel(QWidget):
             self._open_match_reviewer(window)
 
     def _open_match_reviewer(self, window):
-        """Open the existing full Discogs review window inside the app workflow."""
+        """Open the existing full Discogs review window."""
         try:
             from review_discogs_matches import FullReviewWindow
 
             reviewer = FullReviewWindow()
             self._review_window = reviewer
-            reviewer.setAttribute(reviewer.WidgetAttribute.WA_DeleteOnClose, True)
             reviewer.show()
             reviewer.raise_()
             reviewer.activateWindow()
