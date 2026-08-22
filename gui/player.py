@@ -170,7 +170,24 @@ class MP3Player(QWidget):
             print("GEEN BESTAND:", file_path)
             return
 
-        self.current_path = str(file_path)
+        new_path = str(file_path)
+
+        # Same track already loaded: toggle pause / resume (Beatport behaviour)
+        if self.current_path and Path(self.current_path).resolve() == file_path:
+            delegate = self._resolve_delegate()
+            target = delegate if (delegate is not None and delegate is not self) else self
+            try:
+                state = target.player.playbackState()
+                if state == QMediaPlayer.PlaybackState.PlayingState:
+                    target.player.pause()
+                    return
+                if state == QMediaPlayer.PlaybackState.PausedState:
+                    target.player.play()
+                    return
+            except Exception:
+                pass
+
+        self.current_path = new_path
         self.track_label.setText(file_path.name)
 
         delegate = self._resolve_delegate()

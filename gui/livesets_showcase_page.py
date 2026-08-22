@@ -124,8 +124,9 @@ class LivesetsShowcasePage(QWidget):
             QLabel#liveArtist{color:#ffcf72;font-size:10px;font-weight:900;}
             QLabel#liveTitle{color:#fff;font-size:14px;font-weight:900;}
             QLabel#liveMeta{color:#858591;font-size:10px;}
-            QPushButton#cdTrackPlayButton{background:#6b1717;color:#fff;border:1px solid #8f2929;border-radius:7px;font-size:15px;font-weight:900;}
-            QPushButton#cdTrackPlayButton:hover{background:#842020;border-color:#b43a3a;}
+            QPushButton#cdTrackPlayButton{background:#2a1524;color:#ff4fa3;border:1px solid #5a2a48;border-radius:10px;font-size:15px;font-weight:900;}
+            QPushButton#cdTrackPlayButton:hover{background:#ff4fa3;color:#0e0e12;border-color:#ff4fa3;}
+            QPushButton#cdTrackPlayButton[playing="true"]{background:#3a1a30;color:#ff6bb5;border-color:#ff4fa3;}
         """)
 
     def reload(self):

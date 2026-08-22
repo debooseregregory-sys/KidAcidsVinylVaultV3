@@ -83,8 +83,9 @@ class LivesetDetailPage(QWidget):
             QLabel#detailMeta{color:#858591;font-size:13px;}
             QPushButton#detailBack{background:transparent;color:#aaaab4;border:0;padding:6px 2px;font-size:12px;font-weight:800;}
             QPushButton#detailBack:hover{color:#ffcf72;}
-            QPushButton#detailPlay{background:#6b1717;color:#fff;border:1px solid #8f2929;border-radius:8px;font-size:13px;font-weight:900;}
-            QPushButton#detailPlay:hover{background:#842020;border-color:#b43a3a;}
+            QPushButton#detailPlay{background:#2a1524;color:#ff4fa3;border:1px solid #5a2a48;border-radius:10px;font-size:13px;font-weight:900;}
+            QPushButton#detailPlay:hover{background:#ff4fa3;color:#0e0e12;border-color:#ff4fa3;}
+            QPushButton#detailPlay[playing="true"]{background:#3a1a30;color:#ff6bb5;border-color:#ff4fa3;}
         """)
 
     @staticmethod
