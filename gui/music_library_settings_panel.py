@@ -4,7 +4,6 @@
 # ============================================================
 
 from pathlib import Path
-import os
 import sqlite3
 
 from PySide6.QtCore import QSettings, QUrl, Signal
@@ -18,13 +17,15 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QVBoxLayout,
     QWidget,
+    QFileDialog,
+    QApplication,
 )
 
-from database.database import DB_PATH, get_connection
+from database.database import get_connection
 
 
 class MusicLibrarySettingsPanel(QWidget):
-    """Live Music Library controls without changing MP3 links automatically."""
+    """Live Music Library controls without silently changing MP3 links."""
 
     action_requested = Signal(str)
 
@@ -86,6 +87,7 @@ class MusicLibrarySettingsPanel(QWidget):
         title_label.setStyleSheet("font-size:21px;font-weight:900;color:#ffffff;")
         subtitle_label = QLabel(subtitle)
         subtitle_label.setStyleSheet("font-size:12px;color:#90909b;")
+        subtitle_label.setWordWrap(True)
         return title_label, subtitle_label
 
     def _build_ui(self):
@@ -132,15 +134,27 @@ class MusicLibrarySettingsPanel(QWidget):
         fl = QVBoxLayout(folders)
         fl.setContentsMargins(20, 20, 20, 20)
         fl.setSpacing(12)
-        ft, fs = self._section_title("Music folder", "The source location stored in MusicVault's local settings.")
+        ft, fs = self._section_title(
+            "Music folder",
+            "Choose the MP3 source used by MusicVault. The choice is stored locally and does not modify the database."
+        )
         fl.addWidget(ft)
         fl.addWidget(fs)
+
         path_row = QHBoxLayout()
         self._path_label = QLabel()
-        self._path_label.setStyleSheet("background:#111116;border-radius:10px;padding:12px;color:#d5d5dc;font-family:Consolas;font-size:12px;")
+        self._path_label.setStyleSheet(
+            "background:#111116;border-radius:10px;padding:12px;color:#d5d5dc;"
+            "font-family:Consolas;font-size:12px;"
+        )
         self._path_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self._path_label.setTextInteractionFlags(self._path_label.textInteractionFlags())
-        path_row.addWidget(self._path_label)
+        path_row.addWidget(self._path_label, 1)
+
+        choose_btn = QPushButton("Choose Folder")
+        choose_btn.clicked.connect(self._choose_folder)
+        path_row.addWidget(choose_btn)
+
         open_btn = QPushButton("Open Folder")
         open_btn.clicked.connect(self._open_folder)
         path_row.addWidget(open_btn)
@@ -151,22 +165,81 @@ class MusicLibrarySettingsPanel(QWidget):
         wl = QVBoxLayout(workflow)
         wl.setContentsMargins(20, 20, 20, 20)
         wl.setSpacing(12)
-        wt, ws = self._section_title("Library workflow", "Existing tools are exposed without silently modifying your collection.")
+        wt, ws = self._section_title(
+            "Library workflow",
+            "Jump directly to the existing MP3 tools. No automatic matching or deletion is performed from Settings."
+        )
         wl.addWidget(wt)
         wl.addWidget(ws)
+
         buttons = QHBoxLayout()
+
+        library_btn = QPushButton("Open MP3 Library")
+        library_btn.clicked.connect(lambda: self._request_action("library"))
+        buttons.addWidget(library_btn)
+
         scan_btn = QPushButton("Scan Library")
-        scan_btn.clicked.connect(lambda: self.action_requested.emit("scan"))
+        scan_btn.clicked.connect(lambda: self._request_action("scan"))
         buttons.addWidget(scan_btn)
+
         missing_btn = QPushButton("Find Missing")
         missing_btn.clicked.connect(self._find_missing)
         buttons.addWidget(missing_btn)
+
         matches_btn = QPushButton("Review Matches")
-        matches_btn.clicked.connect(lambda: self.action_requested.emit("matches"))
+        matches_btn.clicked.connect(lambda: self._request_action("matches"))
         buttons.addWidget(matches_btn)
+
+        refresh_btn = QPushButton("Refresh")
+        refresh_btn.clicked.connect(self.refresh)
+        buttons.addWidget(refresh_btn)
+
         wl.addLayout(buttons)
         root.addWidget(workflow)
         root.addStretch()
+
+    def _request_action(self, action):
+        """Emit the action and provide a safe fallback for older main windows."""
+        self.action_requested.emit(action)
+        window = QApplication.activeWindow()
+        if window is None:
+            return
+
+        if action == "library" and hasattr(window, "show_mp3_library"):
+            window.show_mp3_library()
+            return
+
+        if action == "scan":
+            if hasattr(window, "show_mp3_library"):
+                window.show_mp3_library()
+            QMessageBox.information(
+                self,
+                "Scan Library",
+                "De bestaande MP3 Library wordt geopend.\n\n"
+                "MusicVault voert vanuit Settings geen automatische database- of MP3-koppeling uit."
+            )
+            return
+
+        if action == "matches":
+            self._open_match_reviewer(window)
+
+    def _open_match_reviewer(self, window):
+        """Open the existing full Discogs review window."""
+        try:
+            from review_discogs_matches import FullReviewWindow
+
+            reviewer = FullReviewWindow()
+            self._review_window = reviewer
+            reviewer.show()
+            reviewer.raise_()
+            reviewer.activateWindow()
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "Review Matches",
+                "De bestaande Match Reviewer kon niet worden geopend.\n\n"
+                f"{exc}"
+            )
 
     def refresh(self):
         """Refresh path and database statistics without changing any records."""
@@ -212,6 +285,24 @@ class MusicLibrarySettingsPanel(QWidget):
             self._health_label.setText("●  DATABASE CHECK FAILED")
             self._health_label.setStyleSheet("font-size:11px;font-weight:900;letter-spacing:1px;color:#e35d6a;")
             self._health_label.setToolTip(str(exc))
+
+    def _choose_folder(self):
+        current = self._music_folder()
+        selected = QFileDialog.getExistingDirectory(
+            self,
+            "Choose Music Folder",
+            str(current) if current.exists() else str(Path.home()),
+        )
+        if not selected:
+            return
+
+        self._settings.setValue("music_folder", selected)
+        self.refresh()
+        QMessageBox.information(
+            self,
+            "Music Folder",
+            f"Music folder opgeslagen:\n\n{selected}\n\nDe database en bestaande MP3-koppelingen zijn niet gewijzigd."
+        )
 
     def _open_folder(self):
         folder = self._music_folder()
