@@ -39,7 +39,7 @@ class CDLibraryPage(QWidget):
         root.setContentsMargins(25, 25, 25, 25)
         root.setSpacing(12)
 
-        title = QLabel("VINYLVAULT CD LIBRARY")
+        title = QLabel("MUSICVAULT CD LIBRARY")
         title.setStyleSheet("QLabel { color:#fff; font-size:28px; font-weight:bold; }")
         root.addWidget(title)
 

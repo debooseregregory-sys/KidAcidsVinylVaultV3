@@ -249,7 +249,7 @@ class ReleaseLibraryPage(QWidget):
         # ====================================================
 
         title = QLabel(
-            "VINYLVAULT RELEASE LIBRARY"
+            "MUSICVAULT RELEASE LIBRARY"
         )
 
         title.setStyleSheet(

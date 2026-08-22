@@ -1,5 +1,5 @@
 # ============================================================
-# KID ACID'S VINYLVAULT V3
+# KID ACID'S MUSICVAULT V3
 # MAIN WINDOW
 #
 # PROFESSIONAL DESKTOP INTERFACE
@@ -200,7 +200,7 @@ class VinylVaultWindow(QMainWindow):
         super().__init__()
 
         self.setWindowTitle(
-            "Kid Acid's VinylVault V3"
+            "Kid Acid's MusicVault"
         )
 
         self.setMinimumSize(
@@ -313,7 +313,7 @@ class VinylVaultWindow(QMainWindow):
         )
 
         brand_title = QLabel(
-            "VINYLVAULT"
+            "MUSICVAULT"
         )
 
         brand_title.setObjectName(
@@ -325,7 +325,7 @@ class VinylVaultWindow(QMainWindow):
         )
 
         brand_version = QLabel(
-            "V3  •  DESKTOP COLLECTION"
+            "V3  •  MUSIC COLLECTION"
         )
 
         brand_version.setObjectName(
@@ -427,7 +427,7 @@ class VinylVaultWindow(QMainWindow):
         # ====================================================
 
         footer = QLabel(
-            "VINYL ONLY  •  KID ACID"
+            "MUSIC COLLECTION  •  KID ACID"
         )
 
         footer.setObjectName(
@@ -511,7 +511,7 @@ class VinylVaultWindow(QMainWindow):
         top_layout.addStretch()
 
         collection_label = QLabel(
-            "VINYL COLLECTION"
+            "MUSIC COLLECTION"
         )
 
         collection_label.setObjectName(
@@ -1033,7 +1033,7 @@ class VinylVaultWindow(QMainWindow):
         )
 
         status_text = QLabel(
-            "VinylVault database actief"
+            "MusicVault database actief"
         )
 
         status_text.setObjectName(
@@ -1337,7 +1337,7 @@ class VinylVaultWindow(QMainWindow):
     ):
 
         print(
-            "VinylVault: database gewijzigd."
+            "MusicVault: database gewijzigd."
         )
 
         self.library_page.load_releases()
@@ -1739,11 +1739,11 @@ def main():
     )
 
     app.setApplicationName(
-        "Kid Acid's VinylVault V3"
+        "Kid Acid's MusicVault"
     )
 
     app.setApplicationDisplayName(
-        "Kid Acid's VinylVault V3"
+        "Kid Acid's MusicVault"
     )
 
     app.setStyle(

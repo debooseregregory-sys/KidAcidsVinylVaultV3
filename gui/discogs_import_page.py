@@ -238,7 +238,7 @@ class DiscogsImportPage(QWidget):
 
         description = QLabel(
             "Zoek rechtstreeks in Discogs en importeer "
-            "een volledige release naar VinylVault."
+            "een volledige release naar MusicVault."
         )
 
         description.setWordWrap(
@@ -763,7 +763,7 @@ class DiscogsImportPage(QWidget):
             "Release importeren",
             (
                 f"Discogs Release {release_id} importeren?\n\n"
-                "De release en tracks worden aan VinylVault "
+                "De release en tracks worden aan MusicVault "
                 "toegevoegd.\n\n"
                 "Bestaande gegevens worden niet dubbel toegevoegd."
             ),
@@ -860,7 +860,7 @@ class DiscogsImportPage(QWidget):
             "Import klaar",
             (
                 "De Discogs release is succesvol "
-                "aan VinylVault toegevoegd."
+                "aan MusicVault toegevoegd."
             )
         )
 
