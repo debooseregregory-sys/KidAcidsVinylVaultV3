@@ -16,16 +16,10 @@ CD = "CD"
 def ensure_media_type_column():
     conn = get_connection()
     try:
-        columns = {
-            row["name"]
-            for row in conn.execute("PRAGMA table_info(releases)").fetchall()
-        }
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(releases").fetchall()}
         if "media_type" not in columns:
             conn.execute("ALTER TABLE releases ADD COLUMN media_type TEXT DEFAULT 'VINYL'")
-        conn.execute(
-            "UPDATE releases SET media_type='VINYL' "
-            "WHERE media_type IS NULL OR TRIM(media_type)=''"
-        )
+        conn.execute("UPDATE releases SET media_type='VINYL' WHERE media_type IS NULL OR TRIM(media_type)=''")
         conn.commit()
     finally:
         conn.close()
@@ -35,11 +29,10 @@ OriginalVinylVaultWindow = main_window_module.VinylVaultWindow
 
 
 class CDVinylVaultWindow(OriginalVinylVaultWindow):
-    """Existing VinylVault window extended with CD pages and Livesets."""
+    """Existing VinylVault window extended with CD pages and a standalone Livesets showcase."""
 
     def build_ui(self):
         super().build_ui()
-
         self.current_media_type = VINYL
         self.current_cd_id = None
 
@@ -49,48 +42,43 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
 
         self.cd_showcase_page = CDShowcasePage()
         self.pages.addWidget(self.cd_showcase_page)
-
         self.cd_library_page.cd_selected.connect(self._open_cd_showcase)
         self.cd_showcase_page.back_requested.connect(self.show_cd_showcase)
         self.cd_showcase_page.release_selected.connect(self._open_cd_detail)
         self.cd_showcase_page.play_mp3.connect(self.player_bar_play)
 
-        # Keep the CD Showcase play buttons synchronized with the real
-        # central MP3 player: dark red when idle/paused/stopped, green
-        # only for the track that is actually playing.
         self.mp3_player.play_started.connect(self.cd_showcase_page.set_active_track)
         self.mp3_player.stopped.connect(self.cd_showcase_page.clear_active_track)
-        self.mp3_player.player.playbackStateChanged.connect(
-            self.cd_showcase_page.set_playback_state
-        )
+        self.mp3_player.player.playbackStateChanged.connect(self.cd_showcase_page.set_playback_state)
 
         self.cd_library_button.setEnabled(True)
         self.cd_library_button.setToolTip("CD Library")
         self.cd_library_button.clicked.connect(self.show_cd_library)
-
         self.cd_showcase_button.setEnabled(True)
         self.cd_showcase_button.setToolTip("CD Showcase")
         self.cd_showcase_button.clicked.connect(self.show_cd_showcase)
 
         # ----------------------------------------------------
-        # LIVESETS
+        # LIVESETS - independent page and independent top-level navigation
         # ----------------------------------------------------
         self.livesets_page = LivesetsPage()
         self.pages.addWidget(self.livesets_page)
         self.livesets_page.play_mp3.connect(self.player_bar_play)
         self.mp3_player.play_started.connect(self.livesets_page.set_active_track)
         self.mp3_player.stopped.connect(self.livesets_page.clear_active_track)
-        self.mp3_player.player.playbackStateChanged.connect(
-            self.livesets_page.set_playback_state
-        )
+        self.mp3_player.player.playbackStateChanged.connect(self.livesets_page.set_playback_state)
 
-        # The base window owns the sidebar layout locally, so insert the
-        # Livesets button next to the collection navigation without touching
-        # the large main_window.py file.
         sidebar_layout = self.cd_library_button.parentWidget().layout()
         self.livesets_button = self.create_nav_button("♫", "Livesets")
-        self.livesets_button.setToolTip("Livesets")
-        insert_at = sidebar_layout.indexOf(self.cd_library_button) + 1
+        self.livesets_button.setToolTip("Livesets Showcase")
+
+        # Livesets is deliberately inserted as its own navigation item near
+        # the main showcases, not as a child/extension of CD Library.
+        showcase_button = getattr(self, "vinyl_showcase_button", None)
+        if showcase_button is not None:
+            insert_at = sidebar_layout.indexOf(showcase_button) + 1
+        else:
+            insert_at = sidebar_layout.indexOf(self.cd_library_button) + 1
         sidebar_layout.insertWidget(insert_at, self.livesets_button)
         self.livesets_button.clicked.connect(self.show_livesets)
 
@@ -104,7 +92,7 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
     def show_livesets(self):
         self.current_media_type = VINYL
         self.pages.setCurrentWidget(self.livesets_page)
-        self.page_title.setText("Livesets")
+        self.page_title.setText("Livesets Showcase")
         self.set_active_nav(self.livesets_button)
 
     def show_board(self):
