@@ -16,7 +16,7 @@ CD = "CD"
 def ensure_media_type_column():
     conn = get_connection()
     try:
-        columns = {row["name"] for row in conn.execute("PRAGMA table_info(releases").fetchall()}
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(releases)").fetchall()}
         if "media_type" not in columns:
             conn.execute("ALTER TABLE releases ADD COLUMN media_type TEXT DEFAULT 'VINYL'")
         conn.execute("UPDATE releases SET media_type='VINYL' WHERE media_type IS NULL OR TRIM(media_type)=''")
@@ -72,8 +72,7 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
         self.livesets_button = self.create_nav_button("♫", "Livesets")
         self.livesets_button.setToolTip("Livesets Showcase")
 
-        # Livesets is deliberately inserted as its own navigation item near
-        # the main showcases, not as a child/extension of CD Library.
+        # Livesets is a separate top-level showcase, not part of CD Library.
         showcase_button = getattr(self, "vinyl_showcase_button", None)
         if showcase_button is not None:
             insert_at = sidebar_layout.indexOf(showcase_button) + 1
