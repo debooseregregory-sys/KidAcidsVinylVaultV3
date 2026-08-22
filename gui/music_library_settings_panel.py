@@ -18,7 +18,6 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
     QFileDialog,
-    QApplication,
 )
 
 from database.database import get_connection
@@ -35,6 +34,7 @@ class MusicLibrarySettingsPanel(QWidget):
         self._stat_labels = {}
         self._path_label = None
         self._health_label = None
+        self._review_window = None
         self._build_ui()
         self.refresh()
 
@@ -198,25 +198,34 @@ class MusicLibrarySettingsPanel(QWidget):
         root.addWidget(workflow)
         root.addStretch()
 
-    def _request_action(self, action):
-        """Emit the action and provide a safe fallback for older main windows."""
-        self.action_requested.emit(action)
-        window = QApplication.activeWindow()
-        if window is None:
-            return
+    def _main_window(self):
+        """Return the real application window instead of relying on activeWindow()."""
+        window = self.window()
+        if window is not None and hasattr(window, "pages"):
+            return window
+        return None
 
-        if action == "library" and hasattr(window, "show_mp3_library"):
-            window.show_mp3_library()
+    def _request_action(self, action):
+        """Route Settings actions to the existing MusicVault window."""
+        self.action_requested.emit(action)
+        window = self._main_window()
+
+        if action == "library":
+            if window is not None and hasattr(window, "show_mp3_library"):
+                window.show_mp3_library()
             return
 
         if action == "scan":
-            if hasattr(window, "show_mp3_library"):
+            if window is not None and hasattr(window, "show_mp3_library"):
                 window.show_mp3_library()
+                page = getattr(window, "mp3_library_page", None)
+                if page is not None and hasattr(page, "load_data"):
+                    page.load_data()
             QMessageBox.information(
                 self,
                 "Scan Library",
-                "De bestaande MP3 Library wordt geopend.\n\n"
-                "MusicVault voert vanuit Settings geen automatische database- of MP3-koppeling uit."
+                "De MP3 Library is geopend en de actuele databasegegevens zijn opnieuw geladen.\n\n"
+                "Deze actie wijzigt geen MP3-koppelingen en verwijdert geen bestanden."
             )
             return
 
@@ -224,12 +233,25 @@ class MusicLibrarySettingsPanel(QWidget):
             self._open_match_reviewer(window)
 
     def _open_match_reviewer(self, window):
-        """Open the existing full Discogs review window."""
+        """Open the existing full Discogs match reviewer and keep it alive."""
         try:
-            from review_discogs_matches import FullReviewWindow
+            try:
+                from review_discogs_matches import FullReviewWindow
+            except ModuleNotFoundError:
+                from gui.review_discogs_matches import FullReviewWindow
+
+            if self._review_window is not None:
+                try:
+                    self._review_window.raise_()
+                    self._review_window.activateWindow()
+                    return
+                except RuntimeError:
+                    self._review_window = None
 
             reviewer = FullReviewWindow()
             self._review_window = reviewer
+            reviewer.setAttribute(reviewer.WidgetAttribute.WA_DeleteOnClose, True)
+            reviewer.destroyed.connect(lambda: setattr(self, "_review_window", None))
             reviewer.show()
             reviewer.raise_()
             reviewer.activateWindow()
@@ -238,7 +260,7 @@ class MusicLibrarySettingsPanel(QWidget):
                 self,
                 "Review Matches",
                 "De bestaande Match Reviewer kon niet worden geopend.\n\n"
-                f"{exc}"
+                f"{type(exc).__name__}: {exc}"
             )
 
     def refresh(self):
