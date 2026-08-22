@@ -32,6 +32,7 @@ from gui.mp3_library_page import MP3LibraryPage
 from gui.mp3_showcase_page import MP3ShowcasePage
 from gui.player_bar import PlayerBar
 from gui.mp3_showcase_playback_bridge import install_mp3_showcase_playback_bridge
+from gui.settings_page import SettingsPage
 
 
 # ============================================================
@@ -417,9 +418,8 @@ class VinylVaultWindow(QMainWindow):
         self.discogs_button.clicked.connect(self.show_discogs)
         sidebar_layout.addWidget(self.discogs_button)
 
-        self.settings_button = self.create_nav_button("⚙", "Instellingen")
-        self.settings_button.setEnabled(False)
-        self.settings_button.setToolTip("Instellingen worden later toegevoegd.")
+        self.settings_button = self.create_nav_button("⚙", "Settings")
+        self.settings_button.clicked.connect(self.show_settings)
         sidebar_layout.addWidget(self.settings_button)
 
         # ====================================================
@@ -686,6 +686,16 @@ class VinylVaultWindow(QMainWindow):
         self.pages.addWidget(
             self.cd_library_page
         )
+
+        # ====================================================
+        # SETTINGS
+        # ====================================================
+
+        self.settings_page = SettingsPage()
+        self.pages.addWidget(
+            self.settings_page
+        )
+
         install_mp3_showcase_playback_bridge()
 
         self.mp3_showcase_page.play_mp3.connect(
@@ -749,6 +759,15 @@ class VinylVaultWindow(QMainWindow):
         self.pages.setCurrentWidget(
             self.home_page
         )
+
+    # ========================================================
+    # SETTINGS
+    # ========================================================
+
+    def show_settings(self):
+        self.pages.setCurrentWidget(self.settings_page)
+        self.page_title.setText("Settings")
+        self.set_active_nav(self.settings_button)
 
     # ========================================================
     # CD LIBRARY
@@ -1079,6 +1098,7 @@ class VinylVaultWindow(QMainWindow):
             self.home_button,            self.library_button,
             self.vinyl_showcase_button,
             self.discogs_button,
+            self.settings_button,
         ]
 
         for item in buttons:
