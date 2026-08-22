@@ -6,7 +6,19 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QFileDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -16,6 +28,7 @@ COVERS_DIR = DATA_DIR / "liveset_covers"
 
 class LivesetsEditPage(QWidget):
     """Dedicated Livesets Library/Edit page, separate from the Showcase."""
+
     changed = Signal()
 
     def __init__(self, parent=None):
@@ -29,9 +42,11 @@ class LivesetsEditPage(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(28, 22, 28, 18)
         root.setSpacing(10)
+
         title = QLabel("LIVESETS")
         title.setObjectName("pageTitle")
         root.addWidget(title)
+
         line = QFrame()
         line.setObjectName("pageLine")
         line.setFixedHeight(2)
@@ -41,6 +56,7 @@ class LivesetsEditPage(QWidget):
 
         body = QHBoxLayout()
         body.setSpacing(14)
+
         self.list = QListWidget()
         self.list.setFixedWidth(300)
         self.list.currentRowChanged.connect(self.select)
@@ -51,8 +67,16 @@ class LivesetsEditPage(QWidget):
         form = QVBoxLayout(panel)
         form.setContentsMargins(18, 18, 18, 18)
         form.setSpacing(8)
+
         self.fields = {}
-        for key, label in [("title", "Titel"), ("artist", "Artiest / DJ"), ("date", "Datum"), ("location", "Locatie"), ("duration", "Duur / tracks"), ("audio", "Audio bestand")]:
+        for key, label in [
+            ("title", "Titel"),
+            ("artist", "Artiest / DJ"),
+            ("date", "Datum"),
+            ("location", "Locatie"),
+            ("duration", "Duur / tracks"),
+            ("audio", "Audio bestand"),
+        ]:
             lab = QLabel(label.upper())
             lab.setObjectName("fieldLabel")
             form.addWidget(lab)
@@ -66,6 +90,7 @@ class LivesetsEditPage(QWidget):
         self.cover.setFixedSize(300, 169)
         self.cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cover_row.addWidget(self.cover)
+
         upload = QPushButton("VERVANG FOTO")
         upload.clicked.connect(self.choose_cover)
         cover_row.addWidget(upload, 0, Qt.AlignmentFlag.AlignCenter)
@@ -76,6 +101,7 @@ class LivesetsEditPage(QWidget):
         new_btn = QPushButton("＋ NIEUWE LIVESET")
         new_btn.clicked.connect(self.new_item)
         delete = QPushButton("VERWIJDER")
+        delete.setObjectName("deleteButton")
         delete.clicked.connect(self.delete_current)
         save = QPushButton("OPSLAAN")
         save.setObjectName("saveButton")
@@ -85,6 +111,7 @@ class LivesetsEditPage(QWidget):
         actions.addWidget(delete)
         actions.addWidget(save)
         form.addLayout(actions)
+
         body.addWidget(panel, 1)
         root.addLayout(body, 1)
 
@@ -102,13 +129,18 @@ class LivesetsEditPage(QWidget):
             QPushButton{background:#18181f;color:#ddd;border:1px solid #30303a;border-radius:7px;padding:9px 13px;font-size:11px;font-weight:900;}
             QPushButton:hover{border-color:#ffcf72;color:#fff;}
             QPushButton#saveButton{background:#6b1717;color:#fff;border-color:#8f2929;}
+            QPushButton#deleteButton{background:#35161b;color:#ffb5bd;border-color:#6d2731;}
+            QPushButton#deleteButton:hover{background:#4a1b22;border-color:#a43b49;color:#fff;}
         """)
 
     def reload(self):
         try:
             self.items = json.loads(LIVESETS_FILE.read_text(encoding="utf-8")) if LIVESETS_FILE.exists() else []
+            if not isinstance(self.items, list):
+                self.items = []
         except (OSError, json.JSONDecodeError):
             self.items = []
+
         self.list.blockSignals(True)
         self.list.clear()
         for item in self.items:
@@ -116,8 +148,10 @@ class LivesetsEditPage(QWidget):
             artist = str(item.get("artist") or "")
             self.list.addItem(QListWidgetItem(f"{title}\n{artist}" if artist else title))
         self.list.blockSignals(False)
+
         if self.items:
-            self.list.setCurrentRow(min(max(self.current_index, 0), len(self.items) - 1))
+            self.current_index = min(max(self.current_index, 0), len(self.items) - 1)
+            self.list.setCurrentRow(self.current_index)
         else:
             self.current_index = -1
             self._clear_form()
@@ -132,22 +166,53 @@ class LivesetsEditPage(QWidget):
         self._show_cover(str(data.get("cover") or ""))
 
     def new_item(self):
-        self.items.append({"title":"", "artist":"", "date":"", "location":"", "duration":"", "audio":"", "cover":""})
+        self.items.append({
+            "title": "",
+            "artist": "",
+            "date": "",
+            "location": "",
+            "duration": "",
+            "audio": "",
+            "cover": "",
+        })
         self.current_index = len(self.items) - 1
         self._write()
 
     def choose_cover(self):
         if self.current_index < 0:
             self.new_item()
-        path, _ = QFileDialog.getOpenFileName(self, "Kies cover", "", "Afbeeldingen (*.jpg *.jpeg *.png *.webp *.bmp)")
+
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Kies cover",
+            "",
+            "Afbeeldingen (*.jpg *.jpeg *.png *.webp *.bmp)",
+        )
         if not path:
             return
+
         COVERS_DIR.mkdir(parents=True, exist_ok=True)
         src = Path(path)
-        dest = COVERS_DIR / f"liveset_{abs(hash(src.name + str(src.stat().st_mtime_ns)))}{src.suffix.lower()}"
-        shutil.copy2(src, dest)
+        try:
+            stamp = src.stat().st_mtime_ns
+        except OSError:
+            stamp = 0
+        dest = COVERS_DIR / f"liveset_{abs(hash(src.name + str(stamp)))}{src.suffix.lower()}"
+
+        try:
+            shutil.copy2(src, dest)
+        except OSError as exc:
+            QMessageBox.critical(self, "Cover kopiëren mislukt", f"De cover kon niet worden gekopieerd.\n\n{exc}")
+            return
+
+        old_cover = str(self.items[self.current_index].get("cover") or "").strip()
         self.items[self.current_index]["cover"] = str(dest)
         self._show_cover(str(dest))
+
+        if old_cover and Path(old_cover) != dest:
+            self._delete_cover_file(old_cover)
+
+        self._write()
 
     def _show_cover(self, path):
         pix = QPixmap(path) if path and Path(path).exists() else QPixmap()
@@ -155,8 +220,13 @@ class LivesetsEditPage(QWidget):
             self.cover.setPixmap(QPixmap())
             self.cover.setText("GEEN COVER")
             return
+
         size = self.cover.size()
-        scaled = pix.scaled(size, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+        scaled = pix.scaled(
+            size,
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.TransformationMode.SmoothTransformation,
+        )
         x = max(0, (scaled.width() - size.width()) // 2)
         y = max(0, (scaled.height() - size.height()) // 2)
         self.cover.setText("")
@@ -165,16 +235,56 @@ class LivesetsEditPage(QWidget):
     def save(self):
         if self.current_index < 0:
             return
+
         cover = self.items[self.current_index].get("cover", "")
-        self.items[self.current_index] = {key: edit.text().strip() for key, edit in self.fields.items()}
+        self.items[self.current_index] = {
+            key: edit.text().strip() for key, edit in self.fields.items()
+        }
         self.items[self.current_index]["cover"] = cover
         self._write()
 
-    def delete_current(self):
-        if self.current_index < 0:
+    @staticmethod
+    def _delete_cover_file(path):
+        """Delete only a liveset cover file; never touch the liveset audio file."""
+        if not path:
             return
+        try:
+            cover_path = Path(path)
+            if not cover_path.exists() or not cover_path.is_file():
+                return
+            if cover_path.parent.resolve() != COVERS_DIR.resolve():
+                return
+            cover_path.unlink()
+        except OSError:
+            pass
+
+    def delete_current(self):
+        if self.current_index < 0 or self.current_index >= len(self.items):
+            return
+
+        item = self.items[self.current_index]
+        title = str(item.get("title") or "(geen titel)")
+        artist = str(item.get("artist") or "")
+        description = f"Weet je zeker dat je deze liveset wilt verwijderen?\n\n{title}"
+        if artist:
+            description += f"\n{artist}"
+        description += "\n\nDe liveset en de bijbehorende cover worden verwijderd. Het MP3/audio-bestand blijft behouden."
+
+        answer = QMessageBox.question(
+            self,
+            "Liveset verwijderen",
+            description,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        cover_path = str(item.get("cover") or "").strip()
         self.items.pop(self.current_index)
         self.current_index = min(self.current_index, len(self.items) - 1)
+
+        self._delete_cover_file(cover_path)
         self._write()
 
     def _clear_form(self):
@@ -185,6 +295,9 @@ class LivesetsEditPage(QWidget):
 
     def _write(self):
         DATA_DIR.mkdir(parents=True, exist_ok=True)
-        LIVESETS_FILE.write_text(json.dumps(self.items, ensure_ascii=False, indent=2), encoding="utf-8")
+        LIVESETS_FILE.write_text(
+            json.dumps(self.items, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
         self.changed.emit()
         self.reload()
