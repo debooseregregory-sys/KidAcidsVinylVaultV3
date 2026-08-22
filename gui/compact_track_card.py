@@ -5,7 +5,6 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QLabel, QPushBut
 
 from database.database import set_preferred_mp3
 from gui.mp3_search_dialog import MP3SearchDialog
-from gui.release_detail_page import TrackEditDialog
 
 
 class CompactTrackCard(QFrame):
@@ -28,19 +27,23 @@ class CompactTrackCard(QFrame):
     def _duration(value):
         if value in (None, ""):
             return ""
+        text = str(value).strip()
+        if ":" in text:
+            return text
         try:
-            seconds = int(value)
+            seconds = int(float(value))
             return f"{seconds // 60}:{seconds % 60:02d}"
         except (TypeError, ValueError):
-            return str(value)
+            return text
 
     def _preferred_mp3(self):
-        if not self.mp3s:
-            return None
-        for mp3 in self.mp3s:
-            if mp3.get("is_preferred"):
+        for mp3 in self.mp3s or []:
+            if mp3.get("is_preferred") and mp3.get("path"):
                 return mp3
-        return self.mp3s[0]
+        for mp3 in self.mp3s or []:
+            if mp3.get("path"):
+                return mp3
+        return None
 
     def _set_playing(self, active):
         self._active = bool(active)
@@ -54,6 +57,7 @@ class CompactTrackCard(QFrame):
 
     def _build(self):
         self.setObjectName("trackRow")
+        self.setFixedHeight(54)
         self.setStyleSheet("""
             QFrame#trackRow {
                 background:#101014;
@@ -89,16 +93,16 @@ class CompactTrackCard(QFrame):
         layout.addWidget(position)
 
         middle = QVBoxLayout()
-        middle.setSpacing(2)
+        middle.setSpacing(1)
 
         title = QLabel(str(self.track.get("title") or "(geen titel)"))
         title.setObjectName("trackTitle")
-        title.setWordWrap(True)
+        title.setWordWrap(False)
         middle.addWidget(title)
 
         artist = QLabel(str(self.track.get("artist") or ""))
         artist.setObjectName("trackArtist")
-        artist.setWordWrap(True)
+        artist.setWordWrap(False)
         if artist.text():
             middle.addWidget(artist)
 
@@ -111,23 +115,21 @@ class CompactTrackCard(QFrame):
         layout.addWidget(duration)
 
         mp3 = self._preferred_mp3()
-        if mp3 and mp3.get("path"):
+        if mp3:
             path = str(mp3["path"]).strip()
             button = QPushButton("▶")
             button.setObjectName("cdTrackPlayButton")
             button.setProperty("playing", False)
             button.setFixedSize(38, 32)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
-            button.setToolTip(f"Speel MP3: {Path(path).name}")
+            button.setToolTip("Speel track")
             button.clicked.connect(lambda _=False, p=path: self._play(p))
             self._play_button = button
             layout.addWidget(button)
         else:
-            no_mp3 = QLabel("GEEN MP3")
-            no_mp3.setObjectName("trackArtist")
-            no_mp3.setFixedWidth(62)
-            no_mp3.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            layout.addWidget(no_mp3)
+            spacer = QLabel("")
+            spacer.setFixedWidth(38)
+            layout.addWidget(spacer)
 
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._context_menu)
@@ -149,7 +151,7 @@ class CompactTrackCard(QFrame):
 
         preferred = {}
         unlink = {}
-        for mp3 in self.mp3s:
+        for mp3 in self.mp3s or []:
             link_id = mp3.get("link_id")
             if link_id is None:
                 continue
@@ -170,6 +172,7 @@ class CompactTrackCard(QFrame):
             self.unlink_mp3_requested.emit(unlink[chosen])
 
     def edit_track(self):
+        from gui.release_detail_page import TrackEditDialog
         dialog = TrackEditDialog(self.track, self)
         if dialog.exec() != dialog.DialogCode.Accepted:
             return
