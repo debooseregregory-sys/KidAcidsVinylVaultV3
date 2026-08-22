@@ -21,13 +21,7 @@ from database.database import get_connection
 
 
 class ReleaseShowcasePage(QWidget):
-    """Vinyl release showcase.
-
-    The track list deliberately mirrors the CD Showcase track structure:
-    position | title + artist | duration | compact play button.
-    MP3 metadata is kept only as the playback source and is never rendered
-    as a separate panel or long track bar.
-    """
+    """Vinyl release showcase using the same compact track structure as CD."""
 
     back_requested = Signal()
     edit_requested = Signal(int)
@@ -74,9 +68,7 @@ class ReleaseShowcasePage(QWidget):
                 border-radius:7px; padding:8px 14px; font-size:12px; font-weight:800; }
             QPushButton:hover { background:#24242c; border-color:#555563; }
 
-            /* Track rows intentionally match CD Showcase exactly. */
             QFrame#trackRow { background:#101014; border:1px solid #292933; border-radius:7px; }
-            QFrame#trackRow:hover { background:#14141a; border-color:#3d3d49; }
             QLabel#trackPosition { color:#ffcf72; font-size:12px; font-weight:900; }
             QLabel#trackTitle { color:#fff; font-size:14px; font-weight:800; }
             QLabel#trackArtist { color:#8f8f9a; font-size:12px; }
@@ -144,7 +136,8 @@ class ReleaseShowcasePage(QWidget):
         if button is None:
             return
         button.setProperty("playing", bool(active))
-        button.setText("❚❚" if active else "▶")
+        # Keep the same compact play symbol as CD Showcase in both states.
+        button.setText("▶")
         style = button.style()
         style.unpolish(button)
         style.polish(button)
@@ -177,10 +170,9 @@ class ReleaseShowcasePage(QWidget):
             self.clear_active_track()
 
     def _make_track_row(self, track, release_artist):
-        """Create the compact Vinyl row using the CD Showcase geometry."""
+        """Exact compact CD-style structure: position | title/artist | duration | play."""
         row = QFrame()
         row.setObjectName("trackRow")
-
         layout = QHBoxLayout(row)
         layout.setContentsMargins(10, 7, 10, 7)
         layout.setSpacing(12)
@@ -192,7 +184,6 @@ class ReleaseShowcasePage(QWidget):
 
         middle = QVBoxLayout()
         middle.setSpacing(2)
-
         title = QLabel(str(track[3] or "(geen titel)"))
         title.setObjectName("trackTitle")
         title.setWordWrap(True)
@@ -204,7 +195,6 @@ class ReleaseShowcasePage(QWidget):
             artist_label.setObjectName("trackArtist")
             artist_label.setWordWrap(True)
             middle.addWidget(artist_label)
-
         layout.addLayout(middle, 1)
 
         duration = QLabel(self._format_duration(track[4]))
@@ -218,11 +208,11 @@ class ReleaseShowcasePage(QWidget):
             play_button = QPushButton("▶")
             play_button.setObjectName("cdTrackPlayButton")
             play_button.setProperty("playing", False)
-            play_button.setProperty("mp3_path", mp3_path)
             play_button.setToolTip(f"Speel MP3: {Path(mp3_path).name}")
             play_button.setFixedSize(38, 32)
             play_button.setCursor(Qt.CursorShape.PointingHandCursor)
-            play_button.setEnabled(Path(mp3_path).exists())
+            # CD Showcase does not turn the compact control into a disabled
+            # grey control merely because a stored path is currently missing.
             button_path = self._normalise_mp3_path(mp3_path)
             self._track_buttons[button_path] = play_button
             self._set_play_button_active(
