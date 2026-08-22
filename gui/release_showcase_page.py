@@ -68,9 +68,15 @@ class ReleaseShowcasePage(QWidget):
             }
             QPushButton:hover { background: #24242c; border-color: #555563; }
             QPushButton#showcasePlay {
-                background: #241422; color: #ff67ad; border-color: #4b263c;
+                background: #6b1717; color: #fff; border-color: #8f2929;
+                border-radius: 7px; min-width: 82px; min-height: 34px;
+                font-size: 12px; font-weight: 900;
             }
-            QPushButton#showcasePlay:hover { background: #ff4fa3; color: #0e0e12; border-color: #ff4fa3; }
+            QPushButton#showcasePlay:hover { background: #842020; border-color: #b43a3a; }
+            QPushButton#showcasePlay[playing="true"] {
+                background: #218c4a; color: #fff; border-color: #39b866;
+            }
+            QPushButton#showcasePlay[playing="true"]:hover { background: #2aa65a; border-color: #51d77c; }
             QLabel#showcaseArtist { color: #ffcf72; font-size: 18px; font-weight: 800; }
             QLabel#showcaseTitle { color: #fff; font-size: 30px; font-weight: 900; }
             QLabel#showcaseMeta { color: #9b9ba6; font-size: 13px; }
@@ -80,9 +86,11 @@ class ReleaseShowcasePage(QWidget):
             QFrame#showcaseCard {
                 background: #121217; border: 1px solid #292933; border-radius: 10px;
             }
-            QLabel#trackPosition { color: #ff4fa3; font-size: 14px; font-weight: 900; }
-            QLabel#trackTitle { color: #fff; font-size: 15px; font-weight: 700; }
-            QLabel#trackMeta { color: #8d8d98; font-size: 11px; }
+            QFrame#showcaseCard:hover { background: #17171e; border-color: #3d3d49; }
+            QLabel#trackPosition { color: #ffcf72; font-size: 13px; font-weight: 900; }
+            QLabel#trackTitle { color: #fff; font-size: 15px; font-weight: 800; }
+            QLabel#trackMeta { color: #858591; font-size: 11px; }
+            QLabel#trackStatus { color: #55d982; font-size: 10px; font-weight: 900; }
         """)
 
     def _clear(self):
@@ -164,8 +172,7 @@ class ReleaseShowcasePage(QWidget):
         if release[4]: meta.append(str(release[4]))
         if release[5]: meta.append(str(release[5]))
         if release[6]: meta.append(str(release[6]))
-        if release[11]:
-            meta.append(f"KAST: {release[11]}")
+        if release[11]: meta.append(f"KAST: {release[11]}")
         meta_label = QLabel(" • ".join(meta))
         meta_label.setObjectName("showcaseMeta")
         meta_label.setWordWrap(True)
@@ -178,9 +185,7 @@ class ReleaseShowcasePage(QWidget):
             if release[8]:
                 discogs_button = QPushButton("OPEN DISCOGS")
                 discogs_url = str(release[8])
-                discogs_button.clicked.connect(
-                    lambda _checked=False, url=discogs_url: QDesktopServices.openUrl(QUrl(url))
-                )
+                discogs_button.clicked.connect(lambda _checked=False, url=discogs_url: QDesktopServices.openUrl(QUrl(url)))
                 info.addWidget(discogs_button, 0, Qt.AlignmentFlag.AlignLeft)
 
         if release[10]:
@@ -212,6 +217,7 @@ class ReleaseShowcasePage(QWidget):
             row.addWidget(pos)
 
             text = QVBoxLayout()
+            text.setSpacing(3)
             name = QLabel(str(track_title or "(geen titel)"))
             name.setObjectName("trackTitle")
             name.setWordWrap(True)
@@ -229,25 +235,45 @@ class ReleaseShowcasePage(QWidget):
                     details.append(f"{float(bpm):.1f} BPM")
                 except (ValueError, TypeError):
                     pass
-            if details:
-                meta_track = QLabel(" • ".join(details))
-                meta_track.setObjectName("trackMeta")
-                text.addWidget(meta_track)
+            meta_track = QLabel(" • ".join(details) if details else "Geen MP3-info")
+            meta_track.setObjectName("trackMeta")
+            text.addWidget(meta_track)
             row.addLayout(text, 1)
 
             path = str(mp3_path or "").strip()
             play = QPushButton("▶ PLAY")
             play.setObjectName("showcasePlay")
             play.setEnabled(bool(path) and Path(path).exists())
+            play.setCursor(Qt.CursorShape.PointingHandCursor)
             if path:
-                # QPushButton.clicked emits a bool; keep the MP3 path as the second/default argument.
-                play.clicked.connect(
-                    lambda checked=False, p=path: self.play_mp3.emit(p)
-                )
+                play.clicked.connect(lambda checked=False, p=path: self.play_mp3.emit(p))
             row.addWidget(play)
             self.content_layout.addWidget(card)
 
         self.content_layout.addStretch()
+
+    def set_active_track(self, path):
+        """Update all currently displayed Vinyl track buttons to the shared red/green state."""
+        active = str(path or "").casefold()
+        for index in range(self.content_layout.count()):
+            item = self.content_layout.itemAt(index)
+            card = item.widget()
+            if not isinstance(card, QFrame) or card.objectName() != "showcaseCard":
+                continue
+            buttons = card.findChildren(QPushButton, "showcasePlay")
+            if not buttons:
+                continue
+            button = buttons[0]
+            # The emitted path is stored on the button so state survives refresh-free playback updates.
+            button_path = str(button.property("mp3_path") or "").casefold()
+            playing = bool(active and button_path and Path(active).name == Path(button_path).name)
+            button.setProperty("playing", playing)
+            button.setText("❚❚ PLAYING" if playing else "▶ PLAY")
+            button.style().unpolish(button)
+            button.style().polish(button)
+
+    def clear_active_track(self):
+        self.set_active_track("")
 
     def _edit(self):
         if self.release_id is not None:
