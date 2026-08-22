@@ -213,7 +213,7 @@ class ReleaseShowcasePage(QWidget):
         duration.setFixedWidth(55)
         layout.addWidget(duration)
 
-        mp3_path = str(track[7] or "").strip()
+        mp3_path = str(track[5] or "").strip()
         if mp3_path:
             play_button = QPushButton("▶")
             play_button.setObjectName("cdTrackPlayButton")
@@ -265,7 +265,6 @@ class ReleaseShowcasePage(QWidget):
                     t.artist,
                     t.title,
                     t.duration,
-                    t.bpm,
                     (
                         SELECT m.path
                         FROM track_mp3 tm
@@ -273,8 +272,7 @@ class ReleaseShowcasePage(QWidget):
                         WHERE tm.track_id = t.id
                         ORDER BY tm.is_preferred DESC, tm.id
                         LIMIT 1
-                    ) AS mp3_path,
-                    t.release_id
+                    ) AS mp3_path
                 FROM tracks t
                 WHERE t.release_id = ?
                 ORDER BY t.id
