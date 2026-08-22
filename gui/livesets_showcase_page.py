@@ -101,14 +101,16 @@ class LivesetsShowcasePage(QWidget):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         scroll.setStyleSheet("QScrollArea{border:0;background:transparent;}")
         self.content = QWidget()
         self.grid = QGridLayout(self.content)
-        self.grid.setContentsMargins(8, 14, 8, 20)
+        # Cards start directly at the content edge instead of being centered.
+        self.grid.setContentsMargins(0, 14, 8, 20)
         self.grid.setHorizontalSpacing(14)
         self.grid.setVerticalSpacing(14)
-        self.grid.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
+        self.grid.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         scroll.setWidget(self.content)
         root.addWidget(scroll, 1)
 
