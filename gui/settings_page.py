@@ -4,6 +4,10 @@
 # ============================================================
 
 from PySide6.QtCore import Qt, Signal, QSettings
+from gui.discogs_settings_panel import DiscogsSettingsPanel
+from gui.music_library_settings_panel import MusicLibrarySettingsPanel
+from gui.database_settings_panel import DatabaseSettingsPanel
+
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -215,10 +219,13 @@ class SettingsPage(QWidget):
 
         self.stack.addWidget(self._general_page())
         self.stack.addWidget(self._appearance_page())
-        self.stack.addWidget(self._placeholder_page("Player", "Playback behaviour, volume, transitions and visualizer preferences will live here."))
-        self.stack.addWidget(self._placeholder_page("Music Library", "MP3 scanning, matching behaviour and library presentation will live here."))
-        self.stack.addWidget(self._placeholder_page("Discogs", "Discogs connection and enrichment preferences will live here."))
-        self.stack.addWidget(self._placeholder_page("Database", "Safe database information and backup tools will live here."))
+        self.stack.addWidget(self._player_page())
+        self.music_library_settings_panel = MusicLibrarySettingsPanel()
+        self.stack.addWidget(self.music_library_settings_panel)
+        self.discogs_settings_panel = DiscogsSettingsPanel()
+        self.stack.addWidget(self.discogs_settings_panel)
+        self.database_settings_panel = DatabaseSettingsPanel()
+        self.stack.addWidget(self.database_settings_panel)
         self.stack.addWidget(self._about_page())
 
         outer.addWidget(content, 1)
@@ -355,6 +362,10 @@ class SettingsPage(QWidget):
         for current, button in self.density_buttons:
             button.setChecked(current == name)
 
+    def _player_page(self):
+        from gui.player_settings_panel import PlayerSettingsPanel
+        return PlayerSettingsPanel()
+
     def _placeholder_page(self, title, description):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -389,35 +400,135 @@ class SettingsPage(QWidget):
 
     def _about_page(self):
         page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(2, 2, 10, 2)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
-        card = QFrame()
-        card.setObjectName("settingsAboutCard")
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(30, 30, 30, 30)
-        card_layout.setSpacing(7)
+        body = QWidget()
+        layout = QVBoxLayout(body)
+        layout.setContentsMargins(2, 2, 10, 8)
+        layout.setSpacing(16)
 
-        small = QLabel("KID ACID'S")
-        small.setObjectName("settingsAboutSmall")
-        card_layout.addWidget(small)
+        hero = QFrame()
+        hero.setObjectName("settingsAboutHero")
+        hero_layout = QVBoxLayout(hero)
+        hero_layout.setContentsMargins(30, 28, 30, 28)
+        hero_layout.setSpacing(6)
+
+        eyebrow = QLabel("ABOUT MUSICVAULT")
+        eyebrow.setObjectName("settingsAboutSmall")
+        hero_layout.addWidget(eyebrow)
 
         title = QLabel("MusicVault")
         title.setObjectName("settingsAboutTitle")
-        card_layout.addWidget(title)
+        hero_layout.addWidget(title)
 
         version = QLabel("V3  •  MUSIC COLLECTION")
         version.setObjectName("settingsAboutVersion")
-        card_layout.addWidget(version)
+        hero_layout.addWidget(version)
 
-        description = QLabel("Your personal music collection environment — vinyl, CD, MP3, livesets and everything that comes next.")
+        tagline = QLabel("Your music. Your collection. Your control.")
+        tagline.setObjectName("settingsAboutTagline")
+        hero_layout.addWidget(tagline)
+
+        description = QLabel(
+            "MusicVault is a personal music collection environment built to bring "
+            "an entire music library together in one place — from vinyl and CDs "
+            "to MP3s, livesets and everything that comes next."
+        )
         description.setObjectName("settingsAboutText")
         description.setWordWrap(True)
-        card_layout.addSpacing(10)
-        card_layout.addWidget(description)
+        hero_layout.addWidget(description)
+        layout.addWidget(hero)
 
-        card_layout.addStretch()
-        layout.addWidget(card, 1)
+        collection = SettingsCard(
+            "Collection",
+            "One home for your music",
+            "Different formats, one organised collection."
+        )
+        collection_row = QHBoxLayout()
+        collection_row.setSpacing(10)
+        for name, subtitle in [
+            ("VINYL", "Physical releases"),
+            ("CD", "Compact disc collection"),
+            ("MP3", "Digital music library"),
+            ("LIVESETS", "Mixes & recordings"),
+        ]:
+            item = QFrame()
+            item.setObjectName("settingsAboutTile")
+            item_layout = QVBoxLayout(item)
+            item_layout.setContentsMargins(14, 14, 14, 14)
+            item_layout.setSpacing(3)
+            item_title = QLabel(name)
+            item_title.setObjectName("settingsAboutTileTitle")
+            item_layout.addWidget(item_title)
+            item_text = QLabel(subtitle)
+            item_text.setObjectName("settingsAboutTileText")
+            item_text.setWordWrap(True)
+            item_layout.addWidget(item_text)
+            collection_row.addWidget(item, 1)
+        collection.body.addLayout(collection_row)
+        layout.addWidget(collection)
+
+        library = SettingsCard(
+            "Music Library",
+            "Built around the collection",
+            "Tools that make a large music library easier to manage."
+        )
+        library.body.addWidget(SettingsRow("Automatic MP3 scanning", "Scan the digital library and keep MusicVault aware of available audio files.", QLabel("READY")))
+        library.body.addWidget(SettingsRow("Track matching", "Link tracks to matching MP3 files and keep multiple versions available.", QLabel("READY")))
+        library.body.addWidget(SettingsRow("Preferred versions", "Choose which linked MP3 should be used for playback when alternatives exist.", QLabel("READY")))
+        library.body.addWidget(SettingsRow("Missing-file detection", "Identify broken or missing MP3 links without silently changing your collection.", QLabel("SAFE")))
+        layout.addWidget(library)
+
+        metadata = SettingsCard(
+            "Discovery & Metadata",
+            "More than a file browser",
+            "MusicVault keeps the identity of your releases and tracks at the centre."
+        )
+        metadata.body.addWidget(SettingsRow("Discogs integration", "Bring release information, artwork and track metadata into your collection.", QLabel("CONNECTED")))
+        metadata.body.addWidget(SettingsRow("Release organisation", "Keep artists, releases, formats and track information together.", QLabel("READY")))
+        metadata.body.addWidget(SettingsRow("Artwork", "Use cover artwork to make the collection feel like a real music library.", QLabel("READY")))
+        layout.addWidget(metadata)
+
+        technology = SettingsCard(
+            "Technology",
+            "The engine underneath",
+            "A local desktop application designed around your own collection."
+        )
+        technology.body.addWidget(SettingsRow("PySide6", "Modern Qt desktop interface for the MusicVault experience.", QLabel("UI")))
+        technology.body.addWidget(SettingsRow("SQLite", "Local collection database for releases, tracks and library relationships.", QLabel("DATA")))
+        technology.body.addWidget(SettingsRow("FFmpeg", "Audio and multimedia playback through Qt Multimedia.", QLabel("AUDIO")))
+        technology.body.addWidget(SettingsRow("Discogs", "External music metadata and release enrichment.", QLabel("META")))
+        layout.addWidget(technology)
+
+        signature = QFrame()
+        signature.setObjectName("settingsAboutSignature")
+        signature_layout = QVBoxLayout(signature)
+        signature_layout.setContentsMargins(30, 28, 30, 28)
+        signature_layout.setSpacing(5)
+
+        built = QLabel("BUILT BY KID ACID")
+        built.setObjectName("settingsAboutBuilt")
+        built.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        signature_layout.addWidget(built)
+
+        made = QLabel("Made for the music. Built for the collection.")
+        made.setObjectName("settingsAboutMade")
+        made.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        signature_layout.addWidget(made)
+
+        signature_version = QLabel("MUSICVAULT V3")
+        signature_version.setObjectName("settingsAboutSignatureVersion")
+        signature_version.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        signature_layout.addWidget(signature_version)
+        layout.addWidget(signature)
+
+        scroll.setWidget(body)
+        root = QVBoxLayout(page)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.addWidget(scroll)
         return page
 
     def _value_button(self, value):
@@ -638,6 +749,63 @@ class SettingsPage(QWidget):
 
             QLabel#settingsComingSoonBadge {
                 margin-top: 12px;
+            }
+
+            QFrame#settingsAboutHero,
+            QFrame#settingsAboutSignature {
+                background: #111116;
+                border: 1px solid #25252f;
+                border-radius: 14px;
+            }
+
+            QLabel#settingsAboutTagline {
+                background: transparent;
+                color: #e9e9ef;
+                font-size: 17px;
+                font-weight: 750;
+                margin-top: 8px;
+            }
+
+            QFrame#settingsAboutTile {
+                background: #18181f;
+                border: 1px solid #2b2b36;
+                border-radius: 10px;
+            }
+
+            QLabel#settingsAboutTileTitle {
+                background: transparent;
+                color: #ffffff;
+                font-size: 11px;
+                font-weight: 900;
+                letter-spacing: 1px;
+            }
+
+            QLabel#settingsAboutTileText {
+                background: transparent;
+                color: #777782;
+                font-size: 10px;
+            }
+
+            QLabel#settingsAboutBuilt {
+                background: transparent;
+                color: #d84b91;
+                font-size: 18px;
+                font-weight: 950;
+                letter-spacing: 2px;
+            }
+
+            QLabel#settingsAboutMade {
+                background: transparent;
+                color: #b8b8c2;
+                font-size: 11px;
+            }
+
+            QLabel#settingsAboutSignatureVersion {
+                background: transparent;
+                color: #555560;
+                font-size: 9px;
+                font-weight: 900;
+                letter-spacing: 1.5px;
             }
 
             QLabel#settingsAboutTitle {
