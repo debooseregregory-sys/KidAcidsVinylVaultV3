@@ -7,7 +7,8 @@ from pathlib import Path
 import os
 import sqlite3
 
-from PySide6.QtCore import QDesktopServices, QSettings, QUrl, Signal
+from PySide6.QtCore import QSettings, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -181,21 +182,6 @@ class MusicLibrarySettingsPanel(QWidget):
                 linked_count = connection.execute(
                     "SELECT COUNT(DISTINCT track_id) FROM track_mp3"
                 ).fetchone()[0]
-                missing_count = connection.execute(
-                    """
-                    SELECT COUNT(*)
-                    FROM track_mp3 x
-                    INNER JOIN mp3_files m ON m.id = x.mp3_id
-                    WHERE m.path IS NULL OR TRIM(m.path) = '' OR NOT EXISTS (
-                        SELECT 1
-                        FROM pragma_database_list
-                        WHERE name = 'temp'
-                    ) AND 0
-                    """
-                ).fetchone()[0]
-
-                # SQLite cannot reliably test Windows filesystem paths in SQL.
-                # Do that small, read-only check in Python instead.
                 rows = connection.execute(
                     """
                     SELECT DISTINCT m.path
@@ -204,9 +190,10 @@ class MusicLibrarySettingsPanel(QWidget):
                     WHERE m.path IS NOT NULL AND TRIM(m.path) <> ''
                     """
                 ).fetchall()
-                missing_count = sum(1 for row in rows if not Path(str(row[0])).exists())
             finally:
                 connection.close()
+
+            missing_count = sum(1 for row in rows if not Path(str(row[0])).exists())
 
             self._stat_labels["mp3"].setText(f"{mp3_count:,}")
             self._stat_labels["tracks"].setText(f"{track_count:,}")
