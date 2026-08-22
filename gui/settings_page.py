@@ -3,7 +3,7 @@
 # SETTINGS PAGE
 # ============================================================
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QSettings
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -83,12 +83,26 @@ class SettingsCard(QFrame):
         layout.addLayout(self.body)
 
 
+class AppearanceOption(QPushButton):
+    def __init__(self, title, subtitle, value, parent=None):
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setObjectName("appearanceOption")
+        self.setMinimumHeight(64)
+        self._title = title
+        self._subtitle = subtitle
+        self._value = value
+        self.setText(f"{title}\n{subtitle}")
+
+
 class SettingsPage(QWidget):
     page_changed = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("settingsPage")
+        self._settings = QSettings("Kid Acid", "MusicVault")
         self._build()
         self._apply_style()
 
@@ -97,9 +111,6 @@ class SettingsPage(QWidget):
         outer.setContentsMargins(34, 30, 34, 30)
         outer.setSpacing(24)
 
-        # ----------------------------------------------------
-        # LEFT SETTINGS NAVIGATION
-        # ----------------------------------------------------
         navigation = QFrame()
         navigation.setObjectName("settingsNavigation")
         navigation.setFixedWidth(220)
@@ -168,9 +179,6 @@ class SettingsPage(QWidget):
 
         outer.addWidget(navigation)
 
-        # ----------------------------------------------------
-        # CONTENT
-        # ----------------------------------------------------
         content = QWidget()
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
@@ -206,7 +214,7 @@ class SettingsPage(QWidget):
         content_layout.addWidget(self.stack, 1)
 
         self.stack.addWidget(self._general_page())
-        self.stack.addWidget(self._placeholder_page("Appearance", "Shape the visual identity of MusicVault. Theme, accent colour, density and artwork presentation will live here."))
+        self.stack.addWidget(self._appearance_page())
         self.stack.addWidget(self._placeholder_page("Player", "Playback behaviour, volume, transitions and visualizer preferences will live here."))
         self.stack.addWidget(self._placeholder_page("Music Library", "MP3 scanning, matching behaviour and library presentation will live here."))
         self.stack.addWidget(self._placeholder_page("Discogs", "Discogs connection and enrichment preferences will live here."))
@@ -256,6 +264,96 @@ class SettingsPage(QWidget):
 
         layout.addStretch()
         return page
+
+    def _appearance_page(self):
+        page = QWidget()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        body = QWidget()
+        layout = QVBoxLayout(body)
+        layout.setContentsMargins(2, 2, 10, 8)
+        layout.setSpacing(16)
+
+        hero = QFrame()
+        hero.setObjectName("settingsHero")
+        hero_layout = QHBoxLayout(hero)
+        hero_layout.setContentsMargins(24, 20, 24, 20)
+        text = QVBoxLayout()
+        title = QLabel("Make it yours")
+        title.setObjectName("settingsHeroTitle")
+        text.addWidget(title)
+        desc = QLabel("Choose the visual language that follows you through MusicVault.")
+        desc.setObjectName("settingsHeroDescription")
+        desc.setWordWrap(True)
+        text.addWidget(desc)
+        hero_layout.addLayout(text, 1)
+        chip = QLabel("SAVED LOCALLY")
+        chip.setObjectName("settingsSafeChip")
+        hero_layout.addWidget(chip, 0, Qt.AlignmentFlag.AlignVCenter)
+        layout.addWidget(hero)
+
+        accent = SettingsCard("Accent", "Signature colour", "Your accent preference is stored locally and can be changed at any time.")
+        self.accent_buttons = []
+        accents = [
+            ("Rose", "MusicVault pink", "#d84b91"),
+            ("Crimson", "Deep red", "#c73b4f"),
+            ("Electric", "Bright violet", "#8f63ff"),
+            ("Ice", "Cool cyan", "#55c9d8"),
+        ]
+        row = QHBoxLayout()
+        row.setSpacing(10)
+        current = self._settings.value("accent", "Rose")
+        for name, subtitle, color in accents:
+            button = AppearanceOption(name, subtitle, name)
+            button.setStyleSheet(
+                f"QPushButton#appearanceOption {{ border:1px solid #30303a; border-radius:10px; background:#18181f; color:#f0f0f4; padding:10px; text-align:left; }}"
+                f"QPushButton#appearanceOption:checked {{ border:2px solid {color}; background:#21151d; }}"
+            )
+            button.clicked.connect(lambda checked=False, n=name: self._set_accent(n))
+            button.setChecked(name == current)
+            row.addWidget(button, 1)
+            self.accent_buttons.append((name, button))
+        accent.body.addLayout(row)
+        layout.addWidget(accent)
+
+        density = SettingsCard("Interface", "Collection density", "Choose how much breathing room you want around track and library rows.")
+        self.density_buttons = []
+        density_row = QHBoxLayout()
+        density_row.setSpacing(10)
+        current_density = self._settings.value("density", "Comfortable")
+        for name, subtitle in [("Comfortable", "Balanced spacing"), ("Compact", "More tracks on screen")]:
+            button = AppearanceOption(name, subtitle, name)
+            button.clicked.connect(lambda checked=False, n=name: self._set_density(n))
+            button.setChecked(name == current_density)
+            density_row.addWidget(button, 1)
+            self.density_buttons.append((name, button))
+        density.body.addLayout(density_row)
+        layout.addWidget(density)
+
+        artwork = SettingsCard("Artwork", "Cover presentation", "Control how prominent cover artwork should feel throughout the collection.")
+        artwork.body.addWidget(SettingsRow("Show artwork animations", "Keep subtle artwork motion enabled where supported.", SettingsToggle(self._settings.value("artwork_animations", True, type=bool))))
+        artwork.body.addWidget(SettingsRow("Prefer large covers", "Give cover art more visual weight in collection views.", SettingsToggle(self._settings.value("large_covers", True, type=bool))))
+        layout.addWidget(artwork)
+        layout.addStretch()
+
+        scroll.setWidget(body)
+        root = QVBoxLayout(page)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.addWidget(scroll)
+        return page
+
+    def _set_accent(self, name):
+        self._settings.setValue("accent", name)
+        for current, button in self.accent_buttons:
+            button.setChecked(current == name)
+
+    def _set_density(self, name):
+        self._settings.setValue("density", name)
+        for current, button in self.density_buttons:
+            button.setChecked(current == name)
 
     def _placeholder_page(self, title, description):
         page = QWidget()
@@ -515,6 +613,27 @@ class SettingsPage(QWidget):
             QPushButton#settingsValueButton:hover {
                 border: 1px solid #d84b91;
                 background: #201720;
+            }
+
+            QPushButton#appearanceOption {
+                background: #18181f;
+                color: #ededf2;
+                border: 1px solid #30303a;
+                border-radius: 10px;
+                padding: 10px;
+                text-align: left;
+                font-size: 11px;
+                font-weight: 700;
+            }
+
+            QPushButton#appearanceOption:hover {
+                border: 1px solid #6c3b57;
+                background: #201720;
+            }
+
+            QPushButton#appearanceOption:checked {
+                border: 2px solid #d84b91;
+                background: #251720;
             }
 
             QLabel#settingsComingSoonBadge {
