@@ -1,4 +1,5 @@
 import sys
+import time
 
 from PySide6.QtWidgets import QApplication
 
@@ -10,8 +11,6 @@ install_cd_mode()
 
 
 if __name__ == "__main__":
-    # Start MusicVault in the SAME process as the splash. The splash stays
-    # visible until the real main window has finished loading.
     app = QApplication(sys.argv)
     app.setApplicationName("Kid Acid's MusicVault")
     app.setApplicationDisplayName("Kid Acid's MusicVault")
@@ -21,8 +20,11 @@ if __name__ == "__main__":
     splash.show()
     app.processEvents()
 
-    # Build the real main window while the splash is already visible.
-    # There is no subprocess and therefore no second Python startup.
+    # Keep the splash visible for at least 5 seconds before the main window
+    # is opened. The main window is then shown immediately and the splash
+    # disappears at the same moment.
+    splash_started = time.monotonic()
+
     import gui.main_window as main_window
     from PySide6.QtCore import QSettings
 
@@ -41,7 +43,13 @@ if __name__ == "__main__":
 
     app.processEvents()
 
-    # The main window is ready. Only now remove the splash.
+    # Never show the main window before the minimum splash time has elapsed.
+    remaining = 5.0 - (time.monotonic() - splash_started)
+    if remaining > 0:
+        time.sleep(remaining)
+
+    # The main window is ready. Close the splash and reveal MusicVault
+    # immediately, with no fade-out delay.
     splash.close()
     window.raise_()
     window.activateWindow()
