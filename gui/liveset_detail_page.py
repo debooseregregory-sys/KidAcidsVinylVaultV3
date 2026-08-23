@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, Signal, QTimer
 from PySide6.QtGui import QPixmap, QPainter, QPen, QBrush, QFont, QLinearGradient
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget, QSizePolicy
 
 
 class LivesetPlayerVisualizer(QWidget):
@@ -15,12 +15,25 @@ class LivesetPlayerVisualizer(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumHeight(330)
-        self.setSizePolicy(self.sizePolicy().horizontalPolicy(), self.sizePolicy().Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._phase = 0.0
         self._text_offset = 0.0
+        self._artist = ""
+        self._title = ""
+        self._playing = False
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._animate)
         self._timer.start(24)
+
+    def set_liveset(self, artist, title, playing=False):
+        self._artist = str(artist or "").strip()
+        self._title = str(title or "").strip()
+        self._playing = bool(playing)
+        self.update()
+
+    def set_playing(self, playing):
+        self._playing = bool(playing)
+        self.update()
 
     def _animate(self):
         self._phase = (self._phase + 0.045) % (math.pi * 2)
@@ -35,7 +48,6 @@ class LivesetPlayerVisualizer(QWidget):
         w, h = rect.width(), rect.height()
         cx, cy = rect.center().x(), rect.top() + h * 0.43
 
-        # Deep neon background.
         bg = QLinearGradient(rect.left(), rect.top(), rect.right(), rect.bottom())
         bg.setColorAt(0.0, Qt.GlobalColor.black)
         bg.setColorAt(0.45, Qt.GlobalColor.darkMagenta)
@@ -44,16 +56,13 @@ class LivesetPlayerVisualizer(QWidget):
         painter.setPen(QPen(Qt.GlobalColor.darkMagenta, 1.5))
         painter.drawRoundedRect(rect, 18, 18)
 
-        # Huge soft concentric pulse rings.
         pulse = 35 + 22 * (0.5 + 0.5 * math.sin(self._phase * 2.0))
         for ring in range(7):
             radius = pulse + ring * 30
-            alpha_pen = QPen(Qt.GlobalColor.magenta, max(1.0, 3.2 - ring * 0.35))
-            painter.setPen(alpha_pen)
+            painter.setPen(QPen(Qt.GlobalColor.magenta, max(1.0, 3.2 - ring * 0.35)))
             painter.setBrush(QBrush(Qt.GlobalColor.transparent))
             painter.drawEllipse(int(cx - radius), int(cy - radius), int(radius * 2), int(radius * 2))
 
-        # Orbiting neon particles.
         for i in range(70):
             angle = self._phase * (0.32 + (i % 8) * 0.055) + i * 0.39
             orbit_x = w * (0.18 + (i % 5) * 0.09)
@@ -65,7 +74,6 @@ class LivesetPlayerVisualizer(QWidget):
             painter.setPen(QPen(Qt.GlobalColor.magenta, 1))
             painter.drawEllipse(int(x - radius), int(y - radius), int(radius * 2), int(radius * 2))
 
-        # Central glowing core / spinning spokes.
         for i in range(16):
             angle = self._phase * 1.7 + i * (math.pi * 2 / 16)
             inner = 20 + 4 * math.sin(self._phase * 2)
@@ -80,7 +88,6 @@ class LivesetPlayerVisualizer(QWidget):
         painter.setPen(QPen(Qt.GlobalColor.lightGray, 2))
         painter.drawEllipse(int(cx - 13), int(cy - 13), 26, 26)
 
-        # Large dynamic equalizer across the full width.
         bar_count = max(48, min(110, w // 13))
         usable = w - 50
         step = usable / bar_count
@@ -96,7 +103,6 @@ class LivesetPlayerVisualizer(QWidget):
             painter.setPen(QPen(Qt.GlobalColor.magenta, max(2.0, step * 0.42)))
             painter.drawLine(int(x), int(base_y), int(x), int(base_y - height))
 
-        # Large scrolling identity line; deliberately no incorrect slogan.
         text = "KID ACID  •  LIVESET  •  ACID HOUSE  •  TECHNO  •  DEEP GROOVES  •  "
         painter.setFont(QFont("Arial", max(12, min(18, int(h / 25))), QFont.Weight.Bold))
         painter.setPen(QPen(Qt.GlobalColor.lightGray))
@@ -106,13 +112,18 @@ class LivesetPlayerVisualizer(QWidget):
         painter.drawText(int(x), int(y), text)
         painter.drawText(int(x + text_width + 80), int(y), text)
 
-        # Live status badge.
-        painter.setFont(QFont("Arial", max(13, min(20, int(h / 19))), QFont.Weight.Black))
+        # This line is tied to the actual liveset currently being played.
+        status = "NOW PLAYING" if self._playing else "READY TO PLAY"
+        painter.setFont(QFont("Arial", max(16, min(28, int(h / 14))), QFont.Weight.Black))
         painter.setPen(QPen(Qt.GlobalColor.white))
-        painter.drawText(rect.left() + 26, rect.top() + 76, "NOW PLAYING")
-        painter.setFont(QFont("Arial", max(10, min(14, int(h / 27))), QFont.Weight.Bold))
+        painter.drawText(rect.left() + 26, rect.top() + 82, status)
+
+        identity = " • ".join(x for x in (self._artist, self._title) if x)
+        if not identity:
+            identity = "LIVSET"
+        painter.setFont(QFont("Arial", max(14, min(24, int(h / 18))), QFont.Weight.Bold))
         painter.setPen(QPen(Qt.GlobalColor.lightGray))
-        painter.drawText(rect.left() + 28, rect.top() + 98, "LIVESET PLAYBACK  •  KID ACID")
+        painter.drawText(rect.left() + 28, rect.top() + 116, identity)
         painter.end()
 
 
@@ -222,6 +233,11 @@ class LivesetDetailPage(QWidget):
         else:
             self.cover.setText("")
             self.cover.setPixmap(pix)
+        self.visualizer.set_liveset(
+            self.data.get("artist") or "",
+            self.data.get("title") or "",
+            False,
+        )
         self.play_button.setProperty("playing", False)
         self.play_button.setText("▶  PLAY LIVESET")
         self.play_button.style().unpolish(self.play_button)
@@ -251,9 +267,11 @@ class LivesetDetailPage(QWidget):
         self.play_button.setText("❚❚  PLAYING" if playing else "▶  PLAY LIVESET")
         self.play_button.style().unpolish(self.play_button)
         self.play_button.style().polish(self.play_button)
+        self.visualizer.set_playing(playing)
 
     def clear_active_track(self):
         self.play_button.setProperty("playing", False)
         self.play_button.setText("▶  PLAY LIVESET")
         self.play_button.style().unpolish(self.play_button)
         self.play_button.style().polish(self.play_button)
+        self.visualizer.set_playing(False)
