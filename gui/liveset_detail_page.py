@@ -107,36 +107,38 @@ class LivesetPlayerVisualizer(QWidget):
         painter.setPen(QPen(QColor(255, 220, 250, 220), 2))
         painter.drawEllipse(int(cx - core), int(cy - core), core * 2, core * 2)
 
-        # Large upper identity marquee: ALWAYS the real liveset.
+        # Slim upper identity marquee so it does not compete with the main visual.
         if self._artist or self._title:
             identity = f"{self._artist or 'UNKNOWN ARTIST'}   •   {self._title or 'UNTITLED LIVESET'}   •   "
         else:
             identity = "NO LIVESET SELECTED   •   "
-        painter.setFont(QFont("Arial", max(20, min(34, int(h / 13))), QFont.Weight.Black))
-        painter.setPen(QPen(QColor(255, 245, 255)))
+        painter.setFont(QFont("Arial", max(15, min(22, int(h / 20))), QFont.Weight.Bold))
+        painter.setPen(QPen(QColor(235, 215, 235, 220)))
         text_width = painter.fontMetrics().horizontalAdvance(identity)
-        gap = 120
+        gap = 90
         x = rect.right() - int(self._text_offset % (text_width + gap))
-        y = rect.top() + 48
+        y = rect.top() + 32
         painter.drawText(int(x), int(y), identity)
         painter.drawText(int(x + text_width + gap), int(y), identity)
 
-        # Playback status and actual artist/title, large and unmistakable.
+        # Compact playback identity block on the left; clear spacing prevents overlap.
         badge = "●  NOW PLAYING" if self._playing else "○  READY TO PLAY"
-        painter.setFont(QFont("Arial", max(18, min(28, int(h / 16))), QFont.Weight.Black))
+        painter.setFont(QFont("Arial", max(13, min(19, int(h / 23))), QFont.Weight.Black))
         painter.setPen(QPen(QColor(255, 255, 255, 245) if self._playing else QColor(190, 190, 205)))
-        painter.drawText(rect.left() + 34, rect.top() + 105, badge)
+        painter.drawText(rect.left() + 34, rect.top() + 78, badge)
 
         artist = self._artist or "Select a liveset"
         title = self._title or "No liveset is currently loaded"
-        artist_size = max(24, min(46, int(h / 10)))
-        title_size = max(20, min(34, int(h / 14)))
-        painter.setFont(QFont("Arial", artist_size, QFont.Weight.Black))
+
+        painter.setFont(QFont("Arial", max(20, min(29, int(h / 15))), QFont.Weight.Black))
+        artist = painter.fontMetrics().elidedText(artist, Qt.TextElideMode.ElideRight, max(260, int(w * 0.46)))
         painter.setPen(QPen(QColor(255, 255, 255)))
-        painter.drawText(rect.left() + 36, rect.top() + 158, artist)
-        painter.setFont(QFont("Arial", title_size, QFont.Weight.Bold))
+        painter.drawText(rect.left() + 36, rect.top() + 122, artist)
+
+        painter.setFont(QFont("Arial", max(16, min(23, int(h / 19))), QFont.Weight.Bold))
+        title = painter.fontMetrics().elidedText(title, Qt.TextElideMode.ElideRight, max(280, int(w * 0.50)))
         painter.setPen(QPen(QColor(235, 205, 230)))
-        painter.drawText(rect.left() + 38, rect.top() + 202, title)
+        painter.drawText(rect.left() + 38, rect.top() + 158, title)
 
         # Wide animated equalizer / stage floor.
         bar_count = max(60, min(150, w // 9))
