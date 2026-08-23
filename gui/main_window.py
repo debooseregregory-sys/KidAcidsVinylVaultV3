@@ -1283,6 +1283,8 @@ class VinylVaultWindow(QMainWindow):
         # Navigeren moet direct zijn. De volledige database wordt
         # alleen opnieuw geladen via de knop VERWIEUW of na een
         # expliciete databasewijziging.
+        self.library_page.load_releases()
+
         self.pages.setCurrentWidget(
             self.library_page
         )

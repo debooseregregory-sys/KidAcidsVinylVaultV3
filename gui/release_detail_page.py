@@ -3038,6 +3038,11 @@ class ReleaseDetailPage(QWidget):
 
         self.update_checked_button(new_value)
 
+        # ----------------------------------------------------
+        # LIBRARY DIRECT VERNIEUWEN
+        # ----------------------------------------------------
+        self.back_requested.emit()
+
     # ========================================================
     # UPDATE KLAAR BUTTON
     # ========================================================
