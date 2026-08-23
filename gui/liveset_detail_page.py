@@ -1,11 +1,96 @@
 from __future__ import annotations
 from gui.app_settings import paint_accent
 
+import math
 from pathlib import Path
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, Signal, QTimer
+from PySide6.QtGui import QPixmap, QPainter, QPen, QBrush, QFont
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+
+
+class LivesetPlayerVisualizer(QWidget):
+    """Animated visual that lives on the actual liveset playback page."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumHeight(180)
+        self.setMaximumHeight(180)
+        self._phase = 0.0
+        self._text_offset = 0.0
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._animate)
+        self._timer.start(30)
+
+    def _animate(self):
+        self._phase = (self._phase + 0.055) % (math.pi * 2)
+        self._text_offset = (self._text_offset + 1.4) % 1200
+        self.update()
+
+    def paintEvent(self, event):
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.rect().adjusted(1, 1, -1, -1)
+
+        painter.setBrush(QBrush(Qt.GlobalColor.black))
+        painter.setPen(QPen(Qt.GlobalColor.transparent))
+        painter.drawRoundedRect(rect, 14, 14)
+
+        # Soft moving particles.
+        for i in range(28):
+            angle = self._phase * (0.45 + (i % 6) * 0.07) + i * 0.71
+            x = rect.left() + rect.width() * (0.5 + 0.48 * math.sin(angle * 0.67 + i))
+            y = rect.top() + 88 + 62 * math.sin(angle * 1.27 + i * 0.37)
+            radius = 1.0 + 2.8 * (0.5 + 0.5 * math.sin(angle * 1.8))
+            painter.setBrush(QBrush(Qt.GlobalColor.darkMagenta))
+            painter.setPen(QPen(Qt.GlobalColor.darkMagenta))
+            painter.drawEllipse(int(x - radius), int(y - radius), int(radius * 2), int(radius * 2))
+
+        # Large central pulse.
+        cx = rect.center().x()
+        cy = rect.top() + 66
+        pulse = 22 + 10 * (0.5 + 0.5 * math.sin(self._phase * 2.0))
+        painter.setBrush(QBrush(Qt.GlobalColor.transparent))
+        painter.setPen(QPen(Qt.GlobalColor.magenta, 2.2))
+        painter.drawEllipse(int(cx - pulse), int(cy - pulse), int(pulse * 2), int(pulse * 2))
+        painter.setPen(QPen(Qt.GlobalColor.darkMagenta, 1.2))
+        painter.drawEllipse(int(cx - pulse - 11), int(cy - pulse - 11), int((pulse + 11) * 2), int((pulse + 11) * 2))
+        painter.setBrush(QBrush(Qt.GlobalColor.magenta))
+        painter.setPen(QPen(Qt.GlobalColor.magenta))
+        painter.drawEllipse(int(cx - 5), int(cy - 5), 10, 10)
+
+        # Wide animated waveform / equalizer.
+        bar_count = 72
+        usable = rect.width() - 36
+        step = usable / bar_count
+        for i in range(bar_count):
+            wave = (
+                math.sin(self._phase * 2.4 + i * 0.37)
+                + 0.62 * math.sin(self._phase * 4.1 - i * 0.19)
+                + 0.30 * math.sin(self._phase * 1.3 + i * 0.83)
+            ) / 1.92
+            height = 10 + (wave + 1.0) * 26
+            x = rect.left() + 18 + i * step
+            y = rect.bottom() - 15 - height
+            painter.setPen(QPen(Qt.GlobalColor.magenta, 2.0))
+            painter.drawLine(int(x), int(rect.bottom() - 15), int(x), int(y))
+
+        # Moving title line.
+        text = "KID ACID  •  LIVESET  •  ACID HOUSE  •  TECHNO  •  DEEP GROOVES  •  LIVE ENERGY  •  "
+        font = QFont("Arial", 9, QFont.Weight.Bold)
+        painter.setFont(font)
+        painter.setPen(QPen(Qt.GlobalColor.lightGray))
+        width = painter.fontMetrics().horizontalAdvance(text)
+        x = rect.right() - int(self._text_offset % (width + 60))
+        y = rect.top() + 23
+        painter.drawText(int(x), y, text)
+        painter.drawText(int(x + width + 60), y, text)
+
+        painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
+        painter.setPen(QPen(Qt.GlobalColor.gray))
+        painter.drawText(rect.left() + 18, rect.top() + 43, "NOW PLAYING  •  THE UNDERGROUND NEVER STOPS")
+        painter.end()
 
 
 class LivesetDetailPage(QWidget):
@@ -73,6 +158,12 @@ class LivesetDetailPage(QWidget):
 
         panel_layout.addLayout(info, 1)
         root.addWidget(panel)
+
+        # This is deliberately below the player/details panel: the visual reacts
+        # continuously while the liveset is being listened to.
+        self.visualizer = LivesetPlayerVisualizer()
+        root.addWidget(self.visualizer)
+
         root.addStretch(1)
 
         self.setStyleSheet(paint_accent("""
