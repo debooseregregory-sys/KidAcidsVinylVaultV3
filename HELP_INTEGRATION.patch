@@ -1,0 +1,41 @@
+diff --git a/gui/main_window.py b/gui/main_window.py
+--- a/gui/main_window.py
++++ b/gui/main_window.py
+@@ -25,6 +25,7 @@ from gui.player_bar import PlayerBar
+ from gui.mp3_showcase_playback_bridge import install_mp3_showcase_playback_bridge
+ from gui.settings_page import SettingsPage
++from gui.help_page import HelpPage
+@@ -390,6 +391,10 @@ class VinylVaultWindow(QMainWindow):
+         self.settings_button.clicked.connect(self.show_settings)
+         sidebar_layout.addWidget(self.settings_button)
++
++        self.help_button = self.create_nav_button("?", "Help")
++        self.help_button.clicked.connect(self.show_help)
++        sidebar_layout.addWidget(self.help_button)
+ 
+         # ====================================================
+         # SIDEBAR FOOTER
+@@ -600,6 +605,11 @@ class VinylVaultWindow(QMainWindow):
+         self.settings_page = SettingsPage()
+         self.pages.addWidget(
+             self.settings_page
+         )
++
++        # ====================================================
++        # HELP
++        # ====================================================
++
++        self.help_page = HelpPage()
++        self.pages.addWidget(self.help_page)
+ 
+         install_mp3_showcase_playback_bridge()
+@@ -1810,6 +1820,13 @@ class VinylVaultWindow(QMainWindow):
+         self._remember_current_page("Settings")
+         self.set_active_nav(self.settings_button)
++
++    def show_help(self):
++        self.pages.setCurrentWidget(self.help_page)
++        self.page_title.setText("Help")
++        self._remember_current_page("Help")
++        self.set_active_nav(self.help_button)
+*** End Patch
