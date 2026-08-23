@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from gui.app_settings import paint_accent
 
 import math
@@ -6,7 +7,15 @@ from pathlib import Path
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, Signal, QTimer
 from PySide6.QtGui import QPixmap, QPainter, QPen, QBrush, QFont, QLinearGradient
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget, QSizePolicy
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 class LivesetPlayerVisualizer(QWidget):
@@ -90,6 +99,7 @@ class LivesetPlayerVisualizer(QWidget):
             y2 = cy + math.sin(angle) * outer
             painter.setPen(QPen(Qt.GlobalColor.magenta, 3.0))
             painter.drawLine(int(x1), int(y1), int(x2), int(y2))
+
         painter.setBrush(QBrush(Qt.GlobalColor.magenta))
         painter.setPen(QPen(Qt.GlobalColor.lightGray, 2))
         painter.drawEllipse(int(cx - 13), int(cy - 13), 26, 26)
@@ -127,13 +137,12 @@ class LivesetPlayerVisualizer(QWidget):
         if not identity:
             identity = "LIVESET"
         painter.setFont(QFont("Arial", max(18, min(34, int(h / 12))), QFont.Weight.Bold))
-        painter.setPen(QPen(Qt.GlobalColor.white))
         painter.drawText(rect.left() + 28, rect.top() + 126, identity)
         painter.end()
 
 
 class LivesetDetailPage(QWidget):
-    """Dedicated Liveset playback view, visually aligned with the existing release detail pages."""
+    """Dedicated Liveset playback view."""
 
     back_requested = Signal()
     play_mp3 = Signal(str)
@@ -144,10 +153,6 @@ class LivesetDetailPage(QWidget):
         self._player = None
         self._last_active_path = ""
         self._build()
-
-        # Poll the real central player. This is deliberately independent of
-        # play_started signals because the player can also be started by the
-        # bottom player bar or another page.
         self._player_sync_timer = QTimer(self)
         self._player_sync_timer.setInterval(150)
         self._player_sync_timer.timeout.connect(self._sync_from_central_player)
@@ -156,6 +161,30 @@ class LivesetDetailPage(QWidget):
     def bind_player(self, player):
         self._player = player
         self._sync_from_central_player()
+
+    @staticmethod
+    def _same_path(left, right):
+        if not left or not right:
+            return False
+        try:
+            return Path(left).resolve() == Path(right).resolve()
+        except (OSError, RuntimeError):
+            return str(left).lower() == str(right).lower()
+
+    @staticmethod
+    def _identity_from_audio(path: str):
+        """Get the identity from the file that is actually playing.
+
+        The central player's current_path is authoritative. This prevents a
+        stale/incorrect Library artist or title from being shown as NOW PLAYING.
+        """
+        name = Path(str(path or "")).stem.strip()
+        if not name:
+            return "", ""
+        if " - " in name:
+            artist, title = name.split(" - ", 1)
+            return artist.strip(), title.strip()
+        return "", name
 
     def _sync_from_central_player(self):
         player = self._player
@@ -169,14 +198,18 @@ class LivesetDetailPage(QWidget):
             return
 
         active = str(self.data.get("audio") or "").strip()
-        same_file = bool(path and active and Path(path).resolve() == Path(active).resolve())
+        same_file = bool(path and active and self._same_path(path, active))
+
         if same_file and playing:
+            fallback_artist, fallback_title = self._identity_from_audio(path)
+            # IMPORTANT: the actual playing filename wins over Library metadata.
+            artist = fallback_artist or str(self.data.get("artist") or "").strip()
+            title = fallback_title or str(self.data.get("title") or "").strip()
+
             if path != self._last_active_path:
                 self._last_active_path = path
-                fallback_artist, fallback_title = self._identity_from_audio(path)
-                artist = str(self.data.get("artist") or "").strip() or fallback_artist
-                title = str(self.data.get("title") or "").strip() or fallback_title
-                self.visualizer.set_now_playing(artist, title)
+
+            self.visualizer.set_now_playing(artist, title)
             self.play_button.setProperty("playing", True)
             self.play_button.setText("❚❚  PLAYING")
         else:
@@ -230,7 +263,6 @@ class LivesetDetailPage(QWidget):
         self.meta.setObjectName("detailMeta")
         self.meta.setWordWrap(True)
         info.addWidget(self.meta)
-
         info.addStretch(1)
 
         self.play_button = QPushButton("▶  PLAY LIVESET")
@@ -265,20 +297,14 @@ class LivesetDetailPage(QWidget):
         pix = QPixmap(path) if path and Path(path).exists() else QPixmap()
         if pix.isNull():
             return QPixmap()
-        scaled = pix.scaled(size, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+        scaled = pix.scaled(
+            size,
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.TransformationMode.SmoothTransformation,
+        )
         x = max(0, (scaled.width() - size.width()) // 2)
         y = max(0, (scaled.height() - size.height()) // 2)
         return scaled.copy(x, y, size.width(), size.height())
-
-    @staticmethod
-    def _identity_from_audio(path: str):
-        name = Path(str(path or "")).stem.strip()
-        if not name:
-            return "", ""
-        if " - " in name:
-            artist, title = name.split(" - ", 1)
-            return artist.strip(), title.strip()
-        return "", name
 
     def load_liveset(self, data):
         self.data = dict(data or {})
@@ -287,12 +313,18 @@ class LivesetDetailPage(QWidget):
         fallback_artist, fallback_title = self._identity_from_audio(audio_path)
         artist = str(self.data.get("artist") or "").strip() or fallback_artist
         title = str(self.data.get("title") or "").strip() or fallback_title
-        self.data["_display_artist"] = artist
-        self.data["_display_title"] = title
+
         self.title.setText(title or "(geen titel)")
         self.artist.setText(artist or "LIVESET")
-        meta = " • ".join(x for x in [str(self.data.get("date") or ""), str(self.data.get("location") or ""), str(self.data.get("duration") or "")] if x)
+        meta = " • ".join(
+            x for x in (
+                str(self.data.get("date") or ""),
+                str(self.data.get("location") or ""),
+                str(self.data.get("duration") or ""),
+            ) if x
+        )
         self.meta.setText(meta)
+
         pix = self._crop(str(self.data.get("cover") or ""), self.cover.size())
         if pix.isNull():
             self.cover.setPixmap(QPixmap())
@@ -300,6 +332,7 @@ class LivesetDetailPage(QWidget):
         else:
             self.cover.setText("")
             self.cover.setPixmap(pix)
+
         self.visualizer.set_liveset(artist, title, False)
         self.play_button.setProperty("playing", False)
         self.play_button.setText("▶  PLAY LIVESET")
