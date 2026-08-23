@@ -173,11 +173,7 @@ class LivesetDetailPage(QWidget):
 
     @staticmethod
     def _identity_from_audio(path: str):
-        """Get the identity from the file that is actually playing.
-
-        The central player's current_path is authoritative. This prevents a
-        stale/incorrect Library artist or title from being shown as NOW PLAYING.
-        """
+        """Extract artist/title from the actual audio filename."""
         name = Path(str(path or "")).stem.strip()
         if not name:
             return "", ""
@@ -186,9 +182,32 @@ class LivesetDetailPage(QWidget):
             return artist.strip(), title.strip()
         return "", name
 
+    def _apply_actual_playback(self, path):
+        """Immediately show the file reported by the real player signal.
+
+        This deliberately does NOT require the Library item to match first.
+        The playback signal is the authoritative source for NOW PLAYING.
+        """
+        path = str(path or "").strip()
+        if not path:
+            return
+
+        artist, title = self._identity_from_audio(path)
+        if not artist:
+            artist = str(self.data.get("artist") or "").strip()
+        if not title:
+            title = str(self.data.get("title") or "").strip()
+
+        self._last_active_path = path
+        self.visualizer.set_now_playing(artist, title)
+        self.play_button.setProperty("playing", True)
+        self.play_button.setText("❚❚  PLAYING")
+        self.play_button.style().unpolish(self.play_button)
+        self.play_button.style().polish(self.play_button)
+
     def _sync_from_central_player(self):
         player = self._player
-        if player is None or not self.data:
+        if player is None:
             return
         try:
             path = str(getattr(player, "current_path", None) or "").strip()
@@ -197,27 +216,14 @@ class LivesetDetailPage(QWidget):
         except Exception:
             return
 
-        active = str(self.data.get("audio") or "").strip()
-        same_file = bool(path and active and self._same_path(path, active))
+        if playing and path:
+            self._apply_actual_playback(path)
+            return
 
-        if same_file and playing:
-            fallback_artist, fallback_title = self._identity_from_audio(path)
-            # IMPORTANT: the actual playing filename wins over Library metadata.
-            artist = fallback_artist or str(self.data.get("artist") or "").strip()
-            title = fallback_title or str(self.data.get("title") or "").strip()
-
-            if path != self._last_active_path:
-                self._last_active_path = path
-
-            self.visualizer.set_now_playing(artist, title)
-            self.play_button.setProperty("playing", True)
-            self.play_button.setText("❚❚  PLAYING")
-        else:
-            self._last_active_path = ""
-            self.visualizer.set_playing(False)
-            self.play_button.setProperty("playing", False)
-            self.play_button.setText("▶  PLAY LIVESET")
-
+        self._last_active_path = ""
+        self.visualizer.set_playing(False)
+        self.play_button.setProperty("playing", False)
+        self.play_button.setText("▶  PLAY LIVESET")
         self.play_button.style().unpolish(self.play_button)
         self.play_button.style().polish(self.play_button)
 
@@ -357,7 +363,10 @@ class LivesetDetailPage(QWidget):
             self.play_mp3.emit(path)
 
     def set_active_track(self, path):
-        self._sync_from_central_player()
+        # This signal is emitted by MP3Player at the exact moment a file is
+        # requested for playback. Use it directly; do not wait for a second
+        # lookup or compare it against Library metadata.
+        self._apply_actual_playback(path)
 
     def clear_active_track(self):
         self._last_active_path = ""
