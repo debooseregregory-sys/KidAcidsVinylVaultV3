@@ -36,6 +36,7 @@ class LivesetsEditPage(QWidget):
         super().__init__(parent)
         self.items = []
         self.current_index = -1
+        self._building = False
         self._build()
         self.reload()
 
@@ -169,12 +170,13 @@ class LivesetsEditPage(QWidget):
         if self.items:
             self.current_index = min(max(self.current_index, 0), len(self.items) - 1)
             self.list.setCurrentRow(self.current_index)
+            self.select(self.current_index)
         else:
             self.current_index = -1
             self._clear_form()
 
     def select(self, index):
-        if index < 0 or index >= len(self.items):
+        if self._building or index < 0 or index >= len(self.items):
             return
         self.current_index = index
         data = self.items[index]
@@ -183,6 +185,10 @@ class LivesetsEditPage(QWidget):
         self._show_cover(str(data.get("cover") or ""))
 
     def new_item(self):
+        # First persist any edits to the currently selected liveset.
+        if self.current_index >= 0:
+            self._collect_form()
+
         self.items.append({
             "title": "",
             "artist": "",
@@ -193,10 +199,11 @@ class LivesetsEditPage(QWidget):
             "cover": "",
         })
         self.current_index = len(self.items) - 1
-        self._write()
+        self._write(reload_after=False)
+        self.reload()
 
     def choose_audio(self):
-        """Restore the actual liveset/audio linking action."""
+        """Link a real audio file to the selected liveset and save it immediately."""
         if self.current_index < 0:
             self.new_item()
 
@@ -210,7 +217,7 @@ class LivesetsEditPage(QWidget):
             return
 
         self.fields["audio"].setText(path)
-        self.save()
+        self.save(show_message=False)
 
     def choose_cover(self):
         if self.current_index < 0:
@@ -266,16 +273,39 @@ class LivesetsEditPage(QWidget):
         self.cover.setText("")
         self.cover.setPixmap(scaled.copy(x, y, size.width(), size.height()))
 
-    def save(self):
-        if self.current_index < 0:
-            return
-
+    def _collect_form(self):
+        if self.current_index < 0 or self.current_index >= len(self.items):
+            return False
         cover = self.items[self.current_index].get("cover", "")
         self.items[self.current_index] = {
             key: edit.text().strip() for key, edit in self.fields.items()
         }
         self.items[self.current_index]["cover"] = cover
-        self._write()
+        return True
+
+    def save(self, show_message=True):
+        if not self._collect_form():
+            if show_message:
+                QMessageBox.warning(self, "Opslaan", "Selecteer eerst een liveset.")
+            return False
+
+        if not self._write(reload_after=False):
+            return False
+
+        # Refresh only the list entry. Do not reload the complete form here;
+        # that used to make the audio-link action look as if it had not saved.
+        row = self.current_index
+        item = self.items[row]
+        title = str(item.get("title") or "(geen titel)")
+        artist = str(item.get("artist") or "")
+        list_item = self.list.item(row)
+        if list_item is not None:
+            list_item.setText(f"{title}\n{artist}" if artist else title)
+
+        self.changed.emit()
+        if show_message:
+            QMessageBox.information(self, "Liveset opgeslagen", "De liveset is opgeslagen.")
+        return True
 
     @staticmethod
     def _delete_cover_file(path):
@@ -327,11 +357,28 @@ class LivesetsEditPage(QWidget):
         self.cover.setPixmap(QPixmap())
         self.cover.setText("GEEN COVER")
 
-    def _write(self):
+    def _write(self, reload_after=True):
         DATA_DIR.mkdir(parents=True, exist_ok=True)
-        LIVESETS_FILE.write_text(
-            json.dumps(self.items, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        self.changed.emit()
-        self.reload()
+        temp_file = LIVESETS_FILE.with_suffix(".json.tmp")
+        try:
+            temp_file.write_text(
+                json.dumps(self.items, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            temp_file.replace(LIVESETS_FILE)
+        except (OSError, TypeError, ValueError) as exc:
+            try:
+                if temp_file.exists():
+                    temp_file.unlink()
+            except OSError:
+                pass
+            QMessageBox.critical(
+                self,
+                "Opslaan mislukt",
+                f"De liveset kon niet worden opgeslagen.\n\n{exc}",
+            )
+            return False
+
+        if reload_after:
+            self.reload()
+        return True
