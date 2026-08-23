@@ -7,7 +7,7 @@
 
 import sys
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSettings
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -217,6 +217,7 @@ class VinylVaultWindow(QMainWindow):
         self.current_nav = None
 
         self.build_ui()
+        self._apply_startup_settings()
 
     # ========================================================
     # BUILD UI
@@ -721,6 +722,7 @@ class VinylVaultWindow(QMainWindow):
             self.mp3_player
         )
 
+        self._player_bar_ready = True
         self.player_bar.setFixedHeight(
             78
         )
@@ -764,9 +766,93 @@ class VinylVaultWindow(QMainWindow):
     # SETTINGS
     # ========================================================
 
+
+    def _settings_store(self):
+        return QSettings("Kid Acid", "MusicVault")
+
+    def _apply_startup_settings(self):
+        """Restore window geometry, volume and open the preferred start page."""
+        settings = self._settings_store()
+
+        if settings.value("remember_window_state", True, type=bool):
+            geometry = settings.value("window_geometry")
+            if geometry is not None:
+                try:
+                    self.restoreGeometry(geometry)
+                except Exception:
+                    pass
+            state = settings.value("window_state")
+            if state is not None:
+                try:
+                    self.restoreState(state)
+                except Exception:
+                    pass
+
+        # Open preferred page after UI is ready
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(0, self._open_startup_page)
+
+    def _open_startup_page(self):
+        settings = self._settings_store()
+        if settings.value("remember_last_page", True, type=bool):
+            page = str(settings.value("last_page", "") or "").strip()
+        else:
+            page = str(settings.value("start_page", "Dashboard") or "Dashboard")
+        self._navigate_to_named_page(page)
+
+    def _navigate_to_named_page(self, page):
+        page = str(page or "Dashboard").strip()
+        mapping = {
+            "Dashboard": "show_home",
+            "Home": "show_home",
+            "Release Board": "show_board",
+            "Board": "show_board",
+            "Release Library": "show_library",
+            "Library": "show_library",
+            "Vinyl Showcase": "show_vinyl_showcase",
+            "Showcase": "show_vinyl_showcase",
+            "CD Library": "show_cd_library",
+            "CD Showcase": "show_cd_library",
+            "MP3 Library": "show_mp3_library",
+            "MP3 Showcase": "show_mp3_showcase",
+            "Discogs Import": "show_discogs",
+            "Discogs": "show_discogs",
+            "Settings": "show_settings",
+        }
+        method_name = mapping.get(page, "show_home")
+        method = getattr(self, method_name, None)
+        if callable(method):
+            try:
+                method()
+            except Exception as exc:
+                print("Startup navigation failed:", page, exc)
+                if method_name != "show_home" and hasattr(self, "show_home"):
+                    self.show_home()
+
+    def _remember_current_page(self, name):
+        settings = self._settings_store()
+        if settings.value("remember_last_page", True, type=bool):
+            settings.setValue("last_page", name)
+
+    def closeEvent(self, event):
+        settings = self._settings_store()
+        if settings.value("remember_window_state", True, type=bool):
+            settings.setValue("window_geometry", self.saveGeometry())
+            settings.setValue("window_state", self.saveState())
+        # Best-effort: store last title as page hint
+        try:
+            title = str(self.page_title.text() or "").strip()
+            if title:
+                settings.setValue("last_page", title)
+        except Exception:
+            pass
+        super().closeEvent(event)
+
+
     def show_settings(self):
         self.pages.setCurrentWidget(self.settings_page)
         self.page_title.setText("Settings")
+        self._remember_current_page("Settings")
         self.set_active_nav(self.settings_button)
 
     # ========================================================
@@ -776,6 +862,7 @@ class VinylVaultWindow(QMainWindow):
     def show_cd_library(self):
         self.pages.setCurrentWidget(self.cd_library_page)
         self.page_title.setText("CD Library")
+        self._remember_current_page("CD Library")
         self.set_active_nav(self.cd_library_button)
         if hasattr(self.cd_library_page, "load_releases"):
             self.cd_library_page.load_releases()
@@ -1772,7 +1859,11 @@ def main():
 
     window = VinylVaultWindow()
 
-    window.showMaximized()
+    # Maximized only when no saved geometry
+    settings = QSettings("Kid Acid", "MusicVault")
+    has_geometry = settings.value("window_geometry") is not None and settings.value("remember_window_state", True, type=bool)
+    if not has_geometry:
+        window.showMaximized()
     window.show()
 
     sys.exit(

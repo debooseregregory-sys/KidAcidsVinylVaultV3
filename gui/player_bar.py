@@ -5,7 +5,7 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSettings
 from PySide6.QtWidgets import (
     QWidget,
     QHBoxLayout,
@@ -204,8 +204,16 @@ class PlayerBar(QWidget):
             100
         )
 
+        settings = QSettings("Kid Acid", "MusicVault")
+        remember = settings.value("remember_volume", True, type=bool)
+        initial_volume = settings.value("player_volume", 80, type=int) if remember else 100
+        try:
+            initial_volume = max(0, min(100, int(initial_volume)))
+        except (TypeError, ValueError):
+            initial_volume = 80
+
         self.volume_slider.setValue(
-            100
+            initial_volume
         )
 
         self.volume_slider.setFixedWidth(
@@ -215,6 +223,8 @@ class PlayerBar(QWidget):
         self.volume_slider.valueChanged.connect(
             self.change_volume
         )
+        # Apply once at startup
+        self.change_volume(initial_volume)
 
         layout.addWidget(
             self.volume_slider
@@ -379,6 +389,9 @@ class PlayerBar(QWidget):
         self.player.change_volume(
             value
         )
+        settings = QSettings("Kid Acid", "MusicVault")
+        if settings.value("remember_volume", True, type=bool):
+            settings.setValue("player_volume", int(value))
 
 
 # ============================================================

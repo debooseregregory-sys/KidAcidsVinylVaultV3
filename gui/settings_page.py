@@ -231,6 +231,46 @@ class SettingsPage(QWidget):
         outer.addWidget(content, 1)
         self._select_category("General")
 
+    def _persistent_toggle(self, key, default=True):
+        """Toggle that loads/saves a boolean QSettings value."""
+        toggle = SettingsToggle(self._settings.value(key, default, type=bool))
+        toggle.toggled.connect(lambda value, k=key: self._settings.setValue(k, bool(value)))
+        return toggle
+
+    def _start_page_button(self):
+        """Cycle start-page preference and persist it."""
+        options = [
+            "Dashboard",
+            "Release Board",
+            "Release Library",
+            "Vinyl Showcase",
+            "CD Library",
+            "MP3 Library",
+            "MP3 Showcase",
+            "Settings",
+        ]
+        current = str(self._settings.value("start_page", "Dashboard") or "Dashboard")
+        if current not in options:
+            current = "Dashboard"
+        button = QPushButton(f"{current}  ▾")
+        button.setObjectName("settingsValueButton")
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setMinimumWidth(150)
+        button.setMinimumHeight(38)
+
+        def cycle():
+            cur = str(self._settings.value("start_page", "Dashboard") or "Dashboard")
+            try:
+                idx = options.index(cur)
+            except ValueError:
+                idx = 0
+            nxt = options[(idx + 1) % len(options)]
+            self._settings.setValue("start_page", nxt)
+            button.setText(f"{nxt}  ▾")
+
+        button.clicked.connect(cycle)
+        return button
+
     def _general_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -259,14 +299,14 @@ class SettingsPage(QWidget):
         layout.addWidget(hero)
 
         startup = SettingsCard("Startup", "Launch behaviour", "Choose how MusicVault should feel when you open it.")
-        startup.body.addWidget(SettingsRow("Start page", "The page MusicVault opens first.", self._value_button("Dashboard")))
-        startup.body.addWidget(SettingsRow("Remember last page", "Return to the page you were using when you closed MusicVault.", SettingsToggle(True)))
+        startup.body.addWidget(SettingsRow("Start page", "The page MusicVault opens first (used when Remember last page is off).", self._start_page_button()))
+        startup.body.addWidget(SettingsRow("Remember last page", "Return to the page you were using when you closed MusicVault.", self._persistent_toggle("remember_last_page", True)))
         layout.addWidget(startup)
 
         behaviour = SettingsCard("Behaviour", "Small details, your way", "Keep the interface predictable and comfortable during everyday use.")
-        behaviour.body.addWidget(SettingsRow("Remember window state", "Keep your window size and position between sessions.", SettingsToggle(True)))
-        behaviour.body.addWidget(SettingsRow("Show notifications", "Display lightweight feedback for completed actions.", SettingsToggle(True)))
-        behaviour.body.addWidget(SettingsRow("Confirm before deleting", "Ask before a destructive action is performed.", SettingsToggle(True)))
+        behaviour.body.addWidget(SettingsRow("Remember window state", "Keep your window size and position between sessions.", self._persistent_toggle("remember_window_state", True)))
+        behaviour.body.addWidget(SettingsRow("Show notifications", "Display lightweight feedback for completed actions.", self._persistent_toggle("show_notifications", True)))
+        behaviour.body.addWidget(SettingsRow("Confirm before deleting", "Ask before a destructive action is performed.", self._persistent_toggle("confirm_before_deleting", True)))
         layout.addWidget(behaviour)
 
         layout.addStretch()
@@ -341,8 +381,8 @@ class SettingsPage(QWidget):
         layout.addWidget(density)
 
         artwork = SettingsCard("Artwork", "Cover presentation", "Control how prominent cover artwork should feel throughout the collection.")
-        artwork.body.addWidget(SettingsRow("Show artwork animations", "Keep subtle artwork motion enabled where supported.", SettingsToggle(self._settings.value("artwork_animations", True, type=bool))))
-        artwork.body.addWidget(SettingsRow("Prefer large covers", "Give cover art more visual weight in collection views.", SettingsToggle(self._settings.value("large_covers", True, type=bool))))
+        artwork.body.addWidget(SettingsRow("Show artwork animations", "Keep subtle artwork motion enabled where supported.", self._persistent_toggle("artwork_animations", True)))
+        artwork.body.addWidget(SettingsRow("Prefer large covers", "Give cover art more visual weight in collection views.", self._persistent_toggle("large_covers", True)))
         layout.addWidget(artwork)
         layout.addStretch()
 
