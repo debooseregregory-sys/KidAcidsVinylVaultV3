@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from gui.app_settings import paint_accent
 
 from PySide6.QtCore import Qt
@@ -173,6 +175,12 @@ class HelpPage(QWidget):
 
         self._render_sections()
 
+    @staticmethod
+    def _format_help_text(text: str) -> str:
+        """Zet iedere afzonderlijke zin op een eigen regel met extra leesruimte."""
+        text = re.sub(r"\s+", " ", text.strip())
+        return re.sub(r"(?<=[.!?])\s+(?=[A-ZÀ-ÖØ-Ý0-9])", "\n\n", text)
+
     def _render_sections(self):
         while self.content_layout.count():
             item = self.content_layout.takeAt(0)
@@ -206,7 +214,7 @@ class HelpPage(QWidget):
             layout.addWidget(heading)
             layout.addSpacing(8)
 
-            description = QLabel(intro)
+            description = QLabel(self._format_help_text(intro))
             description.setObjectName("sectionIntro")
             description.setWordWrap(True)
             description.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -236,7 +244,7 @@ class HelpPage(QWidget):
                 item_heading.setWordWrap(True)
                 item_layout.addWidget(item_heading)
 
-                item_text_label = QLabel(item_text)
+                item_text_label = QLabel(self._format_help_text(item_text))
                 item_text_label.setObjectName("sectionText")
                 item_text_label.setWordWrap(True)
                 item_text_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
