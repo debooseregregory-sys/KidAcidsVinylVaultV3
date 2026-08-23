@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, Signal, QTimer
-from PySide6.QtGui import QPixmap, QPainter, QPen, QBrush, QFont, QLinearGradient
+from PySide6.QtGui import QPixmap, QPainter, QPen, QBrush, QFont, QLinearGradient, QColor
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 
@@ -15,7 +15,8 @@ class LivesetPlayerVisualizer(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumHeight(330)
+        self.setMinimumHeight(430)
+        self.setSizePolicy(self.sizePolicy().horizontalPolicy(), self.sizePolicy().verticalPolicy())
         self._phase = 0.0
         self._text_offset = 0.0
         self._artist = ""
@@ -32,8 +33,8 @@ class LivesetPlayerVisualizer(QWidget):
         self.update()
 
     def _animate(self):
-        self._phase = (self._phase + (0.075 if self._playing else 0.032)) % (math.pi * 2)
-        self._text_offset = (self._text_offset + (2.8 if self._playing else 1.1)) % 4000
+        self._phase = (self._phase + (0.085 if self._playing else 0.032)) % (math.pi * 2)
+        self._text_offset = (self._text_offset + (3.4 if self._playing else 1.0)) % 5000
         self.update()
 
     def paintEvent(self, event):
@@ -43,102 +44,122 @@ class LivesetPlayerVisualizer(QWidget):
         rect = self.rect().adjusted(1, 1, -1, -1)
         w, h = rect.width(), rect.height()
         cx = rect.center().x()
-        cy = rect.top() + h * 0.52
+        cy = rect.top() + h * 0.54
 
+        # Dark club-like backdrop.
         bg = QLinearGradient(rect.left(), rect.top(), rect.right(), rect.bottom())
-        bg.setColorAt(0.0, Qt.GlobalColor.black)
-        bg.setColorAt(0.38, Qt.GlobalColor.darkMagenta)
-        bg.setColorAt(0.72, Qt.GlobalColor.black)
-        bg.setColorAt(1.0, Qt.GlobalColor.black)
+        bg.setColorAt(0.0, QColor(3, 3, 7))
+        bg.setColorAt(0.30, QColor(34, 3, 35))
+        bg.setColorAt(0.52, QColor(8, 2, 15))
+        bg.setColorAt(0.78, QColor(28, 3, 30))
+        bg.setColorAt(1.0, QColor(2, 2, 6))
         painter.setBrush(QBrush(bg))
-        painter.setPen(QPen(Qt.GlobalColor.darkMagenta, 1.5))
-        painter.drawRoundedRect(rect, 20, 20)
+        painter.setPen(QPen(QColor(110, 20, 105), 2))
+        painter.drawRoundedRect(rect, 24, 24)
 
-        # Large pulsing rings. The movement is stronger while the liveset plays.
-        pulse = 48 + 32 * (0.5 + 0.5 * math.sin(self._phase * 2.0))
-        for ring in range(9):
-            radius = pulse + ring * 34
-            width = max(1.0, 4.0 - ring * 0.34)
-            painter.setPen(QPen(Qt.GlobalColor.magenta, width))
-            painter.setBrush(QBrush(Qt.GlobalColor.transparent))
-            painter.drawEllipse(int(cx - radius), int(cy - radius), int(radius * 2), int(radius * 2))
+        # Huge atmospheric glow layers.
+        for radius, alpha in ((310, 18), (250, 24), (190, 32), (135, 45)):
+            painter.setBrush(QBrush(QColor(255, 0, 190, alpha)))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawEllipse(int(cx - radius), int(cy - radius), radius * 2, radius * 2)
 
-        # Wide orbiting particle field.
-        for i in range(90):
-            speed = 0.42 + (i % 9) * 0.055
-            angle = self._phase * speed + i * 0.37
-            orbit_x = w * (0.16 + (i % 6) * 0.075)
-            orbit_y = h * (0.12 + (i % 8) * 0.042)
-            x = cx + math.sin(angle * 0.87 + i) * orbit_x
-            y = cy + math.cos(angle * 1.09 + i * 0.13) * orbit_y
-            radius = 1.0 + 3.8 * (0.5 + 0.5 * math.sin(angle * 2.4))
-            painter.setBrush(QBrush(Qt.GlobalColor.magenta))
-            painter.setPen(QPen(Qt.GlobalColor.magenta, 1))
+        # Rotating outer orbital arcs.
+        orbit_radius = min(w, h) * (0.29 if self._playing else 0.25)
+        for i in range(10):
+            radius = orbit_radius + i * 16
+            span = 34 + 8 * math.sin(self._phase * 1.7 + i)
+            start = int((self._phase * (180 / math.pi) * (1.2 + i * 0.08) + i * 37) * 16)
+            pen = QPen(QColor(255, 45, 190, max(35, 150 - i * 11)), 2.5 if self._playing else 1.6)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawArc(int(cx - radius), int(cy - radius), int(radius * 2), int(radius * 2), start, int(span * 16))
+
+        # Dense animated particle field.
+        for i in range(120):
+            angle = self._phase * (0.30 + (i % 11) * 0.045) + i * 0.37
+            orbit_x = w * (0.18 + (i % 7) * 0.075)
+            orbit_y = h * (0.13 + (i % 9) * 0.038)
+            x = cx + math.sin(angle * 0.83 + i) * orbit_x
+            y = cy + math.cos(angle * 1.13 + i * 0.11) * orbit_y
+            radius = 1.0 + 4.0 * (0.5 + 0.5 * math.sin(angle * 2.7 + i))
+            alpha = 90 + int(120 * (0.5 + 0.5 * math.sin(angle * 1.8)))
+            painter.setBrush(QBrush(QColor(255, 40, 200, alpha)))
+            painter.setPen(Qt.PenStyle.NoPen)
             painter.drawEllipse(int(x - radius), int(y - radius), int(radius * 2), int(radius * 2))
 
-        # Spinning central energy wheel.
-        spokes = 20
+        # Central spinning energy wheel.
+        spokes = 28
+        spin = self._phase * (2.4 if self._playing else 0.65)
         for i in range(spokes):
-            angle = self._phase * (2.0 if self._playing else 0.75) + i * (math.pi * 2 / spokes)
-            inner = 25 + 6 * math.sin(self._phase * 2.0 + i)
-            outer = 82 + 24 * math.sin(self._phase * 3.0 + i * 0.71)
+            angle = spin + i * (math.pi * 2 / spokes)
+            inner = 32 + 8 * math.sin(self._phase * 2.0 + i)
+            outer = 105 + 28 * math.sin(self._phase * 3.0 + i * 0.61)
             x1 = cx + math.cos(angle) * inner
             y1 = cy + math.sin(angle) * inner
             x2 = cx + math.cos(angle) * outer
             y2 = cy + math.sin(angle) * outer
-            painter.setPen(QPen(Qt.GlobalColor.magenta, 3.2 if self._playing else 2.0))
+            alpha = 220 if self._playing else 130
+            painter.setPen(QPen(QColor(255, 30, 190, alpha), 3.8 if self._playing else 2.2))
             painter.drawLine(int(x1), int(y1), int(x2), int(y2))
 
-        painter.setBrush(QBrush(Qt.GlobalColor.magenta))
-        painter.setPen(QPen(Qt.GlobalColor.lightGray, 2))
-        core = 17 + int(5 * (0.5 + 0.5 * math.sin(self._phase * 3)))
+        core = 25 + int(8 * (0.5 + 0.5 * math.sin(self._phase * 3.0)))
+        painter.setBrush(QBrush(QColor(255, 50, 205, 235)))
+        painter.setPen(QPen(QColor(255, 220, 250, 220), 2))
         painter.drawEllipse(int(cx - core), int(cy - core), core * 2, core * 2)
 
-        # Full-width animated equalizer.
-        bar_count = max(52, min(130, w // 11))
-        usable = w - 50
-        step = usable / bar_count
-        base_y = rect.bottom() - 34
-        for i in range(bar_count):
-            wave = (
-                math.sin(self._phase * (3.2 if self._playing else 1.6) + i * 0.31)
-                + 0.72 * math.sin(self._phase * (5.1 if self._playing else 2.2) - i * 0.17)
-                + 0.38 * math.sin(self._phase * 1.35 + i * 0.77)
-            ) / 2.1
-            height = 10 + (wave + 1.0) * (h * (0.15 if self._playing else 0.10))
-            x = rect.left() + 25 + i * step
-            painter.setPen(QPen(Qt.GlobalColor.magenta, max(2.0, step * 0.46)))
-            painter.drawLine(int(x), int(base_y), int(x), int(base_y - height))
-
-        # The scrolling identity is now the REAL selected liveset, never a generic slogan.
+        # Large upper identity marquee: ALWAYS the real liveset.
         if self._artist or self._title:
-            identity = f"{self._artist or 'UNKNOWN ARTIST'}  •  {self._title or 'UNTITLED LIVESET'}  •  "
+            identity = f"{self._artist or 'UNKNOWN ARTIST'}   •   {self._title or 'UNTITLED LIVESET'}   •   "
         else:
-            identity = "NO LIVESET SELECTED  •  "
-
-        painter.setFont(QFont("Arial", max(16, min(28, int(h / 16))), QFont.Weight.Black))
-        painter.setPen(QPen(Qt.GlobalColor.white))
+            identity = "NO LIVESET SELECTED   •   "
+        painter.setFont(QFont("Arial", max(20, min(34, int(h / 13))), QFont.Weight.Black))
+        painter.setPen(QPen(QColor(255, 245, 255)))
         text_width = painter.fontMetrics().horizontalAdvance(identity)
-        x = rect.right() - int(self._text_offset % (text_width + 100))
-        y = rect.top() + 40
+        gap = 120
+        x = rect.right() - int(self._text_offset % (text_width + gap))
+        y = rect.top() + 48
         painter.drawText(int(x), int(y), identity)
-        painter.drawText(int(x + text_width + 100), int(y), identity)
+        painter.drawText(int(x + text_width + gap), int(y), identity)
 
-        # Large, unmistakable current-playback label.
+        # Playback status and actual artist/title, large and unmistakable.
         badge = "●  NOW PLAYING" if self._playing else "○  READY TO PLAY"
-        painter.setFont(QFont("Arial", max(16, min(24, int(h / 18))), QFont.Weight.Black))
-        painter.setPen(QPen(Qt.GlobalColor.white if self._playing else Qt.GlobalColor.lightGray))
-        painter.drawText(rect.left() + 28, rect.top() + 92, badge)
+        painter.setFont(QFont("Arial", max(18, min(28, int(h / 16))), QFont.Weight.Black))
+        painter.setPen(QPen(QColor(255, 255, 255, 245) if self._playing else QColor(190, 190, 205)))
+        painter.drawText(rect.left() + 34, rect.top() + 105, badge)
 
-        # Static readable artist/title in the centre-left area.
         artist = self._artist or "Select a liveset"
         title = self._title or "No liveset is currently loaded"
-        painter.setFont(QFont("Arial", max(18, min(32, int(h / 14))), QFont.Weight.Black))
-        painter.setPen(QPen(Qt.GlobalColor.white))
-        painter.drawText(rect.left() + 30, rect.top() + 142, artist)
-        painter.setFont(QFont("Arial", max(15, min(26, int(h / 17))), QFont.Weight.Bold))
-        painter.setPen(QPen(Qt.GlobalColor.lightGray))
-        painter.drawText(rect.left() + 32, rect.top() + 178, title)
+        artist_size = max(24, min(46, int(h / 10)))
+        title_size = max(20, min(34, int(h / 14)))
+        painter.setFont(QFont("Arial", artist_size, QFont.Weight.Black))
+        painter.setPen(QPen(QColor(255, 255, 255)))
+        painter.drawText(rect.left() + 36, rect.top() + 158, artist)
+        painter.setFont(QFont("Arial", title_size, QFont.Weight.Bold))
+        painter.setPen(QPen(QColor(235, 205, 230)))
+        painter.drawText(rect.left() + 38, rect.top() + 202, title)
+
+        # Wide animated equalizer / stage floor.
+        bar_count = max(60, min(150, w // 9))
+        usable = w - 54
+        step = usable / bar_count
+        base_y = rect.bottom() - 32
+        for i in range(bar_count):
+            wave = (
+                math.sin(self._phase * (3.8 if self._playing else 1.5) + i * 0.28)
+                + 0.72 * math.sin(self._phase * (6.2 if self._playing else 2.1) - i * 0.19)
+                + 0.42 * math.sin(self._phase * 1.2 + i * 0.73)
+            ) / 2.14
+            height = 12 + (wave + 1.0) * (h * (0.19 if self._playing else 0.12))
+            x = rect.left() + 27 + i * step
+            alpha = 220 if self._playing else 125
+            painter.setPen(QPen(QColor(255, 35, 195, alpha), max(2.0, step * 0.50)))
+            painter.drawLine(int(x), int(base_y), int(x), int(base_y - height))
+
+        # Thin moving scanlines make the whole stage feel alive.
+        for i in range(7):
+            scan_y = rect.top() + ((self._text_offset * (0.45 + i * 0.07) + i * 83) % max(1, h - 4))
+            painter.setPen(QPen(QColor(255, 40, 190, 18), 1))
+            painter.drawLine(rect.left() + 12, int(scan_y), rect.right() - 12, int(scan_y))
 
         painter.end()
 
