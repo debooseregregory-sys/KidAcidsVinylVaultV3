@@ -81,9 +81,23 @@ class LivesetsEditPage(QWidget):
             lab = QLabel(label.upper())
             lab.setObjectName("fieldLabel")
             form.addWidget(lab)
-            edit = QLineEdit()
-            self.fields[key] = edit
-            form.addWidget(edit)
+
+            if key == "audio":
+                audio_row = QHBoxLayout()
+                audio_row.setSpacing(6)
+                edit = QLineEdit()
+                self.fields[key] = edit
+                audio_row.addWidget(edit, 1)
+
+                choose_audio = QPushButton("KIES AUDIO")
+                choose_audio.setObjectName("audioButton")
+                choose_audio.clicked.connect(self.choose_audio)
+                audio_row.addWidget(choose_audio)
+                form.addLayout(audio_row)
+            else:
+                edit = QLineEdit()
+                self.fields[key] = edit
+                form.addWidget(edit)
 
         cover_row = QHBoxLayout()
         self.cover = QLabel("GEEN COVER")
@@ -129,6 +143,8 @@ class LivesetsEditPage(QWidget):
             QLabel#editCover{background:#07070a;border:1px solid #2a2a33;border-radius:7px;color:#666671;}
             QPushButton{background:#18181f;color:#ddd;border:1px solid #30303a;border-radius:7px;padding:9px 13px;font-size:11px;font-weight:900;}
             QPushButton:hover{border-color:#ffcf72;color:#fff;}
+            QPushButton#audioButton{background:#24242c;color:#fff;border-color:#4a4a56;}
+            QPushButton#audioButton:hover{background:#30303a;border-color:#ffcf72;color:#fff;}
             QPushButton#saveButton{background:#6b1717;color:#fff;border-color:#8f2929;}
             QPushButton#deleteButton{background:#35161b;color:#ffb5bd;border-color:#6d2731;}
             QPushButton#deleteButton:hover{background:#4a1b22;border-color:#a43b49;color:#fff;}
@@ -178,6 +194,23 @@ class LivesetsEditPage(QWidget):
         })
         self.current_index = len(self.items) - 1
         self._write()
+
+    def choose_audio(self):
+        """Restore the actual liveset/audio linking action."""
+        if self.current_index < 0:
+            self.new_item()
+
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Kies liveset audio",
+            "",
+            "Audio bestanden (*.mp3 *.wav *.flac *.m4a *.aac *.ogg);;Alle bestanden (*.*)",
+        )
+        if not path:
+            return
+
+        self.fields["audio"].setText(path)
+        self.save()
 
     def choose_cover(self):
         if self.current_index < 0:
