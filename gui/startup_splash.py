@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QWidget
 class StartupSplash(QWidget):
     """Fullscreen-style frameless startup announcement for MusicVault."""
 
-    def __init__(self, duration=3200, parent=None):
+    def __init__(self, duration=3600, parent=None):
         super().__init__(parent)
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -66,86 +66,133 @@ class StartupSplash(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         r = self.rect().adjusted(2, 2, -2, -2)
         w, h = r.width(), r.height()
-        cx, cy = r.center().x(), r.center().y() + 18
+        cx, cy = r.center().x(), r.center().y() + 28
 
+        # Deep cinematic background.
         bg = QLinearGradient(r.left(), r.top(), r.right(), r.bottom())
-        bg.setColorAt(0.0, QColor(3, 2, 8, 252))
-        bg.setColorAt(0.45, QColor(30, 3, 31, 252))
-        bg.setColorAt(0.7, QColor(8, 2, 18, 252))
-        bg.setColorAt(1.0, QColor(2, 2, 6, 252))
+        bg.setColorAt(0.0, QColor(2, 2, 8, 253))
+        bg.setColorAt(0.38, QColor(24, 2, 27, 253))
+        bg.setColorAt(0.62, QColor(7, 3, 20, 253))
+        bg.setColorAt(1.0, QColor(1, 2, 7, 253))
         p.setBrush(QBrush(bg))
         p.setPen(QPen(QColor(255, 45, 190, 210), 2))
         p.drawRoundedRect(r, 28, 28)
 
-        # Pulsing neon rings.
-        pulse = 18 + 10 * (0.5 + 0.5 * math.sin(self._phase * 2))
-        for i in range(9):
-            radius = 90 + i * 34 + pulse
-            alpha = max(18, 130 - i * 12)
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            p.setPen(QPen(QColor(255, 30, 190, alpha), 2 if i < 3 else 1))
+        # Subtle moving scan lines give the splash a screen-like feel.
+        p.setPen(QPen(QColor(255, 80, 210, 14), 1))
+        scan_shift = int((self._phase * 34) % 12)
+        for y in range(r.top() + scan_shift, r.bottom(), 12):
+            p.drawLine(r.left() + 18, y, r.right() - 18, y)
+
+        # Wide atmospheric glow behind the core.
+        glow_radius = 250 + int(18 * math.sin(self._phase * 1.7))
+        for i in range(7, 0, -1):
+            radius = glow_radius * i / 7
+            alpha = 7 + i * 3
+            p.setBrush(QBrush(QColor(255, 20, 190, alpha)))
+            p.setPen(Qt.PenStyle.NoPen)
             p.drawEllipse(int(cx - radius), int(cy - radius), int(radius * 2), int(radius * 2))
 
-        # Orbiting particles.
-        for i in range(90):
-            a = self._phase * (0.25 + (i % 7) * 0.045) + i * 0.42
-            ox = w * (0.20 + (i % 6) * 0.07)
-            oy = h * (0.18 + (i % 5) * 0.055)
-            x = cx + math.sin(a * 0.9 + i) * ox
-            y = cy + math.cos(a * 1.15 + i * 0.13) * oy
-            size = 1.0 + 2.8 * (0.5 + 0.5 * math.sin(a * 2.2 + i))
-            p.setBrush(QBrush(QColor(255, 50, 205, 100 + int(120 * (0.5 + 0.5 * math.sin(a))))))
-            p.setPen(Qt.PenStyle.NoPen)
-            p.drawEllipse(int(x - size), int(y - size), int(size * 2), int(size * 2))
+        # Large pulsing rings.
+        pulse = 14 + 12 * (0.5 + 0.5 * math.sin(self._phase * 2))
+        for i in range(8):
+            radius = 72 + i * 32 + pulse
+            alpha = max(15, 125 - i * 14)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.setPen(QPen(QColor(255, 35, 190, alpha), 2 if i < 2 else 1))
+            p.drawEllipse(int(cx - radius), int(cy - radius), int(radius * 2), int(radius * 2))
 
-        # Central energy core.
-        for i in range(24):
-            a = self._phase * 2.1 + i * math.tau / 24
-            inner = 28
-            outer = 70 + 18 * math.sin(self._phase * 3 + i * 0.7)
-            p.setPen(QPen(QColor(255, 45, 195, 190), 3))
+        # Rotating turntable-style core.
+        for i in range(20):
+            a = self._phase * 1.7 + i * math.tau / 20
+            inner = 38
+            outer = 88 + 12 * math.sin(self._phase * 3 + i * 0.8)
+            alpha = 150 + int(70 * (0.5 + 0.5 * math.sin(a * 2)))
+            p.setPen(QPen(QColor(255, 48, 198, alpha), 2.5))
             p.drawLine(
                 int(cx + math.cos(a) * inner),
                 int(cy + math.sin(a) * inner),
                 int(cx + math.cos(a) * outer),
                 int(cy + math.sin(a) * outer),
             )
-        p.setBrush(QBrush(QColor(255, 45, 200, 230)))
-        p.setPen(QPen(QColor(255, 220, 250), 2))
-        p.drawEllipse(int(cx - 17), int(cy - 17), 34, 34)
 
-        # Announcement text.
-        p.setPen(QPen(QColor(255, 220, 246)))
-        p.setFont(QFont("Arial", 13, QFont.Weight.Bold))
+        # Inner record/disc.
+        p.setBrush(QBrush(QColor(7, 7, 12, 235)))
+        p.setPen(QPen(QColor(255, 70, 205, 180), 2))
+        p.drawEllipse(int(cx - 48), int(cy - 48), 96, 96)
+        p.setPen(QPen(QColor(110, 80, 125, 120), 1))
+        for rr in (32, 38, 44):
+            p.drawEllipse(int(cx - rr), int(cy - rr), rr * 2, rr * 2)
+        p.setBrush(QBrush(QColor(255, 45, 195, 235)))
+        p.setPen(QPen(QColor(255, 230, 250), 2))
+        p.drawEllipse(int(cx - 8), int(cy - 8), 16, 16)
+
+        # Orbiting particles and sparks.
+        for i in range(110):
+            a = self._phase * (0.22 + (i % 9) * 0.035) + i * 0.37
+            ox = w * (0.17 + (i % 7) * 0.065)
+            oy = h * (0.14 + (i % 6) * 0.055)
+            x = cx + math.sin(a * 0.91 + i) * ox
+            y = cy + math.cos(a * 1.07 + i * 0.19) * oy
+            size = 0.7 + 2.5 * (0.5 + 0.5 * math.sin(a * 2.4 + i))
+            alpha = 65 + int(150 * (0.5 + 0.5 * math.sin(a + i)))
+            p.setBrush(QBrush(QColor(255, 55, 205, alpha)))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawEllipse(int(x - size), int(y - size), int(size * 2), int(size * 2))
+
+        # Fine equalizer strip across the lower area.
+        bar_count = 76
+        base_y = r.bottom() - 82
+        step = (w - 90) / bar_count
+        for i in range(bar_count):
+            wave = (
+                math.sin(self._phase * 3.0 + i * 0.31)
+                + 0.55 * math.sin(self._phase * 5.4 - i * 0.19)
+                + 0.25 * math.sin(self._phase * 1.6 + i * 0.71)
+            ) / 1.8
+            height = 5 + (wave + 1.0) * 18
+            x = r.left() + 45 + i * step
+            p.setPen(QPen(QColor(255, 48, 195, 125), max(1.5, step * 0.34)))
+            p.drawLine(int(x), int(base_y), int(x), int(base_y - height))
+
+        # Small, elegant announcement typography.
+        p.setPen(QPen(QColor(255, 218, 244)))
+        p.setFont(QFont("Arial", 11, QFont.Weight.Bold))
         label = "WELCOME TO"
         tw = p.fontMetrics().horizontalAdvance(label)
-        p.drawText(int(cx - tw / 2), 76, label)
+        p.drawText(int(cx - tw / 2), 70, label)
 
+        # Smaller main title with more breathing room.
         title = "KID ACID'S"
-        p.setFont(QFont("Arial", 52, QFont.Weight.Black))
+        p.setFont(QFont("Arial", 39, QFont.Weight.Black))
         tw = p.fontMetrics().horizontalAdvance(title)
         p.setPen(QPen(QColor(255, 255, 255)))
-        p.drawText(int(cx - tw / 2), 132, title)
+        p.drawText(int(cx - tw / 2), 116, title)
 
         title2 = "MUSICVAULT"
-        p.setFont(QFont("Arial", 64, QFont.Weight.Black))
+        p.setFont(QFont("Arial", 49, QFont.Weight.Black))
         tw = p.fontMetrics().horizontalAdvance(title2)
-        glow = 130 + int(80 * (0.5 + 0.5 * math.sin(self._phase * 2)))
-        p.setPen(QPen(QColor(255, 45, 195, glow), 2))
-        p.drawText(int(cx - tw / 2), 198, title2)
-        p.setPen(QPen(QColor(255, 245, 255)))
-        p.drawText(int(cx - tw / 2), 198, title2)
+        glow = 105 + int(85 * (0.5 + 0.5 * math.sin(self._phase * 2)))
+        p.setPen(QPen(QColor(255, 40, 195, glow), 3))
+        p.drawText(int(cx - tw / 2), 168, title2)
+        p.setPen(QPen(QColor(255, 248, 255)))
+        p.drawText(int(cx - tw / 2), 168, title2)
 
-        p.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        p.setPen(QPen(QColor(210, 180, 210)))
+        # Animated accent line.
+        line_width = 120 + int(90 * (0.5 + 0.5 * math.sin(self._phase * 2.5)))
+        p.setPen(QPen(QColor(255, 55, 200, 210), 2))
+        p.drawLine(int(cx - line_width / 2), 186, int(cx + line_width / 2), 186)
+
+        p.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        p.setPen(QPen(QColor(205, 175, 210)))
         sub = "VINYL  •  CD  •  MP3  •  LIVESETS"
         tw = p.fontMetrics().horizontalAdvance(sub)
-        p.drawText(int(cx - tw / 2), h - 82, sub)
+        p.drawText(int(cx - tw / 2), h - 54, sub)
 
-        p.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-        p.setPen(QPen(QColor(130, 125, 145)))
-        status = "LOADING YOUR MUSIC COLLECTION  •  PLEASE WAIT"
+        p.setFont(QFont("Arial", 9, QFont.Weight.Bold))
+        p.setPen(QPen(QColor(120, 115, 140)))
+        status = "INITIALIZING YOUR MUSIC COLLECTION"
         tw = p.fontMetrics().horizontalAdvance(status)
-        p.drawText(int(cx - tw / 2), h - 50, status)
+        p.drawText(int(cx - tw / 2), h - 32, status)
 
         p.end()
