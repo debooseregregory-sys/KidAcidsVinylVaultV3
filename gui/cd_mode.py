@@ -73,6 +73,11 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
         self.pages.addWidget(self.livesets_showcase_page)
         self.pages.addWidget(self.liveset_detail_page)
 
+        # IMPORTANT: bind the detail page to the actual central player.
+        # The detail page then reads current_path/playbackState directly,
+        # so NOW PLAYING cannot depend on a missed Qt signal.
+        self.liveset_detail_page.bind_player(self.mp3_player)
+
         self.livesets_library_page.changed.connect(self._reload_livesets_views)
         self.livesets_showcase_page.open_requested.connect(self._open_liveset_detail)
         self.liveset_detail_page.back_requested.connect(self.show_livesets_showcase)
