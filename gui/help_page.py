@@ -57,7 +57,7 @@ class HelpPage(QWidget):
         self.content.setObjectName("helpContent")
         self.content_layout = QVBoxLayout(self.content)
         self.content_layout.setContentsMargins(8, 4, 22, 20)
-        self.content_layout.setSpacing(16)
+        self.content_layout.setSpacing(0)
         self.scroll.setWidget(self.content)
         root.addWidget(self.scroll, 1)
 
@@ -68,14 +68,15 @@ class HelpPage(QWidget):
             QLineEdit#helpSearch{background:#111116;color:#fff;border:1px solid #30303a;border-radius:9px;padding:10px 12px;font-size:12px;}
             QLineEdit#helpSearch:focus{border-color:#ffcf72;}
             QScrollArea#helpScroll{background:transparent;border:0px;}
-            QFrame#helpSection{background:#111116;border:1px solid #292933;border-radius:12px;}
-            QLabel#sectionNumber{color:#ffcf72;font-size:10px;font-weight:900;}
-            QLabel#sectionTitle{color:#fff;font-size:23px;font-weight:900;}
-            QLabel#sectionIntro{color:#aaaab4;font-size:13px;}
-            QFrame#helpItem{background:#17171e;border:1px solid #292933;border-radius:9px;}
-            QLabel#itemNumber{color:#6f6f7b;font-size:10px;font-weight:900;}
-            QLabel#sectionHeading{color:#ffcf72;font-size:12px;font-weight:900;}
-            QLabel#sectionText{color:#c2c2c9;font-size:12px;}
+            QWidget#helpSection{background:transparent;}
+            QLabel#sectionNumber{color:#ffcf72;font-size:10px;font-weight:900;letter-spacing:1px;}
+            QLabel#sectionTitle{color:#fff;font-size:25px;font-weight:900;}
+            QLabel#sectionIntro{color:#aaaab4;font-size:13px;line-height:1.45;}
+            QWidget#helpItem{background:transparent;}
+            QLabel#itemNumber{color:#5f5f6b;font-size:10px;font-weight:900;}
+            QLabel#sectionHeading{color:#ffcf72;font-size:13px;font-weight:900;}
+            QLabel#sectionText{color:#c2c2c9;font-size:12px;line-height:1.5;}
+            QFrame#helpDivider{color:#292933;background:#292933;border:0px;max-height:1px;}
             QScrollBar:vertical{background:#0d0d11;width:9px;border-radius:4px;}
             QScrollBar::handle:vertical{background:#34343e;border-radius:4px;min-height:35px;}
             QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0px;}
@@ -172,11 +173,11 @@ class HelpPage(QWidget):
             if query and query not in haystack:
                 continue
 
-            section = QFrame()
+            section = QWidget()
             section.setObjectName("helpSection")
             layout = QVBoxLayout(section)
-            layout.setContentsMargins(20, 18, 20, 20)
-            layout.setSpacing(12)
+            layout.setContentsMargins(12, 26, 12, 30)
+            layout.setSpacing(0)
 
             number = QLabel(f"HOOFDSTUK {index:02d}")
             number.setObjectName("sectionNumber")
@@ -193,12 +194,19 @@ class HelpPage(QWidget):
             description.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             layout.addWidget(description)
 
+            intro_divider = QFrame()
+            intro_divider.setObjectName("helpDivider")
+            intro_divider.setFrameShape(QFrame.Shape.HLine)
+            intro_divider.setFrameShadow(QFrame.Shadow.Plain)
+            layout.addWidget(intro_divider)
+            layout.addSpacing(14)
+
             for item_index, (item_title, item_text) in enumerate(entries, 1):
-                item_frame = QFrame()
-                item_frame.setObjectName("helpItem")
-                item_layout = QVBoxLayout(item_frame)
-                item_layout.setContentsMargins(15, 13, 15, 15)
-                item_layout.setSpacing(6)
+                item_widget = QWidget()
+                item_widget.setObjectName("helpItem")
+                item_layout = QVBoxLayout(item_widget)
+                item_layout.setContentsMargins(0, 0, 0, 18)
+                item_layout.setSpacing(5)
 
                 item_number = QLabel(f"{item_index:02d}")
                 item_number.setObjectName("itemNumber")
@@ -215,7 +223,15 @@ class HelpPage(QWidget):
                 item_text_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
                 item_layout.addWidget(item_text_label)
 
-                layout.addWidget(item_frame)
+                layout.addWidget(item_widget)
+
+                if item_index < len(entries):
+                    divider = QFrame()
+                    divider.setObjectName("helpDivider")
+                    divider.setFrameShape(QFrame.Shape.HLine)
+                    divider.setFrameShadow(QFrame.Shadow.Plain)
+                    layout.addWidget(divider)
+                    layout.addSpacing(14)
 
             self.content_layout.addWidget(section)
 
