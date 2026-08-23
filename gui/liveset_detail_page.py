@@ -5,26 +5,26 @@ import math
 from pathlib import Path
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, Signal, QTimer
-from PySide6.QtGui import QPixmap, QPainter, QPen, QBrush, QFont
+from PySide6.QtGui import QPixmap, QPainter, QPen, QBrush, QFont, QLinearGradient
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 
 class LivesetPlayerVisualizer(QWidget):
-    """Animated visual that lives on the actual liveset playback page."""
+    """Large animated visual for the actual liveset playback page."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumHeight(180)
-        self.setMaximumHeight(180)
+        self.setMinimumHeight(330)
+        self.setSizePolicy(self.sizePolicy().horizontalPolicy(), self.sizePolicy().Expanding)
         self._phase = 0.0
         self._text_offset = 0.0
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._animate)
-        self._timer.start(30)
+        self._timer.start(24)
 
     def _animate(self):
-        self._phase = (self._phase + 0.055) % (math.pi * 2)
-        self._text_offset = (self._text_offset + 1.4) % 1200
+        self._phase = (self._phase + 0.045) % (math.pi * 2)
+        self._text_offset = (self._text_offset + 2.2) % 2000
         self.update()
 
     def paintEvent(self, event):
@@ -32,64 +32,87 @@ class LivesetPlayerVisualizer(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.rect().adjusted(1, 1, -1, -1)
+        w, h = rect.width(), rect.height()
+        cx, cy = rect.center().x(), rect.top() + h * 0.43
 
-        painter.setBrush(QBrush(Qt.GlobalColor.black))
-        painter.setPen(QPen(Qt.GlobalColor.transparent))
-        painter.drawRoundedRect(rect, 14, 14)
+        # Deep neon background.
+        bg = QLinearGradient(rect.left(), rect.top(), rect.right(), rect.bottom())
+        bg.setColorAt(0.0, Qt.GlobalColor.black)
+        bg.setColorAt(0.45, Qt.GlobalColor.darkMagenta)
+        bg.setColorAt(1.0, Qt.GlobalColor.black)
+        painter.setBrush(QBrush(bg))
+        painter.setPen(QPen(Qt.GlobalColor.darkMagenta, 1.5))
+        painter.drawRoundedRect(rect, 18, 18)
 
-        # Soft moving particles.
-        for i in range(28):
-            angle = self._phase * (0.45 + (i % 6) * 0.07) + i * 0.71
-            x = rect.left() + rect.width() * (0.5 + 0.48 * math.sin(angle * 0.67 + i))
-            y = rect.top() + 88 + 62 * math.sin(angle * 1.27 + i * 0.37)
-            radius = 1.0 + 2.8 * (0.5 + 0.5 * math.sin(angle * 1.8))
-            painter.setBrush(QBrush(Qt.GlobalColor.darkMagenta))
-            painter.setPen(QPen(Qt.GlobalColor.darkMagenta))
+        # Huge soft concentric pulse rings.
+        pulse = 35 + 22 * (0.5 + 0.5 * math.sin(self._phase * 2.0))
+        for ring in range(7):
+            radius = pulse + ring * 30
+            alpha_pen = QPen(Qt.GlobalColor.magenta, max(1.0, 3.2 - ring * 0.35))
+            painter.setPen(alpha_pen)
+            painter.setBrush(QBrush(Qt.GlobalColor.transparent))
+            painter.drawEllipse(int(cx - radius), int(cy - radius), int(radius * 2), int(radius * 2))
+
+        # Orbiting neon particles.
+        for i in range(70):
+            angle = self._phase * (0.32 + (i % 8) * 0.055) + i * 0.39
+            orbit_x = w * (0.18 + (i % 5) * 0.09)
+            orbit_y = h * (0.16 + (i % 7) * 0.045)
+            x = cx + math.sin(angle * 0.83 + i) * orbit_x
+            y = cy + math.cos(angle * 1.11 + i * 0.17) * orbit_y
+            radius = 1.2 + 3.2 * (0.5 + 0.5 * math.sin(angle * 2.1))
+            painter.setBrush(QBrush(Qt.GlobalColor.magenta))
+            painter.setPen(QPen(Qt.GlobalColor.magenta, 1))
             painter.drawEllipse(int(x - radius), int(y - radius), int(radius * 2), int(radius * 2))
 
-        # Large central pulse.
-        cx = rect.center().x()
-        cy = rect.top() + 66
-        pulse = 22 + 10 * (0.5 + 0.5 * math.sin(self._phase * 2.0))
-        painter.setBrush(QBrush(Qt.GlobalColor.transparent))
-        painter.setPen(QPen(Qt.GlobalColor.magenta, 2.2))
-        painter.drawEllipse(int(cx - pulse), int(cy - pulse), int(pulse * 2), int(pulse * 2))
-        painter.setPen(QPen(Qt.GlobalColor.darkMagenta, 1.2))
-        painter.drawEllipse(int(cx - pulse - 11), int(cy - pulse - 11), int((pulse + 11) * 2), int((pulse + 11) * 2))
+        # Central glowing core / spinning spokes.
+        for i in range(16):
+            angle = self._phase * 1.7 + i * (math.pi * 2 / 16)
+            inner = 20 + 4 * math.sin(self._phase * 2)
+            outer = 66 + 15 * math.sin(self._phase * 3 + i * 0.7)
+            x1 = cx + math.cos(angle) * inner
+            y1 = cy + math.sin(angle) * inner
+            x2 = cx + math.cos(angle) * outer
+            y2 = cy + math.sin(angle) * outer
+            painter.setPen(QPen(Qt.GlobalColor.magenta, 3.0))
+            painter.drawLine(int(x1), int(y1), int(x2), int(y2))
         painter.setBrush(QBrush(Qt.GlobalColor.magenta))
-        painter.setPen(QPen(Qt.GlobalColor.magenta))
-        painter.drawEllipse(int(cx - 5), int(cy - 5), 10, 10)
+        painter.setPen(QPen(Qt.GlobalColor.lightGray, 2))
+        painter.drawEllipse(int(cx - 13), int(cy - 13), 26, 26)
 
-        # Wide animated waveform / equalizer.
-        bar_count = 72
-        usable = rect.width() - 36
+        # Large dynamic equalizer across the full width.
+        bar_count = max(48, min(110, w // 13))
+        usable = w - 50
         step = usable / bar_count
+        base_y = rect.bottom() - 42
         for i in range(bar_count):
             wave = (
-                math.sin(self._phase * 2.4 + i * 0.37)
-                + 0.62 * math.sin(self._phase * 4.1 - i * 0.19)
-                + 0.30 * math.sin(self._phase * 1.3 + i * 0.83)
-            ) / 1.92
-            height = 10 + (wave + 1.0) * 26
-            x = rect.left() + 18 + i * step
-            y = rect.bottom() - 15 - height
-            painter.setPen(QPen(Qt.GlobalColor.magenta, 2.0))
-            painter.drawLine(int(x), int(rect.bottom() - 15), int(x), int(y))
+                math.sin(self._phase * 2.7 + i * 0.31)
+                + 0.72 * math.sin(self._phase * 4.6 - i * 0.17)
+                + 0.38 * math.sin(self._phase * 1.35 + i * 0.77)
+            ) / 2.1
+            height = 12 + (wave + 1.0) * (h * 0.13)
+            x = rect.left() + 25 + i * step
+            painter.setPen(QPen(Qt.GlobalColor.magenta, max(2.0, step * 0.42)))
+            painter.drawLine(int(x), int(base_y), int(x), int(base_y - height))
 
-        # Moving title line.
-        text = "KID ACID  •  LIVESET  •  ACID HOUSE  •  TECHNO  •  DEEP GROOVES  •  LIVE ENERGY  •  "
-        font = QFont("Arial", 9, QFont.Weight.Bold)
-        painter.setFont(font)
+        # Large scrolling identity line; deliberately no incorrect slogan.
+        text = "KID ACID  •  LIVESET  •  ACID HOUSE  •  TECHNO  •  DEEP GROOVES  •  "
+        painter.setFont(QFont("Arial", max(12, min(18, int(h / 25))), QFont.Weight.Bold))
         painter.setPen(QPen(Qt.GlobalColor.lightGray))
-        width = painter.fontMetrics().horizontalAdvance(text)
-        x = rect.right() - int(self._text_offset % (width + 60))
-        y = rect.top() + 23
-        painter.drawText(int(x), y, text)
-        painter.drawText(int(x + width + 60), y, text)
+        text_width = painter.fontMetrics().horizontalAdvance(text)
+        x = rect.right() - int(self._text_offset % (text_width + 80))
+        y = rect.top() + 32
+        painter.drawText(int(x), int(y), text)
+        painter.drawText(int(x + text_width + 80), int(y), text)
 
-        painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
-        painter.setPen(QPen(Qt.GlobalColor.gray))
-        painter.drawText(rect.left() + 18, rect.top() + 43, "NOW PLAYING  •  THE UNDERGROUND NEVER STOPS")
+        # Live status badge.
+        painter.setFont(QFont("Arial", max(13, min(20, int(h / 19))), QFont.Weight.Black))
+        painter.setPen(QPen(Qt.GlobalColor.white))
+        painter.drawText(rect.left() + 26, rect.top() + 76, "NOW PLAYING")
+        painter.setFont(QFont("Arial", max(10, min(14, int(h / 27))), QFont.Weight.Bold))
+        painter.setPen(QPen(Qt.GlobalColor.lightGray))
+        painter.drawText(rect.left() + 28, rect.top() + 98, "LIVESET PLAYBACK  •  KID ACID")
         painter.end()
 
 
@@ -159,12 +182,8 @@ class LivesetDetailPage(QWidget):
         panel_layout.addLayout(info, 1)
         root.addWidget(panel)
 
-        # This is deliberately below the player/details panel: the visual reacts
-        # continuously while the liveset is being listened to.
         self.visualizer = LivesetPlayerVisualizer()
-        root.addWidget(self.visualizer)
-
-        root.addStretch(1)
+        root.addWidget(self.visualizer, 1)
 
         self.setStyleSheet(paint_accent("""
             QFrame#detailPanel{background:#121217;border:1px solid #292933;border-radius:12px;}
