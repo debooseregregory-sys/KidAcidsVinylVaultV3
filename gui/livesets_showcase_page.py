@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -83,6 +83,7 @@ class LivesetsShowcasePage(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._items = []
         self._build()
         self.reload()
 
@@ -99,6 +100,13 @@ class LivesetsShowcasePage(QWidget):
         line.setMaximumWidth(150)
         root.addWidget(line)
         root.addWidget(QLabel("Compacte liveset showcase — klik een kaart om te openen."))
+
+        self.search = QLineEdit()
+        self.search.setObjectName("showcaseSearch")
+        self.search.setPlaceholderText("Zoek livesets op artiest, titel, datum of locatie...")
+        self.search.setClearButtonEnabled(True)
+        self.search.textChanged.connect(self._filter)
+        root.addWidget(self.search)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -118,6 +126,8 @@ class LivesetsShowcasePage(QWidget):
             QLabel#showcaseTitle{color:#fff;font-size:26px;font-weight:900;}
             QLabel{color:#858591;font-size:13px;}
             QFrame#showcaseLine{background:#ffcf72;border-radius:1px;}
+            QLineEdit#showcaseSearch{background:#111116;color:#fff;border:1px solid #30303a;border-radius:10px;padding:10px 13px;font-size:12px;}
+            QLineEdit#showcaseSearch:focus{border-color:#ffcf72;}
             QFrame#liveCard{background:#121217;border:1px solid #292933;border-radius:9px;}
             QFrame#liveCard:hover{background:#17171e;border-color:#ffcf72;}
             QLabel#liveCover{background:#07070a;color:#666671;border:1px solid #2a2a33;border-radius:6px;}
@@ -130,15 +140,42 @@ class LivesetsShowcasePage(QWidget):
         """))
 
     def reload(self):
+        try:
+            self._items = json.loads(LIVESETS_FILE.read_text(encoding="utf-8")) if LIVESETS_FILE.exists() else []
+            if not isinstance(self._items, list):
+                self._items = []
+        except (OSError, json.JSONDecodeError):
+            self._items = []
+        self._render(self._items)
+
+    def _filter(self, text):
+        query = text.strip().casefold()
+        if not query:
+            filtered = self._items
+        else:
+            filtered = []
+            for data in self._items:
+                searchable = " ".join(
+                    str(data.get(key) or "")
+                    for key in ("artist", "title", "date", "location", "duration")
+                ).casefold()
+                if query in searchable:
+                    filtered.append(data)
+        self._render(filtered)
+
+    def _render(self, items):
         while self.grid.count():
             item = self.grid.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-        try:
-            items = json.loads(LIVESETS_FILE.read_text(encoding="utf-8")) if LIVESETS_FILE.exists() else []
-        except (OSError, json.JSONDecodeError):
-            items = []
+
         for i, data in enumerate(items):
             card = LivesetShowcaseCard(data)
             card.open_requested.connect(self.open_requested.emit)
             self.grid.addWidget(card, i // 4, i % 4)
+
+        if not items:
+            empty = QLabel("Geen livesets gevonden.")
+            empty.setObjectName("showcaseEmpty")
+            empty.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+            self.grid.addWidget(empty, 0, 0)
