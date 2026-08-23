@@ -31,6 +31,13 @@ class LivesetPlayerVisualizer(QWidget):
         self._playing = bool(playing)
         self.update()
 
+    def set_now_playing(self, artist, title):
+        """Set the identity shown by NOW PLAYING from the actual audio source."""
+        self._artist = str(artist or "").strip()
+        self._title = str(title or "").strip()
+        self._playing = True
+        self.update()
+
     def set_playing(self, playing):
         self._playing = bool(playing)
         self.update()
@@ -112,7 +119,6 @@ class LivesetPlayerVisualizer(QWidget):
         painter.drawText(int(x), int(y), text)
         painter.drawText(int(x + text_width + 80), int(y), text)
 
-        # This line is tied to the actual liveset currently being played.
         status = "NOW PLAYING" if self._playing else "READY TO PLAY"
         painter.setFont(QFont("Arial", max(16, min(28, int(h / 14))), QFont.Weight.Black))
         painter.setPen(QPen(Qt.GlobalColor.white))
@@ -120,10 +126,10 @@ class LivesetPlayerVisualizer(QWidget):
 
         identity = " • ".join(x for x in (self._artist, self._title) if x)
         if not identity:
-            identity = "LIVSET"
-        painter.setFont(QFont("Arial", max(14, min(24, int(h / 18))), QFont.Weight.Bold))
-        painter.setPen(QPen(Qt.GlobalColor.lightGray))
-        painter.drawText(rect.left() + 28, rect.top() + 116, identity)
+            identity = "LIVESET"
+        painter.setFont(QFont("Arial", max(18, min(34, int(h / 12))), QFont.Weight.Bold))
+        painter.setPen(QPen(Qt.GlobalColor.white))
+        painter.drawText(rect.left() + 28, rect.top() + 126, identity)
         painter.end()
 
 
@@ -220,10 +226,27 @@ class LivesetDetailPage(QWidget):
         y = max(0, (scaled.height() - size.height()) // 2)
         return scaled.copy(x, y, size.width(), size.height())
 
+    @staticmethod
+    def _identity_from_audio(path: str):
+        """Extract a useful artist/title fallback from the actual playing filename."""
+        name = Path(str(path or "")).stem.strip()
+        if not name:
+            return "", ""
+        if " - " in name:
+            artist, title = name.split(" - ", 1)
+            return artist.strip(), title.strip()
+        return "", name
+
     def load_liveset(self, data):
         self.data = dict(data or {})
-        self.title.setText(str(self.data.get("title") or "(geen titel)"))
-        self.artist.setText(str(self.data.get("artist") or "LIVESET"))
+        audio_path = str(self.data.get("audio") or "").strip()
+        fallback_artist, fallback_title = self._identity_from_audio(audio_path)
+        artist = str(self.data.get("artist") or "").strip() or fallback_artist
+        title = str(self.data.get("title") or "").strip() or fallback_title
+        self.data["_display_artist"] = artist
+        self.data["_display_title"] = title
+        self.title.setText(title or "(geen titel)")
+        self.artist.setText(artist or "LIVESET")
         meta = " • ".join(x for x in [str(self.data.get("date") or ""), str(self.data.get("location") or ""), str(self.data.get("duration") or "")] if x)
         self.meta.setText(meta)
         pix = self._crop(str(self.data.get("cover") or ""), self.cover.size())
@@ -233,11 +256,7 @@ class LivesetDetailPage(QWidget):
         else:
             self.cover.setText("")
             self.cover.setPixmap(pix)
-        self.visualizer.set_liveset(
-            self.data.get("artist") or "",
-            self.data.get("title") or "",
-            False,
-        )
+        self.visualizer.set_liveset(artist, title, False)
         self.play_button.setProperty("playing", False)
         self.play_button.setText("▶  PLAY LIVESET")
         self.play_button.style().unpolish(self.play_button)
@@ -260,14 +279,22 @@ class LivesetDetailPage(QWidget):
             self.play_mp3.emit(path)
 
     def set_active_track(self, path):
-        current = str(self.data.get("audio") or "").casefold()
-        active = str(path or "").casefold()
+        current = str(self.data.get("audio") or "").strip()
+        active = str(path or "").strip()
         playing = bool(current and active and Path(current).name.casefold() == Path(active).name.casefold())
+
+        if playing:
+            fallback_artist, fallback_title = self._identity_from_audio(active)
+            artist = str(self.data.get("artist") or "").strip() or fallback_artist
+            title = str(self.data.get("title") or "").strip() or fallback_title
+            self.visualizer.set_now_playing(artist, title)
+        else:
+            self.visualizer.set_playing(False)
+
         self.play_button.setProperty("playing", playing)
         self.play_button.setText("❚❚  PLAYING" if playing else "▶  PLAY LIVESET")
         self.play_button.style().unpolish(self.play_button)
         self.play_button.style().polish(self.play_button)
-        self.visualizer.set_playing(playing)
 
     def clear_active_track(self):
         self.play_button.setProperty("playing", False)
