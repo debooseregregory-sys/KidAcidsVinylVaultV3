@@ -93,18 +93,16 @@ class ReleaseShowcasePage(QWidget):
                 border: 1px solid #ff4fa3;
                 border-radius: 16px;
             }
-            /* Active = green small button */
+            /* Active = exact CD green filled button */
             QPushButton#cdTrackPlayButton[playing="true"] {
-                background: transparent;
-                color: #35a65b;
-                border: 1px solid transparent;
-                border-radius: 16px;
+                background: #1f7a3d;
+                color: #ffffff;
+                border: none;
             }
             QPushButton#cdTrackPlayButton[playing="true"]:hover {
-                background: #35a65b;
-                color: #0e0e12;
-                border: 1px solid #35a65b;
-                border-radius: 16px;
+                background: #29934a;
+                color: #ffffff;
+                border: none;
             }
 
             QLabel#showcaseArtist { color:#ffcf72; font-size:18px; font-weight:800; }
@@ -148,7 +146,6 @@ class ReleaseShowcasePage(QWidget):
             return
         active = bool(active)
         button.setProperty("playing", active)
-        # Small CD-style button: ▶ when idle, ❚❚ when playing.
         button.setText("❚❚" if active else "▶")
         style = button.style()
         style.unpolish(button)
@@ -164,29 +161,16 @@ class ReleaseShowcasePage(QWidget):
                 bool(normalised) and button_path == normalised,
             )
 
-    def _track_button_clicked(self, button, path):
-        """Toggle the selected track while keeping the small CD-style button in sync."""
-        button_path = self._normalise_mp3_path(path)
-        was_active = button.property("playing") is True
-
-        if was_active:
-            # MP3Player receives the same path and toggles the current track
-            # from playing to paused.
-            self.play_mp3.emit(path)
-            self._set_active_mp3_path("")
-            return
-
-        # Selecting another track immediately clears the previous green state.
-        self._set_active_mp3_path(button_path)
-        self.play_mp3.emit(path)
-
     def set_active_track(self, path):
+        """Mark the currently playing Vinyl track exactly like CD Showcase."""
         self._set_active_mp3_path(path)
 
     def clear_active_track(self):
+        """Return all Vinyl track play buttons to the idle state."""
         self._set_active_mp3_path("")
 
     def set_playback_state(self, state):
+        """Keep the button green only while the central player is playing."""
         try:
             from PySide6.QtMultimedia import QMediaPlayer
             is_playing = state == QMediaPlayer.PlaybackState.PlayingState
@@ -198,7 +182,7 @@ class ReleaseShowcasePage(QWidget):
             self.clear_active_track()
 
     def _make_track_row(self, track, release_artist):
-        """CD-style row: play | position | title/artist | duration."""
+        """Exact CD-style row: play/pause, position, title/artist, duration."""
         row = QFrame()
         row.setObjectName("trackRow")
 
@@ -222,8 +206,7 @@ class ReleaseShowcasePage(QWidget):
                 button_path == self._active_mp3_path,
             )
             play_button.clicked.connect(
-                lambda _checked=False, button=play_button, path=mp3_path:
-                    self._track_button_clicked(button, path)
+                lambda _checked=False, path=mp3_path: self.play_mp3.emit(path)
             )
             layout.addWidget(play_button)
         else:
