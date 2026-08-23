@@ -20,9 +20,8 @@ if __name__ == "__main__":
     splash.show()
     app.processEvents()
 
-    # Keep the splash visible for at least 5 seconds before the main window
-    # is opened. The main window is then shown immediately and the splash
-    # disappears at the same moment.
+    # The splash must be visible first. Build the main window while it stays
+    # hidden, then keep the splash visible for at least five seconds.
     splash_started = time.monotonic()
 
     import gui.main_window as main_window
@@ -36,21 +35,28 @@ if __name__ == "__main__":
         and settings.value("remember_window_state", True, type=bool)
     )
 
+    # Do NOT show the main window yet. It must only appear when the splash
+    # disappears.
     if not has_geometry:
         window.showMaximized()
+        window.hide()
     else:
         window.show()
+        window.hide()
 
     app.processEvents()
 
-    # Never show the main window before the minimum splash time has elapsed.
+    # Minimum splash duration: 5 seconds.
     remaining = 5.0 - (time.monotonic() - splash_started)
     if remaining > 0:
         time.sleep(remaining)
 
-    # The main window is ready. Close the splash and reveal MusicVault
-    # immediately, with no fade-out delay.
+    # Reveal MusicVault and remove the splash at the same moment.
     splash.close()
+    if not has_geometry:
+        window.showMaximized()
+    else:
+        window.show()
     window.raise_()
     window.activateWindow()
 
