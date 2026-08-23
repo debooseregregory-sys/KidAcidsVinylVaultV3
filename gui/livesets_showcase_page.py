@@ -2,11 +2,21 @@ from __future__ import annotations
 from gui.app_settings import paint_accent
 
 import json
+import math
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtGui import QPixmap, QPainter, QPen, QBrush, QFont
+from PySide6.QtWidgets import (
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -77,6 +87,93 @@ class LivesetShowcaseCard(QFrame):
         self.cover.setPixmap(scaled.copy(x, y, size.width(), size.height()))
 
 
+class LivesetVisualizer(QWidget):
+    """Animated atmospheric footer that fills the showcase without stealing focus."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumHeight(150)
+        self.setMaximumHeight(150)
+        self._phase = 0.0
+        self._text_offset = 0.0
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._animate)
+        self._timer.start(35)
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, False)
+
+    def _animate(self):
+        self._phase = (self._phase + 0.045) % (math.pi * 2)
+        self._text_offset = (self._text_offset + 1.15) % 900
+        self.update()
+
+    def paintEvent(self, event):
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.rect().adjusted(1, 1, -1, -1)
+
+        # Deep atmospheric background.
+        painter.setBrush(QBrush(Qt.GlobalColor.black))
+        painter.setPen(QPen(Qt.GlobalColor.transparent))
+        painter.drawRoundedRect(rect, 14, 14)
+
+        # Moving glow particles.
+        for i in range(22):
+            angle = self._phase * (0.55 + (i % 5) * 0.08) + i * 0.83
+            x = rect.left() + rect.width() * (0.5 + 0.47 * math.sin(angle * 0.72 + i))
+            y = rect.top() + 72 + 48 * math.sin(angle * 1.31 + i * 0.4)
+            radius = 1.5 + 2.4 * (0.5 + 0.5 * math.sin(angle * 1.7))
+            painter.setBrush(QBrush(Qt.GlobalColor.darkMagenta))
+            painter.setPen(QPen(Qt.GlobalColor.darkMagenta))
+            painter.drawEllipse(int(x - radius), int(y - radius), int(radius * 2), int(radius * 2))
+
+        # Animated equalizer / acid pulse.
+        bar_count = 56
+        usable = rect.width() - 42
+        step = usable / bar_count
+        for i in range(bar_count):
+            wave = (
+                math.sin(self._phase * 2.1 + i * 0.43)
+                + 0.55 * math.sin(self._phase * 3.7 - i * 0.17)
+                + 0.25 * math.sin(self._phase * 1.1 + i * 0.91)
+            ) / 1.8
+            height = 12 + (wave + 1) * 24
+            x = rect.left() + 21 + i * step
+            y = rect.bottom() - 17 - height
+            painter.setPen(QPen(Qt.GlobalColor.magenta, 2.2))
+            painter.drawLine(int(x), int(rect.bottom() - 17), int(x), int(y))
+
+        # Central moving pulse ring.
+        cx = rect.center().x()
+        cy = rect.top() + 48
+        pulse = 15 + 8 * (0.5 + 0.5 * math.sin(self._phase * 2.0))
+        painter.setBrush(QBrush(Qt.GlobalColor.transparent))
+        painter.setPen(QPen(Qt.GlobalColor.magenta, 2.0))
+        painter.drawEllipse(int(cx - pulse), int(cy - pulse), int(pulse * 2), int(pulse * 2))
+        painter.setPen(QPen(Qt.GlobalColor.darkMagenta, 1.0))
+        painter.drawEllipse(int(cx - pulse - 8), int(cy - pulse - 8), int((pulse + 8) * 2), int((pulse + 8) * 2))
+
+        # Scrolling typography.
+        text = "KID ACID  •  LIVE ENERGY  •  ACID HOUSE  •  TECHNO  •  DEEP GROOVES  •  LIVE ENERGY  •  "
+        font = QFont("Arial", 11, QFont.Weight.Bold)
+        painter.setFont(font)
+        painter.setPen(QPen(Qt.GlobalColor.lightGray))
+        metrics = painter.fontMetrics()
+        width = metrics.horizontalAdvance(text)
+        y = rect.top() + 25
+        x = rect.right() - int(self._text_offset % (width + 40))
+        painter.drawText(int(x), y, text)
+        painter.drawText(int(x + width + 40), y, text)
+
+        # Small label.
+        small_font = QFont("Arial", 8, QFont.Weight.Bold)
+        painter.setFont(small_font)
+        painter.setPen(QPen(Qt.GlobalColor.gray))
+        painter.drawText(rect.left() + 18, rect.top() + 48, "THE UNDERGROUND NEVER STOPS")
+
+        painter.end()
+
+
 class LivesetsShowcasePage(QWidget):
     """Standalone compact Livesets Showcase. Cards open the dedicated player/detail page."""
     open_requested = Signal(dict)
@@ -107,13 +204,15 @@ class LivesetsShowcasePage(QWidget):
         scroll.setStyleSheet(paint_accent("QScrollArea{border:0;background:transparent;}"))
         self.content = QWidget()
         self.grid = QGridLayout(self.content)
-        # Cards start directly at the content edge instead of being centered.
-        self.grid.setContentsMargins(0, 14, 8, 20)
+        self.grid.setContentsMargins(0, 14, 8, 10)
         self.grid.setHorizontalSpacing(14)
         self.grid.setVerticalSpacing(14)
         self.grid.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         scroll.setWidget(self.content)
         root.addWidget(scroll, 1)
+
+        self.visualizer = LivesetVisualizer()
+        root.addWidget(self.visualizer, 0)
 
         self.setStyleSheet(paint_accent("""
             QLabel#showcaseTitle{color:#fff;font-size:26px;font-weight:900;}
