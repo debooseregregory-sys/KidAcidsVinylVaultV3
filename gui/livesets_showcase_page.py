@@ -1,4 +1,5 @@
 from __future__ import annotations
+from gui.app_settings import paint_accent
 
 import json
 from pathlib import Path
@@ -103,7 +104,7 @@ class LivesetsShowcasePage(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        scroll.setStyleSheet("QScrollArea{border:0;background:transparent;}")
+        scroll.setStyleSheet(paint_accent("QScrollArea{border:0;background:transparent;}"))
         self.content = QWidget()
         self.grid = QGridLayout(self.content)
         # Cards start directly at the content edge instead of being centered.
@@ -114,7 +115,7 @@ class LivesetsShowcasePage(QWidget):
         scroll.setWidget(self.content)
         root.addWidget(scroll, 1)
 
-        self.setStyleSheet("""
+        self.setStyleSheet(paint_accent("""
             QLabel#showcaseTitle{color:#fff;font-size:26px;font-weight:900;}
             QLabel{color:#858591;font-size:13px;}
             QFrame#showcaseLine{background:#ffcf72;border-radius:1px;}
@@ -127,7 +128,7 @@ class LivesetsShowcasePage(QWidget):
             QPushButton#cdTrackPlayButton{background:#2a1524;color:#ff4fa3;border:1px solid #5a2a48;border-radius:10px;font-size:15px;font-weight:900;}
             QPushButton#cdTrackPlayButton:hover{background:#ff4fa3;color:#0e0e12;border-color:#ff4fa3;}
             QPushButton#cdTrackPlayButton[playing="true"]{background:#3a1a30;color:#ff6bb5;border-color:#ff4fa3;}
-        """)
+        """))
 
     def reload(self):
         while self.grid.count():

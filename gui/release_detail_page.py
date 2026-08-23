@@ -1,3 +1,4 @@
+from gui.app_settings import confirm_delete, notify
 import urllib.request
 import os
 
@@ -887,22 +888,7 @@ class TrackCard(QFrame):
             or ""
         )
 
-        answer = QMessageBox.question(
-            self,
-            "Track verwijderen",
-            (
-                "Weet je zeker dat je deze track wilt verwijderen?\n\n"
-                f"{position} - {title}\n\n"
-                "De MP3-koppelingen van deze track worden "
-                "ook verwijderd."
-            ),
-            QMessageBox.StandardButton.Yes
-            | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-
-        if answer != QMessageBox.StandardButton.Yes:
-
+        if not confirm_delete(self, "Track verwijderen", "Deze track verwijderen?"):
             return
 
         from database.database import get_connection
@@ -3449,20 +3435,11 @@ class ReleaseDetailPage(QWidget):
         link_id
     ):
 
-        answer = QMessageBox.question(
+        if not confirm_delete(
             self,
             "MP3 ontkoppelen",
-            (
-                "Deze MP3-koppeling verwijderen?\n\n"
-                "Het MP3-bestand zelf wordt NIET verwijderd."
-            ),
-            QMessageBox.StandardButton.Yes
-            | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-
-        if answer != QMessageBox.StandardButton.Yes:
-
+            "Deze MP3-koppeling verwijderen?\n\nHet MP3-bestand zelf wordt NIET verwijderd.",
+        ):
             return
 
         try:

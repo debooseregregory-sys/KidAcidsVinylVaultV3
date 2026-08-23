@@ -3,7 +3,7 @@
 # CD LIBRARY
 # ============================================================
 
-from PySide6.QtCore import Signal, Qt, QTimer
+from PySide6.QtCore import Signal, Qt, QTimer, QSettings
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
@@ -398,3 +398,5 @@ class CDLibraryPage(QWidget):
                 self.cd_selected.emit(int(item.text()))
             except ValueError:
                 pass
+
+

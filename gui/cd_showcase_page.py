@@ -7,6 +7,7 @@ from pathlib import Path
 
 import requests
 
+from gui.app_settings import paint_accent
 from PySide6.QtCore import Qt, Signal, QUrl
 from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtWidgets import (
@@ -63,7 +64,7 @@ class CDShowcasePage(QWidget):
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.scroll.setStyleSheet("QScrollArea { border:none; background:transparent; }")
+        self.scroll.setStyleSheet(paint_accent("QScrollArea { border:none; background:transparent; }"))
 
         self.content = QWidget()
         self.grid = QGridLayout(self.content)
@@ -73,7 +74,7 @@ class CDShowcasePage(QWidget):
         self.scroll.setWidget(self.content)
         root.addWidget(self.scroll, 1)
 
-        self.setStyleSheet("""
+        self.setStyleSheet(paint_accent("""
             QWidget { background:#0b0b0f; color:#f5f5f7; font-family:'Segoe UI Semibold'; }
             QPushButton { background:#18181f; color:#fff; border:1px solid #30303a;
                 border-radius:7px; padding:8px 14px; font-size:12px; font-weight:800; }
@@ -126,7 +127,7 @@ class CDShowcasePage(QWidget):
                 color: #ffffff;
                 border: none;
             }
-        """)
+        """))
 
     def _back_clicked(self):
         if self.release_id is not None:

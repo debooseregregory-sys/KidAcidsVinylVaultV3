@@ -3,6 +3,7 @@
 # RELEASE BOARD
 # ============================================================
 
+from gui.app_settings import paint_accent
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QWidget,
@@ -106,8 +107,7 @@ class ReleaseBoardPage(QWidget):
         self.load_more_button.setVisible(False)
         layout.addWidget(self.load_more_button)
 
-        self.setStyleSheet(
-            """
+        self.setStyleSheet(paint_accent("""
             QWidget {
                 background: #0b0b0f;
                 color: #f2f2f5;
@@ -239,8 +239,7 @@ class ReleaseBoardPage(QWidget):
                 color: #0e0e12;
                 border-color: #ff4fa3;
             }
-            """
-        )
+            """))
 
     def load_releases(self):
         connection = None

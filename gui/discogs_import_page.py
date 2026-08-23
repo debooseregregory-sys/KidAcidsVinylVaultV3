@@ -1,4 +1,10 @@
-﻿# ============================================================
+from gui.app_settings import (
+    get_discogs_token, get_discogs_headers, paint_accent,
+    preview_before_import_enabled, backup_before_import_enabled,
+    import_artwork_enabled, never_overwrite_manual_enabled,
+    enrich_metadata_enabled, create_db_backup_copy, notify,
+)
+# ============================================================
 # KID ACID'S VINYLVAULT V3
 # DISCOGS RELEASE IMPORT PAGE
 # ============================================================
@@ -24,8 +30,6 @@ from PySide6.QtWidgets import (
     QSplitter,
 )
 
-import config
-
 from import_release_v3 import (
     DB,
     get_release,
@@ -40,7 +44,7 @@ from import_release_v3 import (
 API_URL = "https://api.discogs.com"
 
 HEADERS = {
-    "User-Agent": config.DISCOGS_USER_AGENT,
+    "User-Agent": "KidAcidsVinylVaultV3/1.0",
     "Accept": "application/json",
 }
 
@@ -71,7 +75,7 @@ class DiscogsSearchWorker(QThread):
                     "per_page": 50,
                     "page": 1,
                 },
-                headers=HEADERS,
+                headers=get_discogs_headers(),
                 timeout=30,
             )
 
@@ -134,6 +138,16 @@ class DiscogsImportWorker(QThread):
                     self.release_id
                 )
 
+                from gui.app_settings import never_overwrite_manual_enabled, import_artwork_enabled
+                # Settings-aware import
+                if never_overwrite_manual_enabled():
+                    print("Setting: never overwrite manual data = ON")
+                if not import_artwork_enabled():
+                    # Clear images so insert keeps empty cover
+                    if isinstance(release, dict):
+                        release = dict(release)
+                        release["images"] = []
+                        print("Setting: import artwork = OFF")
                 import_release(
                     release,
                     conn
@@ -752,77 +766,72 @@ class DiscogsImportPage(QWidget):
 
     def import_selected(self):
 
-        if not self.selected_release_id:
-
+        item = self.results_list.currentItem()
+        release_id = None
+        if item is not None:
+            release_id = item.data(32)
+        if not release_id:
+            release_id = getattr(self, "selected_release_id", None)
+        if not release_id:
+            QMessageBox.warning(
+                self,
+                "Importeren",
+                "Selecteer eerst een release in de lijst."
+            )
             return
+        release_id = str(release_id).strip()
+        detail = item.text() if item is not None else release_id
 
-        release_id = self.selected_release_id
+        # ---- Settings: preview ----
+        if preview_before_import_enabled():
+            answer = QMessageBox.question(
+                self,
+                "Import bevestigen",
+                (
+                    f"Discogs Release {release_id} importeren?\n\n"
+                    f"{detail}\n\n"
+                    "Dit voegt of verrijkt data in je collectie."
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                return
 
-        answer = QMessageBox.question(
-            self,
-            "Release importeren",
-            (
-                f"Discogs Release {release_id} importeren?\n\n"
-                "De release en tracks worden aan MusicVault "
-                "toegevoegd.\n\n"
-                "Bestaande gegevens worden niet dubbel toegevoegd."
-            ),
-            QMessageBox.StandardButton.Yes
-            | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
+        # ---- Settings: backup ----
+        if backup_before_import_enabled():
+            try:
+                path = create_db_backup_copy()
+                if path:
+                    self.log.appendPlainText(f"Backup gemaakt: {path}")
+                    notify(self.window(), f"Database-backup: {path}")
+                else:
+                    self.log.appendPlainText("Backup overgeslagen (database niet gevonden).")
+            except Exception as exc:
+                self.log.appendPlainText(f"Backup mislukt: {exc}")
+                answer = QMessageBox.question(
+                    self,
+                    "Backup mislukt",
+                    f"Kon geen backup maken:\n{exc}\n\nToch importeren?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if answer != QMessageBox.StandardButton.Yes:
+                    return
 
-        if answer != QMessageBox.StandardButton.Yes:
-
-            return
-
-        self.import_button.setEnabled(
-            False
-        )
-
-        self.search_button.setEnabled(
-            False
-        )
-
-        self.results_list.setEnabled(
-            False
-        )
-
-        self.log.clear()
-
+        self.import_button.setEnabled(False)
+        self.status_label.setText(f"Importeren van release {release_id}…")
         self.log.appendPlainText(
-            "=" * 70
+            f"Settings: artwork={import_artwork_enabled()} "
+            f"enrich={enrich_metadata_enabled()} "
+            f"no_overwrite={never_overwrite_manual_enabled()}"
         )
 
-        self.log.appendPlainText(
-            f"IMPORT RELEASE {release_id}"
-        )
-
-        self.log.appendPlainText(
-            "=" * 70
-        )
-
-        self.import_worker = DiscogsImportWorker(
-            release_id
-        )
-
-        self.import_worker.output.connect(
-            self.import_output
-        )
-
-        self.import_worker.finished_ok.connect(
-            self.import_finished_ok
-        )
-
-        self.import_worker.failed.connect(
-            self.import_failed
-        )
-
+        self.import_worker = DiscogsImportWorker(release_id)
+        self.import_worker.output.connect(self.import_output)
+        self.import_worker.finished_ok.connect(self.import_finished_ok)
+        self.import_worker.failed.connect(self.import_failed)
         self.import_worker.start()
-
-    # ========================================================
-    # IMPORT OUTPUT
-    # ========================================================
 
     def import_output(
         self,
@@ -838,6 +847,10 @@ class DiscogsImportPage(QWidget):
     # ========================================================
 
     def import_finished_ok(self):
+        try:
+            notify(self.window(), "Discogs-import voltooid")
+        except Exception:
+            pass
 
         self.results_list.setEnabled(
             True

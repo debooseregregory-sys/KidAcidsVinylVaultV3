@@ -478,12 +478,31 @@ def load_local_discogs(conn):
 
 def get_token():
 
-    return (
-        os.environ.get(
-            "DISCOGS_TOKEN",
-            ""
-        ).strip()
-    )
+    # 1) Environment
+    token = os.environ.get("DISCOGS_TOKEN", "").strip()
+    if token:
+        return token
+
+    # 2) MusicVault Settings (QSettings)
+    try:
+        from gui.app_settings import get_discogs_token
+        token = get_discogs_token()
+        if token:
+            return token
+    except Exception:
+        pass
+
+    try:
+        from PySide6.QtCore import QSettings
+        store = QSettings("Kid Acid", "MusicVault")
+        for key in ("discogs_token", "DISCOGS_TOKEN", "token"):
+            val = str(store.value(key, "") or "").strip()
+            if val:
+                return val
+    except Exception:
+        pass
+
+    return ""
 
 
 # ============================================================

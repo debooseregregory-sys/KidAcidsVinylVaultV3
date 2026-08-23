@@ -3,6 +3,7 @@
 # SETTINGS PAGE
 # ============================================================
 
+from gui.app_settings import paint_accent
 from PySide6.QtCore import Qt, Signal, QSettings
 from gui.discogs_settings_panel import DiscogsSettingsPanel
 from gui.music_library_settings_panel import MusicLibrarySettingsPanel
@@ -102,6 +103,7 @@ class AppearanceOption(QPushButton):
 
 class SettingsPage(QWidget):
     page_changed = Signal(str)
+    appearance_changed = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -355,10 +357,8 @@ class SettingsPage(QWidget):
         current = self._settings.value("accent", "Rose")
         for name, subtitle, color in accents:
             button = AppearanceOption(name, subtitle, name)
-            button.setStyleSheet(
-                f"QPushButton#appearanceOption {{ border:1px solid #30303a; border-radius:10px; background:#18181f; color:#f0f0f4; padding:10px; text-align:left; }}"
-                f"QPushButton#appearanceOption:checked {{ border:2px solid {color}; background:#21151d; }}"
-            )
+            button.setStyleSheet(paint_accent(f"QPushButton#appearanceOption {{ border:1px solid #30303a; border-radius:10px; background:#18181f; color:#f0f0f4; padding:10px; text-align:left; }}"
+                f"QPushButton#appearanceOption:checked {{ border:2px solid {color}; background:#21151d; }}"))
             button.clicked.connect(lambda checked=False, n=name: self._set_accent(n))
             button.setChecked(name == current)
             row.addWidget(button, 1)
@@ -396,8 +396,12 @@ class SettingsPage(QWidget):
         self._settings.setValue("accent", name)
         for current, button in self.accent_buttons:
             button.setChecked(current == name)
+        self.appearance_changed.emit()
+
 
     def _set_density(self, name):
+        self.appearance_changed.emit()
+
         self._settings.setValue("density", name)
         for current, button in self.density_buttons:
             button.setChecked(current == name)
@@ -589,8 +593,7 @@ class SettingsPage(QWidget):
         self.page_changed.emit(name)
 
     def _apply_style(self):
-        self.setStyleSheet(
-            """
+        self.setStyleSheet(paint_accent("""
             QWidget#settingsPage {
                 background: #0b0b0f;
                 color: #f4f4f7;
@@ -862,5 +865,4 @@ class SettingsPage(QWidget):
                 font-weight: 900;
                 letter-spacing: 1.5px;
             }
-            """
-        )
+            """))

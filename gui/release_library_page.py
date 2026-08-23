@@ -3,7 +3,7 @@
 # RELEASE LIBRARY
 # ============================================================
 
-from PySide6.QtCore import Signal, Qt, QTimer
+from PySide6.QtCore import Signal, Qt, QTimer, QSettings
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import (
     QWidget,

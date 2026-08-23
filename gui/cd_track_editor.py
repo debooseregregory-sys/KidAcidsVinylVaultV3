@@ -1,3 +1,4 @@
+from gui.app_settings import confirm_delete
 # ============================================================
 # KID ACID'S VINYLVAULT V3
 # CD TRACK EDITOR

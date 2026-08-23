@@ -2,6 +2,7 @@
 import urllib.request
 import re
 
+from gui.app_settings import paint_accent
 from PySide6.QtCore import Qt, QTimer, Signal, QAbstractTableModel, QModelIndex
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
@@ -224,12 +225,12 @@ class MetadataDialog(QDialog):
 
         self.discogs_info = QLabel("Nog geen Discogs-resultaat geselecteerd.")
         self.discogs_info.setWordWrap(True)
-        self.discogs_info.setStyleSheet("color:#9b9ba6; padding:6px 0;")
+        self.discogs_info.setStyleSheet(paint_accent("color:#9b9ba6; padding:6px 0;"))
         layout.addWidget(self.discogs_info)
 
         self.status = QLabel(f"Bestand: {self.path}")
         self.status.setWordWrap(True)
-        self.status.setStyleSheet("color:#777784; font-size:11px;")
+        self.status.setStyleSheet(paint_accent("color:#777784; font-size:11px;"))
         layout.addWidget(self.status)
 
         buttons = QDialogButtonBox(
@@ -940,7 +941,7 @@ class MP3LibraryPage(QWidget):
         root.setSpacing(12)
 
         title = QLabel("MP3 LIBRARY")
-        title.setStyleSheet("font-size: 25px; font-weight: 900; color: #ffffff;")
+        title.setStyleSheet(paint_accent("font-size: 25px; font-weight: 900; color: #ffffff;"))
         root.addWidget(title)
 
         tools = QHBoxLayout()
@@ -970,13 +971,11 @@ class MP3LibraryPage(QWidget):
         root.addLayout(tools)
 
         self.progress_label = QLabel("Metadata: 0 KLAAR | 0 NIET GEDAAN | 0 TOTAAL")
-        self.progress_label.setStyleSheet(
-            "color: #b5a9bd; font-size: 13px; font-weight: bold;"
-        )
+        self.progress_label.setStyleSheet(paint_accent("color: #b5a9bd; font-size: 13px; font-weight: bold;"))
         root.addWidget(self.progress_label)
 
         self.info = QLabel("0 MP3's")
-        self.info.setStyleSheet("color: #9b9ba6;")
+        self.info.setStyleSheet(paint_accent("color: #9b9ba6;"))
         root.addWidget(self.info)
 
         self.table = QTableView()
@@ -1028,7 +1027,7 @@ class MP3LibraryPage(QWidget):
         self.duplicates_button.clicked.connect(self.open_duplicate_cleaner)
         self.open_folder_button.clicked.connect(self.open_selected_folder)
 
-        self.setStyleSheet("""
+        self.setStyleSheet(paint_accent("""
             QWidget {
                 background: #0b0b0f;
                 color: #f2f2f5;
@@ -1058,7 +1057,7 @@ class MP3LibraryPage(QWidget):
                 padding: 7px;
                 border: none;
             }
-        """)
+        """))
 
         self._update_status_button_style()
 
@@ -1072,13 +1071,9 @@ class MP3LibraryPage(QWidget):
             (self.todo_button, "todo"),
         ):
             if self.metadata_mode == mode:
-                button.setStyleSheet(
-                    f"QPushButton {{ {active} border-radius:6px; padding:8px 10px; font-weight:bold; }}"
-                )
+                button.setStyleSheet(paint_accent(f"QPushButton {{ {active} border-radius:6px; padding:8px 10px; font-weight:bold; }}"))
             else:
-                button.setStyleSheet(
-                    f"QPushButton {{ {normal} border-radius:6px; padding:8px 10px; }}"
-                )
+                button.setStyleSheet(paint_accent(f"QPushButton {{ {normal} border-radius:6px; padding:8px 10px; }}"))
 
     def set_metadata_mode(self, mode):
         self.metadata_mode = mode

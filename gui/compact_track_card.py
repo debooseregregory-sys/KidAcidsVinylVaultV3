@@ -194,8 +194,8 @@ class CompactTrackCard(QFrame):
 
     def delete_track(self):
         from PySide6.QtWidgets import QMessageBox
-        answer = QMessageBox.question(self, "Track verwijderen", "Deze track verwijderen? De MP3-koppelingen worden ook verwijderd.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
-        if answer != QMessageBox.StandardButton.Yes:
+        from gui.app_settings import confirm_delete
+        if not confirm_delete(self, "Track verwijderen", "Deze track verwijderen? De MP3-koppelingen worden ook verwijderd."):
             return
         from database.database import get_connection
         connection = get_connection()

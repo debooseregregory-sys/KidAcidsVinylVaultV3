@@ -1,4 +1,11 @@
-﻿# ============================================================
+def _settings_minimum_score(default=60):
+    try:
+        from gui.app_settings import match_minimum_score
+        return match_minimum_score(default)
+    except Exception:
+        return default
+
+# ============================================================
 # KID ACID'S VINYLVAULT V3
 # COLLECTION SEARCH IMPORT
 # ============================================================
@@ -1124,7 +1131,7 @@ def calculate_release_match(
 def verify_discogs_candidates(
     group,
     candidates,
-    minimum_score=60
+    minimum_score=_settings_minimum_score(60)
 ):
 
     verified = []

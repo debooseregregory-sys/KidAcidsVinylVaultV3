@@ -1,3 +1,4 @@
+from gui.app_settings import cover_size, artwork_animations_enabled
 # ============================================================
 # KID ACID'S VINYLVAULT V3
 # RELEASE BOARD TILE
@@ -37,7 +38,7 @@ class ReleaseBoardTile(QFrame):
 
         cover = QLabel()
         cover.setObjectName("boardCover")
-        cover.setFixedSize(216, 216)
+        cover.setFixedSize(cover_size(216, 160), cover_size(216, 160))
         cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cover.setScaledContents(False)
 

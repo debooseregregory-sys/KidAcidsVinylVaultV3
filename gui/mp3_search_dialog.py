@@ -1,4 +1,23 @@
-﻿# ============================================================
+try:
+    from gui.app_settings import match_mp3_minimum_score, discogs_match_mode
+except ImportError:
+    def discogs_match_mode():
+        try:
+            from PySide6.QtCore import QSettings
+            mode = str(QSettings("Kid Acid", "MusicVault").value("discogs_match_mode", "Balanced") or "Balanced")
+            return mode if mode in ("Strict", "Balanced", "Flexible") else "Balanced"
+        except Exception:
+            return "Balanced"
+
+    def match_mp3_minimum_score():
+        mode = discogs_match_mode()
+        if mode == "Strict":
+            return 750
+        if mode == "Flexible":
+            return 250
+        return 450
+
+# ============================================================
 # KID ACID'S VINYLVAULT V3
 # MP3 SEARCH / LINK DIALOG
 # ============================================================
@@ -655,6 +674,10 @@ class MP3SearchDialog(QDialog):
                     )
                 )
 
+        min_score = match_mp3_minimum_score()
+        before = len(scored)
+        scored = [s for s in scored if (s[0] if isinstance(s, (list, tuple)) else 0) >= min_score]
+        print(f"Match mode={discogs_match_mode()} min_score={min_score} kept {len(scored)}/{before}")
         scored.sort(
             key=lambda x: (
                 -x[0],

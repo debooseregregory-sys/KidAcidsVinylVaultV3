@@ -235,15 +235,30 @@ class MusicLibrarySettingsPanel(QWidget):
     def _open_match_reviewer(self, window):
         """Open the existing full Discogs match reviewer and keep it alive."""
         try:
+            # Ensure Discogs token from Settings is visible to the reviewer.
             try:
-                import review_discogs_matches as reviewer_module
-            except ModuleNotFoundError:
-                from gui import review_discogs_matches as reviewer_module
+                from gui.app_settings import get_discogs_token
+                token = get_discogs_token()
+                if token:
+                    import os
+                    os.environ["DISCOGS_TOKEN"] = token
+            except Exception:
+                pass
 
-            # The existing reviewer uses LOCAL_RESULTS in local_candidates(),
-            # but that constant is missing from the legacy standalone module.
-            # Supply the intended limit here without modifying the reviewer
-            # logic or touching the database.
+            import review_discogs_matches as reviewer_module
+        except Exception:
+            try:
+                from gui import review_discogs_matches as reviewer_module
+            except Exception as exc:
+                QMessageBox.critical(
+                    self,
+                    "Review Matches",
+                    "Kon review_discogs_matches niet laden.\n\n"
+                    f"{type(exc).__name__}: {exc}"
+                )
+                return
+
+        try:
             if not hasattr(reviewer_module, "LOCAL_RESULTS"):
                 reviewer_module.LOCAL_RESULTS = getattr(
                     reviewer_module,
@@ -251,7 +266,9 @@ class MusicLibrarySettingsPanel(QWidget):
                     12,
                 )
 
-            FullReviewWindow = reviewer_module.FullReviewWindow
+            FullReviewWindow = getattr(reviewer_module, "FullReviewWindow", None)
+            if FullReviewWindow is None:
+                raise RuntimeError("FullReviewWindow ontbreekt in review_discogs_matches")
 
             if self._review_window is not None:
                 try:
@@ -263,8 +280,9 @@ class MusicLibrarySettingsPanel(QWidget):
 
             reviewer = FullReviewWindow()
             self._review_window = reviewer
-            reviewer.setAttribute(reviewer.WidgetAttribute.WA_DeleteOnClose, True)
-            reviewer.destroyed.connect(lambda: setattr(self, "_review_window", None))
+            from PySide6.QtCore import Qt
+            reviewer.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+            reviewer.destroyed.connect(lambda *_: setattr(self, "_review_window", None))
             reviewer.show()
             reviewer.raise_()
             reviewer.activateWindow()
@@ -272,8 +290,9 @@ class MusicLibrarySettingsPanel(QWidget):
             QMessageBox.critical(
                 self,
                 "Review Matches",
-                "De bestaande Match Reviewer kon niet worden geopend.\n\n"
-                f"{type(exc).__name__}: {exc}"
+                "De Match Reviewer kon niet worden geopend.\n\n"
+                f"{type(exc).__name__}: {exc}\n\n"
+                "Controleer Settings → Discogs → token + Test Connection."
             )
 
     def refresh(self):

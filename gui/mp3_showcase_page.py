@@ -1,4 +1,5 @@
-﻿from __future__ import annotations
+from __future__ import annotations
+from gui.app_settings import paint_accent, accent_color
 from pathlib import Path
 from math import cos, sin, radians, hypot, atan2, degrees
 from PySide6.QtCore import Qt, QTimer, Signal, QPointF, QRectF
@@ -10,7 +11,8 @@ from PySide6.QtWidgets import (
     QSizePolicy,
 )
 from database.database import get_connection
-PINK = QColor("#d84b91")
+def PINK():
+    return QColor(accent_color())
 BG = QColor("#08090c")
 TEXT = QColor("#f2f2f5")
 MUTED = QColor("#8e919b")
@@ -88,7 +90,7 @@ class VinylDeckWidget(QWidget):
         p.setPen(QPen(QColor("#090a0d"), 2))
         p.setBrush(QBrush(QColor("#121318")))
         p.drawRoundedRect(QRectF(25, 25, w - 50, h - 50), 10, 10)
-        self._text(p, QRectF(34, 31, 330, 22), "KID ACID'S VINYL VAULT", 12, PINK, QFont.Weight.Black)
+        self._text(p, QRectF(34, 31, 330, 22), "KID ACID'S VINYL VAULT", 12, PINK(), QFont.Weight.Black)
         self._text(p, QRectF(34, 53, 380, 18), "MP3 SHOWCASE  /  PROFESSIONAL DIRECT DRIVE", 8)
         # PLATTER
         p.setPen(QPen(QColor("#050507"), 3))
@@ -128,11 +130,11 @@ class VinylDeckWidget(QWidget):
 
         label_r = min(155.0, r * .65)
 
-        p.setPen(QPen(QColor("#e7a0c2"), 2))
+        p.setPen(QPen(QColor(accent_color()), 2))
         p.setBrush(QBrush(QColor("#66193f")))
         p.drawEllipse(QPointF(0, 0), label_r, label_r)
 
-        p.setPen(QPen(QColor("#b23c75"), 1))
+        p.setPen(QPen(QColor(accent_color()), 1))
         p.setBrush(QBrush(Qt.BrushStyle.NoBrush))
         p.drawEllipse(QPointF(0, 0), label_r * .78, label_r * .78)
 
@@ -161,7 +163,7 @@ class VinylDeckWidget(QWidget):
             ),
             "VINYL VAULT",
             13,
-            QColor("#e9a8c6"),
+            QColor(accent_color()),
             QFont.Weight.Bold,
             Qt.AlignmentFlag.AlignCenter
         )
@@ -226,7 +228,7 @@ class VinylDeckWidget(QWidget):
         p.setPen(QPen(QColor("#07080a"), 2))
         p.setBrush(QBrush(QColor("#262830")))
         p.drawRoundedRect(QRectF(2, -7, 20, 14), 2, 2)
-        p.setBrush(QBrush(PINK))
+        p.setBrush(QBrush(PINK()))
         p.drawRoundedRect(QRectF(15, -5, 8, 10), 2, 2)
         p.restore()
         # Stylus ends exactly at the playing surface.
@@ -266,7 +268,7 @@ class VinylDeckWidget(QWidget):
         self._text(p, QRectF(pitch_x - 35, top - 32, 70, 18), "+8", 8, MUTED, QFont.Weight.Bold, Qt.AlignmentFlag.AlignCenter)
         self._text(p, QRectF(pitch_x - 35, center - 9, 70, 18), "0", 8, TEXT, QFont.Weight.Black, Qt.AlignmentFlag.AlignCenter)
         self._text(p, QRectF(pitch_x - 35, bottom + 12, 70, 18), "-8", 8, MUTED, QFont.Weight.Bold, Qt.AlignmentFlag.AlignCenter)
-        self._text(p, QRectF(pitch_x - 45, bottom + 34, 90, 18), "PITCH", 8, PINK, QFont.Weight.Black, Qt.AlignmentFlag.AlignCenter)
+        self._text(p, QRectF(pitch_x - 45, bottom + 34, 90, 18), "PITCH", 8, PINK(), QFont.Weight.Black, Qt.AlignmentFlag.AlignCenter)
         # REALISTIC SILVER POWER SWITCH
         # Near-square physical metal button with POWER label above it.
         power_rect = QRectF(35, h - 82, 54, 44)
@@ -278,7 +280,7 @@ class VinylDeckWidget(QWidget):
                    power_rect.width() + 8, 14),
             "POWER",
             7,
-            PINK if self.power_on else MUTED,
+            PINK() if self.power_on else MUTED,
             QFont.Weight.Black,
             Qt.AlignmentFlag.AlignCenter
         )
@@ -358,7 +360,7 @@ class VinylDeckWidget(QWidget):
 
         p.setPen(QPen(QColor("#34363c"), 1))
         p.setBrush(QBrush(
-            PINK if self.power_on else QColor("#393b42")
+            PINK() if self.power_on else QColor("#393b42")
         ))
         p.drawEllipse(led)
         # CLEAN TECHNICAL DISPLAY STRIP.
@@ -368,7 +370,7 @@ class VinylDeckWidget(QWidget):
         p.drawRoundedRect(strip, 7, 7)
         self._text(p, QRectF(strip.x() + 12, strip.y() + 7, strip.width() - 24, 17), "33 RPM   |   DIRECT DRIVE   |   STABLE PLATTER", 8)
         self._text(p, QRectF(strip.x() + 12, strip.y() + 28, strip.width() * .45, 20), self.artist, 10, TEXT, QFont.Weight.Bold)
-        self._text(p, QRectF(strip.x() + strip.width() * .46, strip.y() + 28, strip.width() * .52 - 12, 20), self.title, 10, PINK, QFont.Weight.Black, Qt.AlignmentFlag.AlignRight)
+        self._text(p, QRectF(strip.x() + strip.width() * .46, strip.y() + 28, strip.width() * .52 - 12, 20), self.title, 10, PINK(), QFont.Weight.Black, Qt.AlignmentFlag.AlignRight)
         p.end()
     def mousePressEvent(self, event):
         if event.button() != Qt.MouseButton.LeftButton:
@@ -468,7 +470,7 @@ class ShowcaseVisualizer(QWidget):
         # ====================================================
         p.setFont(QFont("Segoe UI", 8, QFont.Weight.Black))
 
-        p.setPen(QColor("#d84b91"))
+        p.setPen(QColor(accent_color()))
         p.drawText(
             QRectF(17, 13, 180, 18),
             Qt.AlignmentFlag.AlignLeft,
@@ -476,7 +478,7 @@ class ShowcaseVisualizer(QWidget):
         )
 
         p.setPen(
-            QColor("#d84b91")
+            QColor(accent_color())
             if self.playing
             else QColor("#666973")
         )
@@ -706,7 +708,7 @@ class ShowcaseVisualizer(QWidget):
 
         if self.playing:
             p.setPen(
-                QPen(QColor("#d84b91"), 2)
+                QPen(QColor(accent_color()), 2)
             )
             p.drawLine(
                 QPointF(scan_x, top),
@@ -775,7 +777,7 @@ class ShowcaseVisualizer(QWidget):
 
             p.setBrush(
                 QBrush(
-                    QColor("#d84b91")
+                    QColor(accent_color())
                     if self.playing
                     else QColor("#42444c")
                 )
@@ -839,7 +841,7 @@ class ShowcaseVisualizer(QWidget):
         )
 
         p.setPen(
-            QColor("#d84b91")
+            QColor(accent_color())
             if self.playing
             else QColor("#555861")
         )
@@ -869,11 +871,11 @@ class MP3ShowcasePage(QWidget):
         root.setSpacing(10)
         header = QHBoxLayout()
         title = QLabel("MP3 SHOWCASE")
-        title.setStyleSheet("font-size:25px;font-weight:900;color:#fff;")
+        title.setStyleSheet(paint_accent("font-size:25px;font-weight:900;color:#fff;"))
         header.addWidget(title)
         header.addStretch(1)
         self.status = QLabel("Laden...")
-        self.status.setStyleSheet("color:#9b9ba6;font-weight:700;")
+        self.status.setStyleSheet(paint_accent("color:#9b9ba6;font-weight:700;"))
         header.addWidget(self.status)
         root.addLayout(header)
         search = QHBoxLayout()
@@ -891,7 +893,7 @@ class MP3ShowcasePage(QWidget):
         ll = QVBoxLayout(left)
         ll.setContentsMargins(9, 9, 9, 9)
         lab = QLabel("MP3 LIBRARY")
-        lab.setStyleSheet("font-size:12px;font-weight:900;color:#d84b91;")
+        lab.setStyleSheet(paint_accent("font-size:12px;font-weight:900;color:#d84b91;"))
         ll.addWidget(lab)
         self.list = QTableWidget(0, 2)
         self.list.setHorizontalHeaderLabels(["ARTIEST", "TRACK"])
@@ -920,21 +922,19 @@ class MP3ShowcasePage(QWidget):
         rl.setContentsMargins(14, 14, 14, 14)
         rl.setSpacing(10)
         now = QLabel("NOW PLAYING")
-        now.setStyleSheet("font-size:12px;font-weight:900;color:#d84b91;")
+        now.setStyleSheet(paint_accent("font-size:12px;font-weight:900;color:#d84b91;"))
         rl.addWidget(now)
         self.cover = QLabel("GEEN COVER")
         self.cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.cover.setFixedHeight(145)
-        self.cover.setStyleSheet("background:#0a0b0e;border:1px solid #30323a;border-radius:8px;color:#666;")
+        self.cover.setStyleSheet(paint_accent("background:#0a0b0e;border:1px solid #30323a;border-radius:8px;color:#666;"))
         rl.addWidget(self.cover)
         self.info = QLabel("Geen track geselecteerd")
         self.info.setWordWrap(True)
         self.info.setMaximumHeight(58)
         rl.addWidget(self.info)
         tracks = QLabel("SELECTED TRACK")
-        tracks.setStyleSheet(
-            "font-size:10px;font-weight:900;color:#d84b91;"
-        )
+        tracks.setStyleSheet(paint_accent("font-size:10px;font-weight:900;color:#d84b91;"))
         tracks.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         tracks.setFixedHeight(16)
         rl.addWidget(tracks)
@@ -976,7 +976,7 @@ class MP3ShowcasePage(QWidget):
 
         # Connect the visualizer to the REAL central MP3 player.
         QTimer.singleShot(500, self._connect_visualizer_to_player)
-        self.setStyleSheet("""
+        self.setStyleSheet(paint_accent("""
             QWidget{background:#0b0b0f;color:#f2f2f5;}
             QFrame#column{background:#121318;border:1px solid #292b33;border-radius:10px;}
             QLineEdit,QPushButton{background:#18181f;color:#fff;border:1px solid #30303a;border-radius:6px;padding:7px 10px;}
@@ -989,7 +989,7 @@ class MP3ShowcasePage(QWidget):
             QListWidget{background:#101015;color:#f2f2f5;border:1px solid #2b2932;border-radius:7px;}
             QListWidget::item{padding:7px;border-bottom:1px solid #22222a;}
             QListWidget::item:selected{background:#3a1d31;}
-        """)
+        """))
     def _connect_visualizer_to_player(self):
         """Connect visualizer to the application's real MP3 player."""
         try:
@@ -1118,7 +1118,7 @@ class MP3ShowcasePage(QWidget):
             self.vinyl_deck.set_track(artist, title)
             self.vinyl_deck.set_playing(False)
             self.visualizer.set_playing(False)
-            self.info.setText(f"<b>{artist}</b><br><span style='color:#d84b91;font-size:16px'>{title}</span><br><br>{row[3] or ''}<br>{row[4] or ''}")
+            self.info.setText(f"<b>{artist}</b><br><span style='color:{accent_color()};font-size:16px'>{title}</span><br><br>{row[3] or ''}<br>{row[4] or ''}")
             self.track_list.clear()
             item = QListWidgetItem(f"{artist} - {title}")
             item.setData(Qt.ItemDataRole.UserRole, str(row[0] or ""))

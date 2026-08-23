@@ -55,7 +55,14 @@ def parse_filename(path: str) -> dict[str, str]:
     return result
 
 
-def search_releases(artist: str, title: str, limit: int = 10) -> list[dict]:
+def search_releases(artist: str, title: str, limit: int | None = None) -> list[dict]:
+    try:
+        from gui.app_settings import match_result_limit
+        if limit is None:
+            limit = match_result_limit(10)
+    except Exception:
+        if limit is None:
+            limit = 10
     artist = str(artist or "").strip()
     title = str(title or "").strip()
     if not artist and not title:
@@ -64,7 +71,7 @@ def search_releases(artist: str, title: str, limit: int = 10) -> list[dict]:
     params = {
         "type": "release",
         "q": " ".join(x for x in (artist, title) if x),
-        "per_page": max(1, min(limit, 20)),
+        "per_page": max(1, min(int(limit), 25)),
     }
 
     response = requests.get(

@@ -110,3 +110,10 @@ __pycache__/
 # Temporary Discogs experiments / search output
 discogs_match_engine_test*.py
 discogs_search.txt
+
+# =========================
+# LOCAL APPLICATION DATA
+# =========================
+data/cd_covers/
+data/liveset_covers/
+data/livesets.json

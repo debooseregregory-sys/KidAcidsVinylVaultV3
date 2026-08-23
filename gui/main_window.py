@@ -7,6 +7,7 @@
 
 import sys
 
+from gui.app_settings import paint_accent
 from PySide6.QtCore import Qt, QSettings
 from PySide6.QtWidgets import (
     QApplication,
@@ -1457,8 +1458,7 @@ class VinylVaultWindow(QMainWindow):
         self
     ):
 
-        self.setStyleSheet(
-            """
+        self.setStyleSheet(paint_accent("""
             /* ==================================================
                GLOBAL
                ================================================== */
@@ -1831,8 +1831,7 @@ class VinylVaultWindow(QMainWindow):
             QScrollBar::handle:horizontal:hover {
                 background-color: #d84b91;
             }
-            """
-        )
+            """))
 
 
 # ============================================================

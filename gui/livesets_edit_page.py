@@ -1,4 +1,5 @@
 from __future__ import annotations
+from gui.app_settings import confirm_delete
 
 import json
 import shutil
