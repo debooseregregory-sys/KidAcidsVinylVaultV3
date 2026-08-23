@@ -30,6 +30,7 @@ class CDShowcasePage(QWidget):
         self.release_id = None
         self._track_buttons = {}
         self._active_mp3_path = None
+        self.checked_button = None
         self.build_ui()
 
     def build_ui(self):
@@ -127,11 +128,34 @@ class CDShowcasePage(QWidget):
                 color: #ffffff;
                 border: none;
             }
+            QPushButton#cdReadyButton {
+                background: #252525;
+                color: #ffffff;
+                border: 1px solid #555555;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-size: 12px;
+                font-weight: 900;
+            }
+            QPushButton#cdReadyButton:hover {
+                background: #333333;
+                border-color: #777777;
+            }
+            QPushButton#cdReadyButton[ready="true"] {
+                background: #ffeb78;
+                color: #141414;
+                border: 1px solid #c9ad32;
+            }
+            QPushButton#cdReadyButton[ready="true"]:hover {
+                background: #ffe45a;
+                color: #141414;
+            }
         """))
 
     def _back_clicked(self):
         if self.release_id is not None:
             self.release_id = None
+            self.checked_button = None
             self.load_releases()
             return
         self.back_requested.emit()
@@ -237,15 +261,12 @@ class CDShowcasePage(QWidget):
             )
 
     def set_active_track(self, path):
-        """Mark the currently playing CD track (pink play state)."""
         self._set_active_mp3_path(path)
 
     def clear_active_track(self):
-        """Return all CD track play buttons to idle state."""
         self._set_active_mp3_path("")
 
     def set_playback_state(self, state):
-        """Keep the button in playing state only while the central player is playing."""
         try:
             from PySide6.QtMultimedia import QMediaPlayer
             is_playing = state == QMediaPlayer.PlaybackState.PlayingState
@@ -258,6 +279,7 @@ class CDShowcasePage(QWidget):
 
     def load_releases(self, search_text=""):
         self.release_id = None
+        self.checked_button = None
         self._clear_grid()
         self.title_label.setText("CD SHOWCASE")
         self.back_button.setText("← CD LIBRARY")
@@ -339,17 +361,13 @@ class CDShowcasePage(QWidget):
         return card
 
     def _make_track_row(self, track):
-        """Beatport-like: no bars — play/pause, position, title/artist, duration."""
         row = QFrame()
         row.setObjectName("trackRow")
-                
         layout = QHBoxLayout(row)
         layout.setContentsMargins(2, 4, 8, 4)
         layout.setSpacing(12)
 
         mp3_path = str(track[8] or "").strip()
-
-        # Play / pause on the left
         if mp3_path:
             play_button = QPushButton("▶")
             play_button.setObjectName("cdTrackPlayButton")
@@ -359,10 +377,7 @@ class CDShowcasePage(QWidget):
             play_button.setCursor(Qt.CursorShape.PointingHandCursor)
             button_path = self._normalise_mp3_path(mp3_path)
             self._track_buttons[button_path] = play_button
-            self._set_play_button_active(
-                play_button,
-                button_path == self._active_mp3_path,
-            )
+            self._set_play_button_active(play_button, button_path == self._active_mp3_path)
             play_button.clicked.connect(
                 lambda _checked=False, path=mp3_path: self.play_mp3.emit(path)
             )
@@ -380,18 +395,15 @@ class CDShowcasePage(QWidget):
         middle = QVBoxLayout()
         middle.setSpacing(1)
         middle.setContentsMargins(0, 0, 0, 0)
-
         title = QLabel(str(track[5] or "(geen titel)"))
         title.setObjectName("trackTitle")
         title.setWordWrap(False)
         middle.addWidget(title)
-
         artist = str(track[4] or "").strip()
         if artist:
             artist_label = QLabel(artist)
             artist_label.setObjectName("trackArtist")
             middle.addWidget(artist_label)
-
         layout.addLayout(middle, 1)
 
         duration = QLabel(str(track[6] or ""))
@@ -399,8 +411,38 @@ class CDShowcasePage(QWidget):
         duration.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         duration.setFixedWidth(48)
         layout.addWidget(duration)
-
         return row
+
+    def toggle_checked(self):
+        if self.release_id is None:
+            return
+        conn = get_connection()
+        try:
+            row = conn.execute(
+                "SELECT checked FROM cd_releases WHERE id = ?",
+                (self.release_id,),
+            ).fetchone()
+            current = int(row[0] or 0) if row else 0
+            new_value = 0 if current else 1
+            conn.execute(
+                "UPDATE cd_releases SET checked = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (new_value, self.release_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        self.load_release(self.release_id)
+
+    def _update_checked_button(self, checked):
+        if self.checked_button is None:
+            return
+        ready = bool(int(checked or 0))
+        self.checked_button.setProperty("ready", ready)
+        self.checked_button.setText("✓ KLAAR - TERUGZETTEN" if ready else "✓ KLAAR")
+        style = self.checked_button.style()
+        style.unpolish(self.checked_button)
+        style.polish(self.checked_button)
+        self.checked_button.update()
 
     def load_release(self, release_id):
         self.release_id = int(release_id)
@@ -452,11 +494,21 @@ class CDShowcasePage(QWidget):
         fields = [
             ("LABEL", release[3]), ("CATALOGUS", release[4]), ("JAAR", release[5]),
             ("GENRE", release[6]), ("TYPE", "CD"),
-            ("STATUS", "GEKOPPELD" if int(release[11] or 0) else "NIET GEKOPPELD"),
+            ("STATUS", "KLAAR" if int(release[11] or 0) else "NOG TE DOEN"),
         ]
         for index, (label, value) in enumerate(fields):
             meta_grid.addWidget(self._make_value_card(label, value), index // 3, index % 3)
         info.addLayout(meta_grid)
+
+        self.checked_button = QPushButton()
+        self.checked_button.setObjectName("cdReadyButton")
+        self.checked_button.setMinimumHeight(42)
+        self.checked_button.setMinimumWidth(220)
+        self.checked_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.checked_button.clicked.connect(self.toggle_checked)
+        self._update_checked_button(release[11])
+        info.addWidget(self.checked_button, 0, Qt.AlignmentFlag.AlignLeft)
+
         if release[7]:
             discogs = QLabel(f"Discogs ID: {release[7]}")
             discogs.setObjectName("meta")
