@@ -24,21 +24,31 @@ class HelpPage(QWidget):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(30, 24, 30, 24)
-        root.setSpacing(14)
+        root.setContentsMargins(36, 30, 36, 30)
+        root.setSpacing(16)
+
+        header = QWidget()
+        header.setObjectName("helpHeader")
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 4)
+        header_layout.setSpacing(6)
 
         kicker = QLabel("KID ACID'S MUSICVAULT V3")
         kicker.setObjectName("helpKicker")
-        root.addWidget(kicker)
+        header_layout.addWidget(kicker)
 
         title = QLabel("HANDLEIDING")
         title.setObjectName("helpTitle")
-        root.addWidget(title)
+        header_layout.addWidget(title)
 
-        subtitle = QLabel("Een uitgebreide gids voor het beheren, terugvinden, bekijken en afspelen van je muziekcollectie.")
+        subtitle = QLabel(
+            "Een uitgebreide gids voor het beheren, terugvinden, bekijken en afspelen van je muziekcollectie."
+        )
         subtitle.setObjectName("helpSubtitle")
         subtitle.setWordWrap(True)
-        root.addWidget(subtitle)
+        header_layout.addWidget(subtitle)
+
+        root.addWidget(header)
 
         self.search = QLineEdit()
         self.search.setObjectName("helpSearch")
@@ -52,34 +62,38 @@ class HelpPage(QWidget):
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
 
         self.content = QWidget()
         self.content.setObjectName("helpContent")
         self.content_layout = QVBoxLayout(self.content)
-        self.content_layout.setContentsMargins(8, 4, 22, 20)
+        self.content_layout.setContentsMargins(4, 8, 18, 30)
         self.content_layout.setSpacing(0)
         self.scroll.setWidget(self.content)
         root.addWidget(self.scroll, 1)
 
         self.setStyleSheet(paint_accent("""
+            QWidget#helpHeader{background:transparent;}
             QLabel#helpKicker{color:#ffcf72;font-size:10px;font-weight:900;letter-spacing:2px;}
-            QLabel#helpTitle{color:#fff;font-size:30px;font-weight:900;}
-            QLabel#helpSubtitle{color:#92929d;font-size:13px;}
-            QLineEdit#helpSearch{background:#111116;color:#fff;border:1px solid #30303a;border-radius:9px;padding:10px 12px;font-size:12px;}
+            QLabel#helpTitle{color:#ffffff;font-size:32px;font-weight:900;letter-spacing:0.5px;}
+            QLabel#helpSubtitle{color:#9696a1;font-size:13px;line-height:1.5;}
+            QLineEdit#helpSearch{background:#111116;color:#ffffff;border:1px solid #30303a;border-radius:10px;padding:11px 13px;font-size:12px;}
             QLineEdit#helpSearch:focus{border-color:#ffcf72;}
             QScrollArea#helpScroll{background:transparent;border:0px;}
+            QWidget#helpContent{background:transparent;}
             QWidget#helpSection{background:transparent;}
-            QLabel#sectionNumber{color:#ffcf72;font-size:10px;font-weight:900;letter-spacing:1px;}
-            QLabel#sectionTitle{color:#fff;font-size:25px;font-weight:900;}
-            QLabel#sectionIntro{color:#aaaab4;font-size:13px;line-height:1.45;}
+            QLabel#sectionNumber{color:#ffcf72;font-size:10px;font-weight:900;letter-spacing:1.4px;}
+            QLabel#sectionTitle{color:#ffffff;font-size:25px;font-weight:900;}
+            QLabel#sectionIntro{color:#aaaab4;font-size:13px;line-height:1.55;}
             QWidget#helpItem{background:transparent;}
-            QLabel#itemNumber{color:#5f5f6b;font-size:10px;font-weight:900;}
+            QLabel#itemNumber{color:#5f5f6b;font-size:10px;font-weight:900;letter-spacing:1px;}
             QLabel#sectionHeading{color:#ffcf72;font-size:13px;font-weight:900;}
-            QLabel#sectionText{color:#c2c2c9;font-size:12px;line-height:1.5;}
-            QFrame#helpDivider{color:#292933;background:#292933;border:0px;max-height:1px;}
-            QScrollBar:vertical{background:#0d0d11;width:9px;border-radius:4px;}
+            QLabel#sectionText{color:#c2c2c9;font-size:12px;line-height:1.6;}
+            QFrame#helpDivider{background:#292933;border:0px;max-height:1px;min-height:1px;}
+            QScrollBar:vertical{background:#0d0d11;width:9px;border-radius:4px;margin:0px;}
             QScrollBar::handle:vertical{background:#34343e;border-radius:4px;min-height:35px;}
-            QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0px;}
+            QScrollBar::handle:vertical:hover{background:#454551;}
+            QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0px;background:none;border:none;}
         """))
 
         self._sections = [
@@ -169,43 +183,48 @@ class HelpPage(QWidget):
         query = self.search.text().strip().casefold()
 
         for index, (name, title, intro, entries) in enumerate(self._sections, 1):
-            haystack = " ".join([name, title, intro, *[f"{a} {b}" for a, b in entries]]).casefold()
+            haystack = " ".join(
+                [name, title, intro, *[f"{a} {b}" for a, b in entries]]
+            ).casefold()
             if query and query not in haystack:
                 continue
 
             section = QWidget()
             section.setObjectName("helpSection")
             layout = QVBoxLayout(section)
-            layout.setContentsMargins(12, 26, 12, 30)
+            layout.setContentsMargins(8, 28, 8, 34)
             layout.setSpacing(0)
 
             number = QLabel(f"HOOFDSTUK {index:02d}")
             number.setObjectName("sectionNumber")
             layout.addWidget(number)
+            layout.addSpacing(4)
 
             heading = QLabel(title)
             heading.setObjectName("sectionTitle")
             heading.setWordWrap(True)
             layout.addWidget(heading)
+            layout.addSpacing(8)
 
             description = QLabel(intro)
             description.setObjectName("sectionIntro")
             description.setWordWrap(True)
             description.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             layout.addWidget(description)
+            layout.addSpacing(18)
 
-            intro_divider = QFrame()
-            intro_divider.setObjectName("helpDivider")
-            intro_divider.setFrameShape(QFrame.Shape.HLine)
-            intro_divider.setFrameShadow(QFrame.Shadow.Plain)
-            layout.addWidget(intro_divider)
-            layout.addSpacing(14)
+            divider = QFrame()
+            divider.setObjectName("helpDivider")
+            divider.setFrameShape(QFrame.Shape.HLine)
+            divider.setFrameShadow(QFrame.Shadow.Plain)
+            layout.addWidget(divider)
+            layout.addSpacing(18)
 
             for item_index, (item_title, item_text) in enumerate(entries, 1):
                 item_widget = QWidget()
                 item_widget.setObjectName("helpItem")
                 item_layout = QVBoxLayout(item_widget)
-                item_layout.setContentsMargins(0, 0, 0, 18)
+                item_layout.setContentsMargins(0, 0, 0, 22)
                 item_layout.setSpacing(5)
 
                 item_number = QLabel(f"{item_index:02d}")
@@ -226,12 +245,12 @@ class HelpPage(QWidget):
                 layout.addWidget(item_widget)
 
                 if item_index < len(entries):
-                    divider = QFrame()
-                    divider.setObjectName("helpDivider")
-                    divider.setFrameShape(QFrame.Shape.HLine)
-                    divider.setFrameShadow(QFrame.Shadow.Plain)
-                    layout.addWidget(divider)
-                    layout.addSpacing(14)
+                    item_divider = QFrame()
+                    item_divider.setObjectName("helpDivider")
+                    item_divider.setFrameShape(QFrame.Shape.HLine)
+                    item_divider.setFrameShadow(QFrame.Shadow.Plain)
+                    layout.addWidget(item_divider)
+                    layout.addSpacing(18)
 
             self.content_layout.addWidget(section)
 
