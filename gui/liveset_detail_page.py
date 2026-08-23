@@ -32,7 +32,6 @@ class LivesetPlayerVisualizer(QWidget):
         self.update()
 
     def set_now_playing(self, artist, title):
-        """Set the identity shown by NOW PLAYING from the actual audio source."""
         self._artist = str(artist or "").strip()
         self._title = str(title or "").strip()
         self._playing = True
@@ -142,7 +141,52 @@ class LivesetDetailPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.data = {}
+        self._player = None
+        self._last_active_path = ""
         self._build()
+
+        # Poll the real central player. This is deliberately independent of
+        # play_started signals because the player can also be started by the
+        # bottom player bar or another page.
+        self._player_sync_timer = QTimer(self)
+        self._player_sync_timer.setInterval(150)
+        self._player_sync_timer.timeout.connect(self._sync_from_central_player)
+        self._player_sync_timer.start()
+
+    def bind_player(self, player):
+        self._player = player
+        self._sync_from_central_player()
+
+    def _sync_from_central_player(self):
+        player = self._player
+        if player is None or not self.data:
+            return
+        try:
+            path = str(getattr(player, "current_path", None) or "").strip()
+            state = player.player.playbackState()
+            playing = state == player.player.PlaybackState.PlayingState
+        except Exception:
+            return
+
+        active = str(self.data.get("audio") or "").strip()
+        same_file = bool(path and active and Path(path).resolve() == Path(active).resolve())
+        if same_file and playing:
+            if path != self._last_active_path:
+                self._last_active_path = path
+                fallback_artist, fallback_title = self._identity_from_audio(path)
+                artist = str(self.data.get("artist") or "").strip() or fallback_artist
+                title = str(self.data.get("title") or "").strip() or fallback_title
+                self.visualizer.set_now_playing(artist, title)
+            self.play_button.setProperty("playing", True)
+            self.play_button.setText("❚❚  PLAYING")
+        else:
+            self._last_active_path = ""
+            self.visualizer.set_playing(False)
+            self.play_button.setProperty("playing", False)
+            self.play_button.setText("▶  PLAY LIVESET")
+
+        self.play_button.style().unpolish(self.play_button)
+        self.play_button.style().polish(self.play_button)
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -228,7 +272,6 @@ class LivesetDetailPage(QWidget):
 
     @staticmethod
     def _identity_from_audio(path: str):
-        """Extract a useful artist/title fallback from the actual playing filename."""
         name = Path(str(path or "")).stem.strip()
         if not name:
             return "", ""
@@ -239,6 +282,7 @@ class LivesetDetailPage(QWidget):
 
     def load_liveset(self, data):
         self.data = dict(data or {})
+        self._last_active_path = ""
         audio_path = str(self.data.get("audio") or "").strip()
         fallback_artist, fallback_title = self._identity_from_audio(audio_path)
         artist = str(self.data.get("artist") or "").strip() or fallback_artist
@@ -262,6 +306,7 @@ class LivesetDetailPage(QWidget):
         self.play_button.style().unpolish(self.play_button)
         self.play_button.style().polish(self.play_button)
         self._animate_open()
+        self._sync_from_central_player()
 
     def _animate_open(self):
         self.setWindowOpacity(0.0)
@@ -279,26 +324,8 @@ class LivesetDetailPage(QWidget):
             self.play_mp3.emit(path)
 
     def set_active_track(self, path):
-        current = str(self.data.get("audio") or "").strip()
-        active = str(path or "").strip()
-        playing = bool(current and active and Path(current).name.casefold() == Path(active).name.casefold())
-
-        if playing:
-            fallback_artist, fallback_title = self._identity_from_audio(active)
-            artist = str(self.data.get("artist") or "").strip() or fallback_artist
-            title = str(self.data.get("title") or "").strip() or fallback_title
-            self.visualizer.set_now_playing(artist, title)
-        else:
-            self.visualizer.set_playing(False)
-
-        self.play_button.setProperty("playing", playing)
-        self.play_button.setText("❚❚  PLAYING" if playing else "▶  PLAY LIVESET")
-        self.play_button.style().unpolish(self.play_button)
-        self.play_button.style().polish(self.play_button)
+        self._sync_from_central_player()
 
     def clear_active_track(self):
-        self.play_button.setProperty("playing", False)
-        self.play_button.setText("▶  PLAY LIVESET")
-        self.play_button.style().unpolish(self.play_button)
-        self.play_button.style().polish(self.play_button)
-        self.visualizer.set_playing(False)
+        self._last_active_path = ""
+        self._sync_from_central_player()
