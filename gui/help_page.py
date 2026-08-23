@@ -1,183 +1,261 @@
 from __future__ import annotations
 
 from gui.app_settings import paint_accent
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QListWidget,
+    QListWidgetItem,
     QLineEdit,
-    QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 
 
-class HelpCard(QFrame):
-    def __init__(self, eyebrow: str, title: str, text: str, parent=None):
-        super().__init__(parent)
-        self.setObjectName("helpCard")
-        self._search_text = f"{eyebrow} {title} {text}".casefold()
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(7)
-
-        eyebrow_label = QLabel(eyebrow.upper())
-        eyebrow_label.setObjectName("helpEyebrow")
-        layout.addWidget(eyebrow_label)
-
-        title_label = QLabel(title)
-        title_label.setObjectName("helpCardTitle")
-        title_label.setWordWrap(True)
-        layout.addWidget(title_label)
-
-        text_label = QLabel(text)
-        text_label.setObjectName("helpCardText")
-        text_label.setWordWrap(True)
-        text_label.setTextFormat(Qt.TextFormat.PlainText)
-        layout.addWidget(text_label)
-
-    def matches(self, query: str) -> bool:
-        return not query or query.casefold() in self._search_text
-
-
 class HelpPage(QWidget):
-    """Full in-app manual for Kid Acid's MusicVault."""
+    """Rustige, volledig Nederlandstalige handleiding binnen MusicVault."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("helpPage")
-        self.cards: list[HelpCard] = []
+        self._sections = []
         self._build()
 
     def _build(self):
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(34, 26, 34, 24)
-        outer.setSpacing(14)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(30, 24, 30, 24)
+        root.setSpacing(14)
 
-        hero = QFrame()
-        hero.setObjectName("helpHero")
-        hero_layout = QVBoxLayout(hero)
-        hero_layout.setContentsMargins(28, 22, 28, 20)
-        hero_layout.setSpacing(5)
+        header = QHBoxLayout()
+        header.setSpacing(18)
 
-        eyebrow = QLabel("KID ACID'S MUSICVAULT V3")
-        eyebrow.setObjectName("helpHeroEyebrow")
-        hero_layout.addWidget(eyebrow)
+        intro = QVBoxLayout()
+        intro.setSpacing(3)
 
-        title = QLabel("HELP & COMPLETE GUIDE")
-        title.setObjectName("helpHeroTitle")
-        hero_layout.addWidget(title)
+        kicker = QLabel("KID ACID'S MUSICVAULT V3")
+        kicker.setObjectName("helpKicker")
+        intro.addWidget(kicker)
 
-        subtitle = QLabel(
-            "A practical guide to your collection, playback, Discogs, Livesets and the MusicVault workflow."
-        )
-        subtitle.setObjectName("helpHeroSubtitle")
+        title = QLabel("HANDLEIDING")
+        title.setObjectName("helpTitle")
+        intro.addWidget(title)
+
+        subtitle = QLabel("Alles wat je nodig hebt om je collectie te beheren en muziek af te spelen.")
+        subtitle.setObjectName("helpSubtitle")
         subtitle.setWordWrap(True)
-        hero_layout.addWidget(subtitle)
+        intro.addWidget(subtitle)
+        header.addLayout(intro, 1)
 
-        outer.addWidget(hero)
-
-        search_row = QHBoxLayout()
-        search_row.setSpacing(8)
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Zoek in Help…  bv. MP3, Discogs, Livesets, cover, speler")
+        self.search.setObjectName("helpSearch")
+        self.search.setPlaceholderText("Zoeken in de handleiding...")
         self.search.setClearButtonEnabled(True)
-        self.search.textChanged.connect(self._filter_cards)
-        search_row.addWidget(self.search, 1)
-        clear = QPushButton("TOON ALLES")
-        clear.setObjectName("helpClear")
-        clear.clicked.connect(self.search.clear)
-        search_row.addWidget(clear)
-        outer.addLayout(search_row)
+        self.search.setFixedWidth(270)
+        self.search.textChanged.connect(self._search)
+        header.addWidget(self.search, 0, Qt.AlignmentFlag.AlignBottom)
+        root.addLayout(header)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        body = QHBoxLayout()
+        body.setSpacing(18)
 
-        content = QWidget()
-        content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(2, 2, 10, 14)
-        content_layout.setSpacing(10)
+        self.menu = QListWidget()
+        self.menu.setObjectName("helpMenu")
+        self.menu.setFixedWidth(205)
+        self.menu.currentRowChanged.connect(self._show_section)
+        body.addWidget(self.menu)
 
-        sections = [
-            ("QUICK START", "Begin hier", "Start MusicVault, open Settings if needed, check your music/MP3 location and then use the relevant Library. Open a release or liveset to inspect it and use the player to listen. The Showcase pages are for the visual presentation; Library pages are for finding and managing items."),
-            ("VINYL", "Vinyl Library & Release details", "Vinyl is your main release collection. Use the Library to search and browse releases. Open a release for its cover, metadata and tracks. Linked MP3 files can be played from the track area. Keep local collection information such as your kastcode intact when editing other release data."),
-            ("VINYL", "Vinyl Showcase", "Showcase is the visual way to browse and play releases. It is separate from the Library/detail editing workflow. Select a release, inspect its artwork and tracks, and use the track play controls. The active play state is shown by the player styling."),
-            ("CD", "CD Library", "CD has its own Library and Showcase. Use CD Library to find a CD, then open the CD release view. CD tracks use the same central playback system as the rest of MusicVault. CD and Vinyl are kept as separate media types."),
-            ("CD", "CD Showcase & tracks", "The CD Showcase is designed as the CD-specific visual presentation. Track play buttons show the active state, and playback is handled by the central player. If a track has a linked MP3, playing it should update the active track state in the Showcase."),
-            ("MP3", "MP3 Library", "Use MP3 Library to search and inspect the scanned audio collection. MP3 files are the actual playable audio files; database links tell MusicVault which file belongs to a track. Do not move or rename files outside MusicVault without checking the resulting links."),
-            ("MP3", "MP3 matching & links", "MusicVault can link MP3 files to tracks using matching information. A link is not the same thing as copying an MP3 into the database: the audio file remains on disk and the database stores its path/link information. If a file is missing, check the original path before trying to repair a match."),
-            ("PLAYER", "The central player", "The bottom player is the common playback engine. Play a track or liveset from its page and the central player handles the actual audio. Use pause/play and other available controls there. Playback views listen to the same player state so the displayed active item stays synchronized."),
-            ("LIVESETS", "Livesets Library", "Livesets have a dedicated Library for managing sets. Select a set to edit title, artist/DJ, date, location, duration, audio file and cover. Use KIES AUDIO to link the real MP3/audio file. OPSLAAN writes the metadata to data/livesets.json. The audio file itself is not copied or deleted when you save."),
-            ("LIVESETS", "Liveset Showcase", "Showcase is the visual entry point for Livesets. Select a set to open its dedicated playback page. The large animated visualizer belongs to the playback/detail page, not the editing Library."),
-            ("LIVESETS", "Liveset playback", "On the Liveset playback page you see the selected cover, title, artist and metadata together with PLAY LIVESET. The NOW PLAYING information is tied to the central player, so it should describe the liveset that is actually playing rather than a fixed slogan."),
-            ("COVERS", "Covers toevoegen", "Use the cover controls on the relevant Library/editor page to choose an image. MusicVault stores liveset covers inside its local data/liveset_covers area. Replacing a liveset cover removes only the old managed cover file; the audio file is left alone."),
-            ("DISCOGS", "Discogs import", "Discogs tools are for importing or enriching release information. Work carefully with imports and matching because Discogs data is external information while your local collection and MP3 links are your own data. Always verify the selected release before applying a large change."),
-            ("DISCOGS", "Discogs matching", "When matching a release or track, compare artist, title, format, catalogue information and track listing instead of relying on one field. A good match should make sense for the physical release and your local collection. Do not use Discogs matching as a reason to overwrite unrelated local information."),
-            ("SETTINGS", "Settings", "Settings contains the configuration areas used by MusicVault, including application behaviour, database options, music-library options and Discogs settings. Change one logical setting at a time and test the affected page afterwards."),
-            ("DATABASE", "Database & local data", "The database contains the structured collection information and links. Local data also includes covers and liveset metadata. Database files and generated local data should not be casually deleted. If something looks wrong, stop before running cleanup or import operations."),
-            ("SAFETY", "Before large changes", "For a large import, matching run or structural change, first make sure MusicVault starts correctly. Test the exact page you changed. Prefer small, understandable Git commits so a working state can be recovered easily."),
-            ("SAFETY", "What not to delete", "Do not manually delete the database, cover folders or audio files just because an item is not visible in a Library. A missing file can leave a database link behind. First identify whether the problem is the database record, the path or the physical file."),
-            ("TROUBLESHOOTING", "Een MP3 speelt niet", "Check whether the file still exists at the stored path. If the file was moved or renamed, the track link may point to the old location. Test the file directly and then repair the MusicVault link rather than deleting the track record."),
-            ("TROUBLESHOOTING", "Een Liveset speelt niet", "Open Livesets Library, select the set and check Audio bestand. Use KIES AUDIO to select the real audio file again and click OPSLAAN. Then reopen the set from Showcase and press PLAY LIVESET."),
-            ("TROUBLESHOOTING", "Een cover ontbreekt", "Open the relevant editor and choose the cover again. For Livesets, the cover is stored in the local liveset cover folder. If the image was manually removed from disk, selecting it again is the safest repair."),
-            ("TROUBLESHOOTING", "MusicVault start niet", "Start run_v3.py from PowerShell and read the first Python traceback. Do not keep changing random files. A syntax error, import error or Qt error usually identifies the exact file that needs attention."),
-            ("TROUBLESHOOTING", "Na een wijziging werkt iets anders niet", "Check Git status and the changed file first. Compile the affected Python file with python -m py_compile <file>. Then start MusicVault and test the affected workflow. Keep unrelated files untouched while diagnosing the problem."),
-            ("GIT", "Werken met de huidige versie", "This MusicVault project is maintained on the rescue-my-work-cd branch. Before pulling new work, make sure your working tree is clean or deliberately stash/commit local changes. After a pull, compile the changed Python files and run the application."),
-            ("ABOUT", "MusicVault in één zin", "Kid Acid's MusicVault is your local music collection environment: physical releases, CDs, MP3 audio and Livesets brought together with artwork, metadata, playback and visual Showcases."),
-        ]
+        self.scroll = QScrollArea()
+        self.scroll.setObjectName("helpScroll")
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
-        for eyebrow, title, text in sections:
-            card = HelpCard(eyebrow, title, text)
-            self.cards.append(card)
-            content_layout.addWidget(card)
-
-        self.empty_label = QLabel("Geen Help-onderdeel gevonden. Probeer een ander zoekwoord.")
-        self.empty_label.setObjectName("helpEmpty")
-        self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.empty_label.hide()
-        content_layout.addWidget(self.empty_label)
-
-        footer = QLabel("KID ACID  •  MUSICVAULT V3  •  HELP")
-        footer.setObjectName("helpFooter")
-        footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        content_layout.addWidget(footer)
-
-        scroll.setWidget(content)
-        outer.addWidget(scroll, 1)
+        self.content = QWidget()
+        self.content.setObjectName("helpContent")
+        self.content_layout = QVBoxLayout(self.content)
+        self.content_layout.setContentsMargins(8, 4, 22, 20)
+        self.content_layout.setSpacing(14)
+        self.scroll.setWidget(self.content)
+        body.addWidget(self.scroll, 1)
+        root.addLayout(body, 1)
 
         self.setStyleSheet(paint_accent("""
-            QFrame#helpHero{background:#15151c;border:1px solid #30303b;border-radius:14px;}
-            QLabel#helpHeroEyebrow{color:#ffcf72;font-size:10px;font-weight:900;letter-spacing:2px;}
-            QLabel#helpHeroTitle{color:#fff;font-size:29px;font-weight:900;}
-            QLabel#helpHeroSubtitle{color:#a6a6b0;font-size:13px;}
-            QLineEdit{background:#0e0e12;color:#fff;border:1px solid #30303a;border-radius:8px;padding:10px 12px;font-size:12px;}
-            QLineEdit:focus{border-color:#ffcf72;}
-            QPushButton#helpClear{background:#18181f;color:#ddd;border:1px solid #30303a;border-radius:8px;padding:10px 15px;font-size:10px;font-weight:900;}
-            QPushButton#helpClear:hover{background:#24242c;color:#fff;border-color:#ffcf72;}
-            QFrame#helpCard{background:#111116;border:1px solid #292933;border-radius:11px;}
-            QFrame#helpCard:hover{border-color:#4a4a58;background:#13131a;}
-            QLabel#helpEyebrow{color:#ffcf72;font-size:9px;font-weight:900;letter-spacing:1.5px;}
-            QLabel#helpCardTitle{color:#fff;font-size:17px;font-weight:900;}
-            QLabel#helpCardText{color:#aaaab4;font-size:12px;}
-            QLabel#helpEmpty{color:#ffcf72;font-size:13px;font-weight:800;padding:30px;}
-            QLabel#helpFooter{color:#686872;font-size:10px;font-weight:800;padding:10px;}
-            QScrollBar:vertical{background:#0d0d11;width:10px;border-radius:5px;}
-            QScrollBar::handle:vertical{background:#34343e;border-radius:5px;min-height:35px;}
-            QScrollBar::handle:vertical:hover{background:#50505c;}
+            QLabel#helpKicker{color:#ffcf72;font-size:10px;font-weight:900;letter-spacing:2px;}
+            QLabel#helpTitle{color:#fff;font-size:30px;font-weight:900;}
+            QLabel#helpSubtitle{color:#92929d;font-size:13px;}
+            QLineEdit#helpSearch{background:#111116;color:#fff;border:1px solid #30303a;border-radius:9px;padding:10px 12px;font-size:12px;}
+            QLineEdit#helpSearch:focus{border-color:#ffcf72;}
+            QListWidget#helpMenu{background:#0f0f14;border:1px solid #292933;border-radius:10px;padding:8px;outline:0;}
+            QListWidget#helpMenu::item{color:#9999a4;padding:11px 12px;border-radius:7px;font-size:11px;font-weight:800;}
+            QListWidget#helpMenu::item:hover{background:#18181f;color:#fff;}
+            QListWidget#helpMenu::item:selected{background:#28242a;color:#ffcf72;}
+            QFrame#helpSection{background:#111116;border:1px solid #292933;border-radius:12px;}
+            QLabel#sectionNumber{color:#ffcf72;font-size:10px;font-weight:900;}
+            QLabel#sectionTitle{color:#fff;font-size:23px;font-weight:900;}
+            QLabel#sectionIntro{color:#aaaab4;font-size:13px;line-height:1.4;}
+            QLabel#sectionHeading{color:#ffcf72;font-size:12px;font-weight:900;}
+            QLabel#sectionText{color:#c2c2c9;font-size:12px;}
+            QLabel#tip{background:#17171e;color:#d0d0d6;border-left:3px solid #ffcf72;padding:12px;font-size:12px;}
+            QScrollBar:vertical{background:#0d0d11;width:9px;border-radius:4px;}
+            QScrollBar::handle:vertical{background:#34343e;border-radius:4px;min-height:35px;}
             QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0px;}
         """))
 
-    def _filter_cards(self, text: str):
-        query = text.strip()
-        visible = 0
-        for card in self.cards:
-            show = card.matches(query)
-            card.setVisible(show)
-            if show:
-                visible += 1
-        self.empty_label.setVisible(visible == 0)
+        sections = [
+            ("Welkom", "Welkom bij MusicVault", "MusicVault is je eigen muziekverzameling in één programma. Vinyl, CD's, MP3-bestanden en Livesets hebben elk hun eigen onderdeel, terwijl de centrale speler de muziek daadwerkelijk afspeelt.", [
+                ("Waarvoor dient MusicVault?", "Gebruik de Libraries om je collectie te vinden en te beheren. Gebruik de Showcases wanneer je vooral de muziek, hoezen en visuele presentatie wilt beleven."),
+                ("Belangrijk", "Je eigen bestanden blijven op je computer staan. MusicVault bewaart vooral informatie over je collectie, koppelingen en lokale gegevens."),
+            ]),
+            ("Snel beginnen", "In vier stappen aan de slag", "Als je MusicVault voor het eerst gebruikt, hoef je niet alles tegelijk in te stellen.", [
+                ("01  Instellingen", "Controleer eerst de instellingen voor je database, muziekmap en Discogs."),
+                ("02  Bibliotheek", "Open Vinyl, CD, MP3 of Livesets en controleer of je collectie zichtbaar is."),
+                ("03  Koppelingen", "Controleer bij tracks of het juiste MP3-bestand gekoppeld is."),
+                ("04  Afspelen", "Open een track of Liveset en gebruik de centrale speler onderaan."),
+            ]),
+            ("Vinyl", "Vinylbibliotheek en releases", "De Vinylbibliotheek is bedoeld om je fysieke vinylcollectie te vinden, te bekijken en te beheren.", [
+                ("Zoeken", "Gebruik de zoekfunctie om artiesten, titels en releases snel te vinden."),
+                ("Release openen", "Open een release om de hoes, gegevens en volledige tracklijst te bekijken."),
+                ("Tracks", "Wanneer een track aan een MP3 gekoppeld is, kun je die rechtstreeks afspelen."),
+                ("Kastcode", "Lokale gegevens zoals je kastcode horen bij je eigen collectie. Wijzig die alleen wanneer je dat bewust wilt."),
+            ]),
+            ("Vinyl Showcase", "Vinyl als visuele ervaring", "De Vinyl Showcase is de presentatiekant van je collectie. Hier draait het minder om administratie en meer om bladeren, artwork en muziek.", [
+                ("Afspelen", "Gebruik de afspeelknoppen bij de tracks. De actieve track krijgt een duidelijke actieve status."),
+                ("Bibliotheek versus Showcase", "De Bibliotheek is voor zoeken en beheren; de Showcase is voor bekijken en beleven."),
+            ]),
+            ("CD", "CD-bibliotheek en Showcase", "CD's hebben binnen MusicVault een eigen bibliotheek en eigen Showcase.", [
+                ("Bibliotheek", "Zoek een CD, open hem en bekijk de gegevens en tracks."),
+                ("Showcase", "De CD Showcase is de visuele weergave. De centrale speler verzorgt het echte afspelen."),
+                ("Trackknoppen", "De knop toont duidelijk wanneer een track actief aan het afspelen is."),
+            ]),
+            ("MP3", "MP3-bibliotheek en koppelingen", "De MP3-bibliotheek bevat de werkelijke audiobestanden die op je computer staan.", [
+                ("Bestand versus koppeling", "Een MP3-koppeling is een verwijzing naar een bestand op schijf. Het bestand zelf wordt niet in de database opgeslagen."),
+                ("Bestanden verplaatsen", "Als je een MP3 buiten MusicVault verplaatst of hernoemt, kan de bestaande koppeling ongeldig worden."),
+                ("Ontbrekende MP3", "Controleer eerst of het originele bestand nog bestaat voordat je een track of databasegegeven verwijdert."),
+            ]),
+            ("Speler", "De centrale muziekspeler", "De speler onderaan is de gemeenschappelijke afspeelvoorziening van MusicVault.", [
+                ("Afspelen", "Start een track vanuit een Library, Showcase of Liveset. De centrale speler neemt de daadwerkelijke audio over."),
+                ("Actieve inhoud", "Pagina's kunnen naar de speler luisteren om te tonen welke track of Liveset werkelijk speelt."),
+                ("Probleem", "Speelt iets niet? Controleer eerst het bestandspad en probeer daarna de koppeling opnieuw in te stellen."),
+            ]),
+            ("Livesets", "Livesets beheren", "Livesets zijn volledige DJ-sets met hun eigen titel, artiest, datum, locatie, duur, audio en cover.", [
+                ("Nieuwe Liveset", "Maak een nieuwe Liveset aan en vul de gegevens in."),
+                ("Audio koppelen", "Gebruik KIES AUDIO om het echte MP3- of audiobestand te selecteren."),
+                ("Opslaan", "Met OPSLAAN worden de gegevens bewaard. Het oorspronkelijke audiobestand wordt daarbij niet gekopieerd of verwijderd."),
+                ("Cover", "Gebruik VERVANG FOTO om een afbeelding aan de Liveset te koppelen."),
+            ]),
+            ("Liveset afspelen", "Liveset Showcase en afspeelpagina", "De Showcase brengt je naar de speciale afspeelpagina van de geselecteerde Liveset.", [
+                ("Afspeelpagina", "Daar zie je de echte cover, titel, artiest en gegevens van de gekozen set."),
+                ("Animatie", "De grote animatie hoort bij de afspeelpagina en reageert op de actieve Liveset."),
+                ("Nu aan het spelen", "De weergegeven naam moet overeenkomen met de Liveset die daadwerkelijk door de centrale speler wordt afgespeeld."),
+            ]),
+            ("Covers", "Hoezen en afbeeldingen", "Covers maken de collectie visueel herkenbaar.", [
+                ("Toevoegen", "Kies op de betreffende pagina een afbeelding om een cover toe te voegen of te vervangen."),
+                ("Livesets", "Liveset-covers worden lokaal in de daarvoor bestemde covermap bewaard."),
+                ("Veiligheid", "Verwijder geen coverbestanden handmatig als je niet zeker weet welke gegevens ernaar verwijzen."),
+            ]),
+            ("Discogs", "Discogs en gegevens verrijken", "Discogs levert externe releasegegevens die je kunt gebruiken om je collectie aan te vullen.", [
+                ("Importeren", "Controleer altijd eerst welke release je selecteert voordat je een grote import uitvoert."),
+                ("Matchen", "Vergelijk artiest, titel, formaat, catalogusgegevens en tracklijst. Eén overeenkomst is niet altijd voldoende."),
+                ("Lokale gegevens", "Discogs-gegevens zijn niet hetzelfde als je eigen collectiegegevens. Lokale informatie mag niet zomaar worden overschreven."),
+            ]),
+            ("Instellingen", "Instellingen van MusicVault", "In Instellingen vind je de onderdelen waarmee je MusicVault configureert.", [
+                ("Muziekbibliotheek", "Controleer waar je muziekbestanden staan en hoe de bibliotheek ermee werkt."),
+                ("Discogs", "Beheer hier de instellingen die nodig zijn voor Discogs."),
+                ("Database", "Ga voorzichtig om met database-instellingen. Wijzig niets zonder te weten welk effect het heeft."),
+            ]),
+            ("Veilig werken", "Je collectie veilig houden", "MusicVault bevat veel lokale gegevens. Kleine, gecontroleerde wijzigingen zijn daarom beter dan grote wijzigingen in één keer.", [
+                ("Voor grote wijzigingen", "Zorg dat MusicVault correct start en maak indien nodig eerst een backup."),
+                ("Niet zomaar verwijderen", "Verwijder de database, MP3-bestanden of covermappen niet omdat iets tijdelijk ontbreekt in een Library."),
+                ("Na een wijziging", "Test precies de pagina en functie die je hebt aangepast voordat je verdergaat."),
+            ]),
+            ("Problemen", "Veelvoorkomende problemen", "De meeste problemen zijn terug te brengen tot een verkeerd bestandspad, een ontbrekende koppeling of een configuratieprobleem.", [
+                ("MP3 speelt niet", "Controleer of het bestand nog bestaat op het opgeslagen pad. Stel de koppeling opnieuw in als het bestand verplaatst is."),
+                ("Liveset speelt niet", "Open de Livesetsbibliotheek, kies de set, controleer Audio bestand, kies het bestand opnieuw en druk op OPSLAAN."),
+                ("Cover ontbreekt", "Kies de cover opnieuw vanuit de editor van de betreffende release of Liveset."),
+                ("Programma start niet", "Start run_v3.py vanuit PowerShell en kijk naar de eerste foutmelding. Die wijst meestal naar het bestand dat aandacht nodig heeft."),
+            ]),
+            ("Onderhoud", "Werken met de projectbestanden", "MusicVault wordt als softwareproject onderhouden met Git. Dat maakt het mogelijk om werkende versies te bewaren en wijzigingen gecontroleerd door te voeren.", [
+                ("Voor ophalen van nieuwe wijzigingen", "Controleer eerst of je lokale werkmap schoon is of dat je je wijzigingen bewust hebt opgeslagen."),
+                ("Na een wijziging", "Compileer het gewijzigde Python-bestand en start MusicVault om de betreffende functie te testen."),
+                ("Bij twijfel", "Niet blijven experimenteren met meerdere bestanden tegelijk. Noteer eerst wat er precies fout gaat."),
+            ]),
+            ("Over MusicVault", "Kid Acid's MusicVault V3", "MusicVault brengt je fysieke collectie, digitale muziek en Livesets samen in één lokale muziekomgeving, met artwork, metadata, koppelingen, afspelen en visuele Showcases.", [
+                ("Het uitgangspunt", "Je collectie blijft van jou. MusicVault helpt je om ze overzichtelijk te beheren, terug te vinden en te beluisteren."),
+                ("Tip", "Gebruik de Libraries voor beheer en de Showcases wanneer je gewoon door je muziek wilt bladeren en luisteren."),
+            ]),
+        ]
+
+        for index, (name, title, intro_text, items) in enumerate(sections, 1):
+            self._sections.append((name, title, intro_text, items))
+            self.menu.addItem(QListWidgetItem(name))
+
+        if sections:
+            self.menu.setCurrentRow(0)
+
+    def _show_section(self, index: int):
+        if index < 0 or index >= len(self._sections):
+            return
+
+        while self.content_layout.count():
+            item = self.content_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+        name, title, intro_text, items = self._sections[index]
+
+        card = QFrame()
+        card.setObjectName("helpSection")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(26, 24, 26, 26)
+        layout.setSpacing(14)
+
+        number = QLabel(f"{index + 1:02d}  /  {name.upper()}")
+        number.setObjectName("sectionNumber")
+        layout.addWidget(number)
+
+        title_label = QLabel(title)
+        title_label.setObjectName("sectionTitle")
+        title_label.setWordWrap(True)
+        layout.addWidget(title_label)
+
+        intro = QLabel(intro_text)
+        intro.setObjectName("sectionIntro")
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        for heading, text in items:
+            heading_label = QLabel(heading)
+            heading_label.setObjectName("sectionHeading")
+            layout.addWidget(heading_label)
+
+            text_label = QLabel(text)
+            text_label.setObjectName("sectionText")
+            text_label.setWordWrap(True)
+            layout.addWidget(text_label)
+
+        self.content_layout.addWidget(card)
+        self.content_layout.addStretch(1)
+        self.scroll.verticalScrollBar().setValue(0)
+
+    def _search(self, query: str):
+        query = query.strip().casefold()
+        if not query:
+            for row in range(self.menu.count()):
+                self.menu.item(row).setHidden(False)
+            return
+
+        first_match = -1
+        for index, (name, title, intro_text, items) in enumerate(self._sections):
+            haystack = " ".join([name, title, intro_text] + [f"{h} {t}" for h, t in items]).casefold()
+            match = query in haystack
+            self.menu.item(index).setHidden(not match)
+            if match and first_match < 0:
+                first_match = index
+
+        if first_match >= 0 and self.menu.currentRow() != first_match:
+            self.menu.setCurrentRow(first_match)
