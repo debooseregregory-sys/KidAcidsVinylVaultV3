@@ -58,12 +58,15 @@ class HelpPage(QWidget):
         header.addWidget(self.search, 0, Qt.AlignmentFlag.AlignBottom)
         root.addLayout(header)
 
-        body = QHBoxLayout()
+        # Alles in de Help-pagina wordt bewust verticaal opgebouwd.
+        # Daardoor staan menu, uitleg en afzonderlijke uitlegblokken volledig onder elkaar.
+        body = QVBoxLayout()
         body.setSpacing(18)
 
         self.menu = QListWidget()
         self.menu.setObjectName("helpMenu")
-        self.menu.setFixedWidth(205)
+        self.menu.setMinimumHeight(120)
+        self.menu.setMaximumHeight(190)
         self.menu.currentRowChanged.connect(self._show_section)
         body.addWidget(self.menu)
 
