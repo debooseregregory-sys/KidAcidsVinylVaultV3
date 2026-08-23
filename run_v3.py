@@ -1,6 +1,7 @@
 import sys
 
 from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QSettings, QTimer
 
 from gui.cd_mode import install_cd_mode
 from gui.startup_splash import StartupSplash
@@ -24,7 +25,6 @@ if __name__ == "__main__":
     # Build the real main window while the splash is already visible.
     # There is no subprocess and therefore no second Python startup.
     import gui.main_window as main_window
-    from PySide6.QtCore import QSettings
 
     window = main_window.VinylVaultWindow()
 
@@ -41,9 +41,13 @@ if __name__ == "__main__":
 
     app.processEvents()
 
-    # The main window is now ready, so remove the splash immediately.
-    splash.close()
-    window.raise_()
-    window.activateWindow()
+    # MusicVault is ready. Keep the splash visible briefly so the transition
+    # feels intentional, without adding meaningful startup work or delay.
+    def finish_startup():
+        splash.close()
+        window.raise_()
+        window.activateWindow()
+
+    QTimer.singleShot(1200, finish_startup)
 
     sys.exit(app.exec())
