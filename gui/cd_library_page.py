@@ -4,11 +4,12 @@
 # ============================================================
 
 from PySide6.QtCore import Signal, Qt, QTimer, QSettings
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
-    QMessageBox, QInputDialog, QFileDialog,
+    QMessageBox, QInputDialog, QFileDialog, QComboBox,
+    QStyledItemDelegate, QStyleOptionViewItem, QStyle,
 )
 
 from database.cd_database import (
@@ -19,6 +20,41 @@ from database.cd_database import (
 from database.database import get_connection
 from tools.discogs import fetch_release_data
 from gui.cd_track_editor import CDTrackEditorDialog
+
+
+class CDReadyItemDelegate(QStyledItemDelegate):
+    """Keep completed CD rows permanently yellow, including when selected."""
+
+    READY_BACKGROUND = QColor(255, 235, 120)
+    READY_TEXT = QColor(20, 20, 20)
+
+    def paint(self, painter, option, index):
+        checked = index.data(Qt.ItemDataRole.UserRole)
+        try:
+            checked = int(checked or 0)
+        except Exception:
+            checked = 0
+
+        if checked != 1:
+            super().paint(painter, option, index)
+            return
+
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        opt.state &= ~QStyle.StateFlag.State_Selected
+        opt.state &= ~QStyle.StateFlag.State_MouseOver
+        opt.palette.setColor(QPalette.ColorRole.Text, self.READY_TEXT)
+        opt.palette.setColor(QPalette.ColorRole.WindowText, self.READY_TEXT)
+        opt.palette.setColor(QPalette.ColorRole.HighlightedText, self.READY_TEXT)
+
+        painter.save()
+        painter.fillRect(option.rect, self.READY_BACKGROUND)
+        style = opt.widget.style() if opt.widget else None
+        if style is None:
+            from PySide6.QtWidgets import QApplication
+            style = QApplication.style()
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, opt.widget)
+        painter.restore()
 
 
 class CDLibraryPage(QWidget):
@@ -55,6 +91,16 @@ class CDLibraryPage(QWidget):
         self.search.textChanged.connect(self._schedule_search)
         search_row.addWidget(self.search, 1)
 
+        self.ready_filter = QComboBox()
+        self.ready_filter.setMinimumHeight(42)
+        self.ready_filter.addItems([
+            "ALLE CD'S",
+            "KLAAR",
+            "NOG TE DOEN",
+        ])
+        self.ready_filter.currentIndexChanged.connect(self._apply_filters)
+        search_row.addWidget(self.ready_filter)
+
         refresh = QPushButton("VERNIEUW")
         refresh.setMinimumHeight(42)
         refresh.clicked.connect(self.load_releases)
@@ -77,6 +123,7 @@ class CDLibraryPage(QWidget):
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setDefaultSectionSize(34)
         self.table.cellDoubleClicked.connect(self._open_selected)
+        self.table.setItemDelegate(CDReadyItemDelegate(self.table))
         self.table.setStyleSheet("""
             QTableWidget { background:#101010; alternate-background-color:#171717;
                 color:#eee; gridline-color:#292929; border:1px solid #303030;
@@ -85,9 +132,10 @@ class CDLibraryPage(QWidget):
             QHeaderView::section { background:#202020; color:#fff; padding:9px;
                 border:none; border-right:1px solid #303030; border-bottom:1px solid #444;
                 font-weight:bold; font-size:12px; }
-            QLineEdit { background:#181818; color:#fff; border:1px solid #383838;
+            QLineEdit, QComboBox { background:#181818; color:#fff; border:1px solid #383838;
                 border-radius:4px; padding:8px 12px; font-size:14px; }
-            QLineEdit:focus { border:1px solid #666; }
+            QLineEdit:focus, QComboBox:focus { border:1px solid #666; }
+            QComboBox QAbstractItemView { background:#181818; color:#fff; selection-background-color:#383838; }
             QPushButton { background:#222; color:#fff; border:1px solid #3a3a3a;
                 border-radius:4px; padding:8px 16px; font-weight:bold; }
             QPushButton:hover { background:#303030; }
@@ -137,7 +185,7 @@ class CDLibraryPage(QWidget):
         try:
             ensure_cd_schema()
             self.all_rows = get_cd_releases()
-            self.display_releases(self.all_rows)
+            self._apply_filters()
         except Exception as error:
             QMessageBox.critical(self, "Database fout", f"De CD Library kon niet worden geladen.\n\n{error}")
 
@@ -160,12 +208,7 @@ class CDLibraryPage(QWidget):
                     Qt.AlignmentFlag.AlignCenter if c in (0, 3, 6)
                     else Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
                 )
-
-                # KLAAR: volledige CD-rij geel, net als Vinyl.
-                if checked:
-                    item.setBackground(QColor(255, 235, 120))
-                    item.setForeground(QColor(20, 20, 20))
-
+                item.setData(Qt.ItemDataRole.UserRole, 1 if checked else 0)
                 self.table.setItem(r, c, item)
             self.table.setRowHeight(r, 34)
         self.table.setSortingEnabled(True)
@@ -176,15 +219,32 @@ class CDLibraryPage(QWidget):
         self.search_timer.start()
 
     def _apply_pending_search(self):
+        self._apply_filters()
+
+    def _apply_filters(self, *_args):
         text = self._pending_search.strip().lower()
-        if not text:
-            self.display_releases(self.all_rows)
-            return
+        filter_index = self.ready_filter.currentIndex() if hasattr(self, "ready_filter") else 0
         filtered = []
+
         for row in self.all_rows:
-            values = [row[k] for k in ("id", "artist", "title", "media_type", "label", "catalog", "year")]
-            if text in " ".join("" if v is None else str(v) for v in values).lower():
-                filtered.append(row)
+            try:
+                checked = int(row["checked"] or 0) == 1
+            except Exception:
+                checked = False
+
+            if filter_index == 1 and not checked:
+                continue
+            if filter_index == 2 and checked:
+                continue
+
+            if text:
+                values = [row[k] for k in ("id", "artist", "title", "media_type", "label", "catalog", "year")]
+                haystack = " ".join("" if v is None else str(v) for v in values).lower()
+                if text not in haystack:
+                    continue
+
+            filtered.append(row)
+
         self.display_releases(filtered)
 
     def _open_selected(self, row, column):
