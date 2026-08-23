@@ -1314,20 +1314,20 @@ class VinylVaultWindow(QMainWindow):
         release_ids=None
     ):
 
-        self.showcase_page.load_release(
+        self.detail_page.load_release(
             release_id
         )
 
         self.pages.setCurrentWidget(
-            self.showcase_page
+            self.detail_page
         )
 
         self.page_title.setText(
-            "Vinyl Showcase"
+            "Release"
         )
 
         self.set_active_nav(
-            self.vinyl_showcase_button
+            self.library_button
         )
 
     # ========================================================
