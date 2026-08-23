@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from gui.app_settings import paint_accent
 
 import math
@@ -7,15 +6,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, Signal, QTimer
 from PySide6.QtGui import QPixmap, QPainter, QPen, QBrush, QFont, QLinearGradient
-from PySide6.QtWidgets import (
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QSizePolicy,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 
 class LivesetPlayerVisualizer(QWidget):
@@ -24,31 +15,12 @@ class LivesetPlayerVisualizer(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumHeight(330)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        from PySide6.QtWidgets import QSizePolicy
         self._phase = 0.0
         self._text_offset = 0.0
-        self._artist = ""
-        self._title = ""
-        self._playing = False
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._animate)
         self._timer.start(24)
-
-    def set_liveset(self, artist, title, playing=False):
-        self._artist = str(artist or "").strip()
-        self._title = str(title or "").strip()
-        self._playing = bool(playing)
-        self.update()
-
-    def set_now_playing(self, artist, title):
-        self._artist = str(artist or "").strip()
-        self._title = str(title or "").strip()
-        self._playing = True
-        self.update()
-
-    def set_playing(self, playing):
-        self._playing = bool(playing)
-        self.update()
 
     def _animate(self):
         self._phase = (self._phase + 0.045) % (math.pi * 2)
@@ -63,6 +35,7 @@ class LivesetPlayerVisualizer(QWidget):
         w, h = rect.width(), rect.height()
         cx, cy = rect.center().x(), rect.top() + h * 0.43
 
+        # Deep neon background.
         bg = QLinearGradient(rect.left(), rect.top(), rect.right(), rect.bottom())
         bg.setColorAt(0.0, Qt.GlobalColor.black)
         bg.setColorAt(0.45, Qt.GlobalColor.darkMagenta)
@@ -71,13 +44,16 @@ class LivesetPlayerVisualizer(QWidget):
         painter.setPen(QPen(Qt.GlobalColor.darkMagenta, 1.5))
         painter.drawRoundedRect(rect, 18, 18)
 
+        # Huge soft concentric pulse rings.
         pulse = 35 + 22 * (0.5 + 0.5 * math.sin(self._phase * 2.0))
         for ring in range(7):
             radius = pulse + ring * 30
-            painter.setPen(QPen(Qt.GlobalColor.magenta, max(1.0, 3.2 - ring * 0.35)))
+            alpha_pen = QPen(Qt.GlobalColor.magenta, max(1.0, 3.2 - ring * 0.35))
+            painter.setPen(alpha_pen)
             painter.setBrush(QBrush(Qt.GlobalColor.transparent))
             painter.drawEllipse(int(cx - radius), int(cy - radius), int(radius * 2), int(radius * 2))
 
+        # Orbiting neon particles.
         for i in range(70):
             angle = self._phase * (0.32 + (i % 8) * 0.055) + i * 0.39
             orbit_x = w * (0.18 + (i % 5) * 0.09)
@@ -89,6 +65,7 @@ class LivesetPlayerVisualizer(QWidget):
             painter.setPen(QPen(Qt.GlobalColor.magenta, 1))
             painter.drawEllipse(int(x - radius), int(y - radius), int(radius * 2), int(radius * 2))
 
+        # Central glowing core / spinning spokes.
         for i in range(16):
             angle = self._phase * 1.7 + i * (math.pi * 2 / 16)
             inner = 20 + 4 * math.sin(self._phase * 2)
@@ -99,11 +76,11 @@ class LivesetPlayerVisualizer(QWidget):
             y2 = cy + math.sin(angle) * outer
             painter.setPen(QPen(Qt.GlobalColor.magenta, 3.0))
             painter.drawLine(int(x1), int(y1), int(x2), int(y2))
-
         painter.setBrush(QBrush(Qt.GlobalColor.magenta))
         painter.setPen(QPen(Qt.GlobalColor.lightGray, 2))
         painter.drawEllipse(int(cx - 13), int(cy - 13), 26, 26)
 
+        # Large dynamic equalizer across the full width.
         bar_count = max(48, min(110, w // 13))
         usable = w - 50
         step = usable / bar_count
@@ -119,6 +96,7 @@ class LivesetPlayerVisualizer(QWidget):
             painter.setPen(QPen(Qt.GlobalColor.magenta, max(2.0, step * 0.42)))
             painter.drawLine(int(x), int(base_y), int(x), int(base_y - height))
 
+        # Large scrolling identity line; deliberately no incorrect slogan.
         text = "KID ACID  •  LIVESET  •  ACID HOUSE  •  TECHNO  •  DEEP GROOVES  •  "
         painter.setFont(QFont("Arial", max(12, min(18, int(h / 25))), QFont.Weight.Bold))
         painter.setPen(QPen(Qt.GlobalColor.lightGray))
@@ -128,21 +106,18 @@ class LivesetPlayerVisualizer(QWidget):
         painter.drawText(int(x), int(y), text)
         painter.drawText(int(x + text_width + 80), int(y), text)
 
-        status = "NOW PLAYING" if self._playing else "READY TO PLAY"
-        painter.setFont(QFont("Arial", max(16, min(28, int(h / 14))), QFont.Weight.Black))
+        # Live status badge.
+        painter.setFont(QFont("Arial", max(13, min(20, int(h / 19))), QFont.Weight.Black))
         painter.setPen(QPen(Qt.GlobalColor.white))
-        painter.drawText(rect.left() + 26, rect.top() + 82, status)
-
-        identity = " • ".join(x for x in (self._artist, self._title) if x)
-        if not identity:
-            identity = "LIVESET"
-        painter.setFont(QFont("Arial", max(18, min(34, int(h / 12))), QFont.Weight.Bold))
-        painter.drawText(rect.left() + 28, rect.top() + 126, identity)
+        painter.drawText(rect.left() + 26, rect.top() + 76, "NOW PLAYING")
+        painter.setFont(QFont("Arial", max(10, min(14, int(h / 27))), QFont.Weight.Bold))
+        painter.setPen(QPen(Qt.GlobalColor.lightGray))
+        painter.drawText(rect.left() + 28, rect.top() + 98, "LIVESET PLAYBACK  •  KID ACID")
         painter.end()
 
 
 class LivesetDetailPage(QWidget):
-    """Dedicated Liveset playback view."""
+    """Dedicated Liveset playback view, visually aligned with the existing release detail pages."""
 
     back_requested = Signal()
     play_mp3 = Signal(str)
@@ -150,82 +125,7 @@ class LivesetDetailPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.data = {}
-        self._player = None
-        self._last_active_path = ""
         self._build()
-        self._player_sync_timer = QTimer(self)
-        self._player_sync_timer.setInterval(150)
-        self._player_sync_timer.timeout.connect(self._sync_from_central_player)
-        self._player_sync_timer.start()
-
-    def bind_player(self, player):
-        self._player = player
-        self._sync_from_central_player()
-
-    @staticmethod
-    def _same_path(left, right):
-        if not left or not right:
-            return False
-        try:
-            return Path(left).resolve() == Path(right).resolve()
-        except (OSError, RuntimeError):
-            return str(left).lower() == str(right).lower()
-
-    @staticmethod
-    def _identity_from_audio(path: str):
-        """Extract artist/title from the actual audio filename."""
-        name = Path(str(path or "")).stem.strip()
-        if not name:
-            return "", ""
-        if " - " in name:
-            artist, title = name.split(" - ", 1)
-            return artist.strip(), title.strip()
-        return "", name
-
-    def _apply_actual_playback(self, path):
-        """Immediately show the file reported by the real player signal.
-
-        This deliberately does NOT require the Library item to match first.
-        The playback signal is the authoritative source for NOW PLAYING.
-        """
-        path = str(path or "").strip()
-        if not path:
-            return
-
-        artist, title = self._identity_from_audio(path)
-        if not artist:
-            artist = str(self.data.get("artist") or "").strip()
-        if not title:
-            title = str(self.data.get("title") or "").strip()
-
-        self._last_active_path = path
-        self.visualizer.set_now_playing(artist, title)
-        self.play_button.setProperty("playing", True)
-        self.play_button.setText("❚❚  PLAYING")
-        self.play_button.style().unpolish(self.play_button)
-        self.play_button.style().polish(self.play_button)
-
-    def _sync_from_central_player(self):
-        player = self._player
-        if player is None:
-            return
-        try:
-            path = str(getattr(player, "current_path", None) or "").strip()
-            state = player.player.playbackState()
-            playing = state == player.player.PlaybackState.PlayingState
-        except Exception:
-            return
-
-        if playing and path:
-            self._apply_actual_playback(path)
-            return
-
-        self._last_active_path = ""
-        self.visualizer.set_playing(False)
-        self.play_button.setProperty("playing", False)
-        self.play_button.setText("▶  PLAY LIVESET")
-        self.play_button.style().unpolish(self.play_button)
-        self.play_button.style().polish(self.play_button)
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -269,6 +169,7 @@ class LivesetDetailPage(QWidget):
         self.meta.setObjectName("detailMeta")
         self.meta.setWordWrap(True)
         info.addWidget(self.meta)
+
         info.addStretch(1)
 
         self.play_button = QPushButton("▶  PLAY LIVESET")
@@ -303,34 +204,17 @@ class LivesetDetailPage(QWidget):
         pix = QPixmap(path) if path and Path(path).exists() else QPixmap()
         if pix.isNull():
             return QPixmap()
-        scaled = pix.scaled(
-            size,
-            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-            Qt.TransformationMode.SmoothTransformation,
-        )
+        scaled = pix.scaled(size, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
         x = max(0, (scaled.width() - size.width()) // 2)
         y = max(0, (scaled.height() - size.height()) // 2)
         return scaled.copy(x, y, size.width(), size.height())
 
     def load_liveset(self, data):
         self.data = dict(data or {})
-        self._last_active_path = ""
-        audio_path = str(self.data.get("audio") or "").strip()
-        fallback_artist, fallback_title = self._identity_from_audio(audio_path)
-        artist = str(self.data.get("artist") or "").strip() or fallback_artist
-        title = str(self.data.get("title") or "").strip() or fallback_title
-
-        self.title.setText(title or "(geen titel)")
-        self.artist.setText(artist or "LIVESET")
-        meta = " • ".join(
-            x for x in (
-                str(self.data.get("date") or ""),
-                str(self.data.get("location") or ""),
-                str(self.data.get("duration") or ""),
-            ) if x
-        )
+        self.title.setText(str(self.data.get("title") or "(geen titel)"))
+        self.artist.setText(str(self.data.get("artist") or "LIVESET"))
+        meta = " • ".join(x for x in [str(self.data.get("date") or ""), str(self.data.get("location") or ""), str(self.data.get("duration") or "")] if x)
         self.meta.setText(meta)
-
         pix = self._crop(str(self.data.get("cover") or ""), self.cover.size())
         if pix.isNull():
             self.cover.setPixmap(QPixmap())
@@ -338,14 +222,11 @@ class LivesetDetailPage(QWidget):
         else:
             self.cover.setText("")
             self.cover.setPixmap(pix)
-
-        self.visualizer.set_liveset(artist, title, False)
         self.play_button.setProperty("playing", False)
         self.play_button.setText("▶  PLAY LIVESET")
         self.play_button.style().unpolish(self.play_button)
         self.play_button.style().polish(self.play_button)
         self._animate_open()
-        self._sync_from_central_player()
 
     def _animate_open(self):
         self.setWindowOpacity(0.0)
@@ -363,11 +244,16 @@ class LivesetDetailPage(QWidget):
             self.play_mp3.emit(path)
 
     def set_active_track(self, path):
-        # This signal is emitted by MP3Player at the exact moment a file is
-        # requested for playback. Use it directly; do not wait for a second
-        # lookup or compare it against Library metadata.
-        self._apply_actual_playback(path)
+        current = str(self.data.get("audio") or "").casefold()
+        active = str(path or "").casefold()
+        playing = bool(current and active and Path(current).name.casefold() == Path(active).name.casefold())
+        self.play_button.setProperty("playing", playing)
+        self.play_button.setText("❚❚  PLAYING" if playing else "▶  PLAY LIVESET")
+        self.play_button.style().unpolish(self.play_button)
+        self.play_button.style().polish(self.play_button)
 
     def clear_active_track(self):
-        self._last_active_path = ""
-        self._sync_from_central_player()
+        self.play_button.setProperty("playing", False)
+        self.play_button.setText("▶  PLAY LIVESET")
+        self.play_button.style().unpolish(self.play_button)
+        self.play_button.style().polish(self.play_button)
