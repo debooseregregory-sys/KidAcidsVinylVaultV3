@@ -12,6 +12,7 @@ from gui.cd_showcase_page import CDShowcasePage
 from gui.livesets_edit_page import LivesetsEditPage
 from gui.livesets_showcase_page import LivesetsShowcasePage
 from gui.liveset_detail_page import LivesetDetailPage
+from gui.help_page import HelpPage
 
 VINYL = "VINYL"
 CD = "CD"
@@ -102,9 +103,22 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
         self.livesets_showcase_button.clicked.connect(self.show_livesets_showcase)
         self.livesets_library_button.clicked.connect(self.show_livesets_library)
 
+        # ----------------------------------------------------
+        # HELP: keep the Help page inside MusicVault and place it
+        # directly in TOOLS, underneath Settings.
+        # ----------------------------------------------------
+        self.help_page = HelpPage()
+        self.pages.addWidget(self.help_page)
+
+        self.help_button = self.create_nav_button("?", "Help")
+        tools_layout = self.discogs_button.parentWidget().layout()
+        settings_index = tools_layout.indexOf(self.settings_button)
+        tools_layout.insertWidget(settings_index + 1, self.help_button)
+        self.help_button.clicked.connect(self.show_help)
+
     def set_active_nav(self, button):
         super().set_active_nav(button)
-        for name in ("livesets_showcase_button", "livesets_library_button"):
+        for name in ("livesets_showcase_button", "livesets_library_button", "help_button"):
             btn = getattr(self, name, None)
             if btn is not None:
                 btn.setProperty("active", button is btn)
@@ -132,6 +146,11 @@ class CDVinylVaultWindow(OriginalVinylVaultWindow):
         self.pages.setCurrentWidget(self.liveset_detail_page)
         self.page_title.setText("Liveset")
         self.set_active_nav(self.livesets_showcase_button)
+
+    def show_help(self):
+        self.pages.setCurrentWidget(self.help_page)
+        self.page_title.setText("Help")
+        self.set_active_nav(self.help_button)
 
     def show_board(self):
         self.pages.setCurrentWidget(self.board_page)
