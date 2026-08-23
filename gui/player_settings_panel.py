@@ -4,7 +4,7 @@
 # ============================================================
 
 from PySide6.QtCore import Qt, QSettings
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSlider, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSlider, QVBoxLayout, QWidget, QApplication
 
 
 class PlayerSettingsPanel(QWidget):
@@ -70,7 +70,8 @@ class PlayerSettingsPanel(QWidget):
 
         self.volume = QSlider(Qt.Orientation.Horizontal)
         self.volume.setRange(0, 100)
-        self.volume.setValue(self.settings.value("player_volume", 80, type=int))
+        initial = self.settings.value("player_volume", 80, type=int)
+        self.volume.setValue(max(0, min(100, int(initial))))
         self.volume.valueChanged.connect(self._volume_changed)
         row.addWidget(self.volume, 1)
 
@@ -124,10 +125,21 @@ class PlayerSettingsPanel(QWidget):
 
         from gui.settings_page import SettingsToggle
         toggle = SettingsToggle(self.settings.value(key, default, type=bool))
-        toggle.toggled.connect(lambda value, k=key: self.settings.setValue(k, value))
+        toggle.toggled.connect(lambda value, k=key: self.settings.setValue(k, bool(value)))
         layout.addWidget(toggle, 0, Qt.AlignmentFlag.AlignVCenter)
         return row
 
     def _volume_changed(self, value):
+        value = max(0, min(100, int(value)))
         self.volume_value.setText(f"{value}%")
         self.settings.setValue("player_volume", value)
+
+        # Change the live central player immediately as well as the stored
+        # preference. This makes Settings > Player a real master-output control.
+        try:
+            window = QApplication.activeWindow()
+            player = getattr(window, "mp3_player", None)
+            if player is not None:
+                player.change_volume(value)
+        except Exception as exc:
+            print("PLAYER SETTINGS VOLUME APPLY FAILED:", exc)
