@@ -5,10 +5,7 @@ from gui.app_settings import paint_accent
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame,
-    QHBoxLayout,
     QLabel,
-    QListWidget,
-    QListWidgetItem,
     QLineEdit,
     QScrollArea,
     QVBoxLayout,
@@ -30,45 +27,25 @@ class HelpPage(QWidget):
         root.setContentsMargins(30, 24, 30, 24)
         root.setSpacing(14)
 
-        header = QHBoxLayout()
-        header.setSpacing(18)
-        intro = QVBoxLayout()
-        intro.setSpacing(3)
-
         kicker = QLabel("KID ACID'S MUSICVAULT V3")
         kicker.setObjectName("helpKicker")
-        intro.addWidget(kicker)
+        root.addWidget(kicker)
 
         title = QLabel("HANDLEIDING")
         title.setObjectName("helpTitle")
-        intro.addWidget(title)
+        root.addWidget(title)
 
         subtitle = QLabel("Een uitgebreide gids voor het beheren, terugvinden, bekijken en afspelen van je muziekcollectie.")
         subtitle.setObjectName("helpSubtitle")
         subtitle.setWordWrap(True)
-        intro.addWidget(subtitle)
-        header.addLayout(intro, 1)
+        root.addWidget(subtitle)
 
         self.search = QLineEdit()
         self.search.setObjectName("helpSearch")
         self.search.setPlaceholderText("Zoeken in de handleiding...")
         self.search.setClearButtonEnabled(True)
-        self.search.setFixedWidth(270)
         self.search.textChanged.connect(self._search)
-        header.addWidget(self.search, 0, Qt.AlignmentFlag.AlignBottom)
-        root.addLayout(header)
-
-        # Alles in de Help-pagina wordt bewust verticaal opgebouwd.
-        # Daardoor staan menu, uitleg en afzonderlijke uitlegblokken volledig onder elkaar.
-        body = QVBoxLayout()
-        body.setSpacing(18)
-
-        self.menu = QListWidget()
-        self.menu.setObjectName("helpMenu")
-        self.menu.setMinimumHeight(120)
-        self.menu.setMaximumHeight(190)
-        self.menu.currentRowChanged.connect(self._show_section)
-        body.addWidget(self.menu)
+        root.addWidget(self.search)
 
         self.scroll = QScrollArea()
         self.scroll.setObjectName("helpScroll")
@@ -82,8 +59,7 @@ class HelpPage(QWidget):
         self.content_layout.setContentsMargins(8, 4, 22, 20)
         self.content_layout.setSpacing(16)
         self.scroll.setWidget(self.content)
-        body.addWidget(self.scroll, 1)
-        root.addLayout(body, 1)
+        root.addWidget(self.scroll, 1)
 
         self.setStyleSheet(paint_accent("""
             QLabel#helpKicker{color:#ffcf72;font-size:10px;font-weight:900;letter-spacing:2px;}
@@ -91,10 +67,7 @@ class HelpPage(QWidget):
             QLabel#helpSubtitle{color:#92929d;font-size:13px;}
             QLineEdit#helpSearch{background:#111116;color:#fff;border:1px solid #30303a;border-radius:9px;padding:10px 12px;font-size:12px;}
             QLineEdit#helpSearch:focus{border-color:#ffcf72;}
-            QListWidget#helpMenu{background:#0f0f14;border:1px solid #292933;border-radius:10px;padding:8px;outline:0;}
-            QListWidget#helpMenu::item{color:#9999a4;padding:11px 12px;border-radius:7px;font-size:11px;font-weight:800;}
-            QListWidget#helpMenu::item:hover{background:#18181f;color:#fff;}
-            QListWidget#helpMenu::item:selected{background:#28242a;color:#ffcf72;}
+            QScrollArea#helpScroll{background:transparent;border:0px;}
             QFrame#helpSection{background:#111116;border:1px solid #292933;border-radius:12px;}
             QLabel#sectionNumber{color:#ffcf72;font-size:10px;font-weight:900;}
             QLabel#sectionTitle{color:#fff;font-size:23px;font-weight:900;}
@@ -183,15 +156,7 @@ class HelpPage(QWidget):
             ]),
         ]
 
-        self.menu.blockSignals(True)
-        self.menu.clear()
-        for name, *_ in self._sections:
-            self.menu.addItem(QListWidgetItem(name))
-        self.menu.blockSignals(False)
-
         self._render_sections()
-        if self.menu.count():
-            self.menu.setCurrentRow(0)
 
     def _render_sections(self):
         while self.content_layout.count():
@@ -200,7 +165,13 @@ class HelpPage(QWidget):
             if widget is not None:
                 widget.deleteLater()
 
+        query = self.search.text().strip().casefold()
+
         for index, (name, title, intro, entries) in enumerate(self._sections, 1):
+            haystack = " ".join([name, title, intro, *[f"{a} {b}" for a, b in entries]]).casefold()
+            if query and query not in haystack:
+                continue
+
             section = QFrame()
             section.setObjectName("helpSection")
             layout = QVBoxLayout(section)
@@ -250,31 +221,5 @@ class HelpPage(QWidget):
 
         self.content_layout.addStretch(1)
 
-    def _show_section(self, index):
-        if index < 0:
-            return
-        widgets = [self.content_layout.itemAt(i).widget() for i in range(self.content_layout.count())]
-        if index >= len(widgets) or widgets[index] is None:
-            return
-        self.scroll.ensureWidgetVisible(widgets[index])
-
-    def _search(self, text):
-        query = text.strip().casefold()
-        for row in range(self.menu.count()):
-            item = self.menu.item(row)
-            section = self._sections[row]
-            haystack = " ".join([
-                section[0], section[1], section[2],
-                *[f"{title} {body}" for title, body in section[3]],
-            ]).casefold()
-            item.setHidden(bool(query and query not in haystack))
-
-        if query:
-            for row, section in enumerate(self._sections):
-                haystack = " ".join([
-                    section[0], section[1], section[2],
-                    *[f"{title} {body}" for title, body in section[3]],
-                ]).casefold()
-                if query in haystack:
-                    self.menu.setCurrentRow(row)
-                    break
+    def _search(self, _text):
+        self._render_sections()
