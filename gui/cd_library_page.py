@@ -4,6 +4,7 @@
 # ============================================================
 
 from PySide6.QtCore import Signal, Qt, QTimer, QSettings
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
@@ -146,6 +147,12 @@ class CDLibraryPage(QWidget):
         for r, row in enumerate(rows):
             self.table.insertRow(r)
             values = [row["id"], row["artist"], row["title"], row["media_type"], row["label"], row["catalog"], row["year"] or ""]
+
+            try:
+                checked = int(row["checked"] or 0) == 1
+            except Exception:
+                checked = False
+
             for c, value in enumerate(values):
                 item = QTableWidgetItem(str(value or "------------"))
                 item.setToolTip(str(value or ""))
@@ -153,6 +160,12 @@ class CDLibraryPage(QWidget):
                     Qt.AlignmentFlag.AlignCenter if c in (0, 3, 6)
                     else Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
                 )
+
+                # KLAAR: volledige CD-rij geel, net als Vinyl.
+                if checked:
+                    item.setBackground(QColor(255, 235, 120))
+                    item.setForeground(QColor(20, 20, 20))
+
                 self.table.setItem(r, c, item)
             self.table.setRowHeight(r, 34)
         self.table.setSortingEnabled(True)
@@ -398,5 +411,3 @@ class CDLibraryPage(QWidget):
                 self.cd_selected.emit(int(item.text()))
             except ValueError:
                 pass
-
-
