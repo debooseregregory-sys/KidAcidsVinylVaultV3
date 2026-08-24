@@ -13,6 +13,8 @@ class MP3Player(QWidget):
         super().__init__(parent)
         self.current_path = None
         self._delegate_player = None
+        self._pending_play = False
+        self._pending_play_path = None
         self._transition_timer = None
         self._transition_step = 0
         self._transition_callback = None
@@ -204,9 +206,27 @@ class MP3Player(QWidget):
         print("SOURCE:", self.player.source().toString())
         print("========================================")
         self.track_label.setText("MP3 ERROR: " + str(error_string or error))
+        self._pending_play = False
+        self._pending_play_path = None
 
     def _media_status(self, status):
         print("MP3 MEDIA STATUS:", status)
+
+        # QMediaPlayer can receive play() before the newly selected local
+        # file has finished loading. On some Windows/Qt multimedia backends
+        # that causes the first click to start briefly and then stop. Wait
+        # until the media is loaded/buffered, then start it exactly once.
+        if status in (
+            QMediaPlayer.MediaStatus.LoadedMedia,
+            QMediaPlayer.MediaStatus.BufferedMedia,
+        ):
+            if self._pending_play and self._pending_play_path == self.current_path:
+                self._pending_play = False
+                self._pending_play_path = None
+                self.player.setPosition(0)
+                self.player.play()
+                self._sync_visualizer(True)
+
         try:
             if status == QMediaPlayer.MediaStatus.EndOfMedia:
                 self._handle_end_of_media()
@@ -302,12 +322,13 @@ class MP3Player(QWidget):
             delegate.play_file(self.current_path)
         else:
             print("MP3 PLAY:", self.current_path)
+            self._pending_play = True
+            self._pending_play_path = self.current_path
             self.player.stop()
             self.player.setPosition(0)
             url = QUrl.fromLocalFile(self.current_path)
             print("MP3 URL:", url.toString())
             self.player.setSource(url)
-            self.player.play()
 
         self.play_started.emit(self.current_path)
         QTimer.singleShot(0, lambda: self._sync_visualizer(True))
@@ -321,6 +342,8 @@ class MP3Player(QWidget):
             self.player.pause()
             self._sync_visualizer(False)
         elif self.current_path:
+            self._pending_play = False
+            self._pending_play_path = None
             self.player.play()
             self._sync_visualizer(True)
 
@@ -329,6 +352,8 @@ class MP3Player(QWidget):
         if delegate is not None and delegate is not self:
             delegate.stop()
         else:
+            self._pending_play = False
+            self._pending_play_path = None
             self.player.stop()
         self.slider.setValue(0)
         self.position_label.setText("00:00")
