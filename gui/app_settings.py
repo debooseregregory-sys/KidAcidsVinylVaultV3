@@ -7,8 +7,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtCore import QSettings, QTimer
+from PySide6.QtWidgets import QMessageBox, QApplication
 
 ORG = "Kid Acid"
 APP = "MusicVault"
@@ -232,3 +232,24 @@ def create_db_backup_copy():
     dest = backup_dir / f"{src.stem}_pre_import_{stamp}{src.suffix}"
     shutil.copy2(src, dest)
     return str(dest)
+
+
+# ============================================================
+# KLAAR AUTO-SAVE INSTALLATION
+# ============================================================
+# release_detail_page.py already contains the KLAAR status handler.
+# This installs a small Qt event filter before that handler fires so
+# the current editor fields are persisted first. The existing player
+# code is untouched.
+
+
+def _install_klaar_autosave():
+    try:
+        from gui.klaar_autosave import install_klaar_autosave
+        install_klaar_autosave()
+    except Exception as exc:
+        print("KLAAR auto-save install fout:", exc)
+
+
+if QApplication.instance() is not None:
+    QTimer.singleShot(0, _install_klaar_autosave)
