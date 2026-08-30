@@ -1,4 +1,4 @@
-from gui.app_settings import confirm_delete, notify
+﻿from gui.app_settings import confirm_delete, notify
 import urllib.request
 import os
 
@@ -2390,6 +2390,17 @@ class ReleaseDetailPage(QWidget):
         )
 
         # ----------------------------------------------------
+        # KLAAR-STATUS CORRECT ZETTEN
+        # ----------------------------------------------------
+
+        try:
+            checked_value = int(release["checked"] or 0)
+        except Exception:
+            checked_value = 0
+
+        self.update_checked_button(checked_value)
+
+        # ----------------------------------------------------
         # TRACKS
         # ----------------------------------------------------
 
@@ -2994,38 +3005,29 @@ class ReleaseDetailPage(QWidget):
             return
 
         try:
-
             from database.database import get_connection
 
             connection = get_connection()
 
             try:
-
                 row = connection.execute(
                     "SELECT checked FROM releases WHERE id = ?",
                     (self.release_id,)
                 ).fetchone()
 
                 current = int(row[0] or 0) if row else 0
-
                 new_value = 0 if current else 1
 
                 connection.execute(
                     "UPDATE releases SET checked = ? WHERE id = ?",
-                    (
-                        new_value,
-                        self.release_id
-                    )
+                    (new_value, self.release_id)
                 )
-
                 connection.commit()
 
             finally:
-
                 connection.close()
 
         except Exception as error:
-
             QMessageBox.critical(
                 self,
                 "KLAAR opslaan mislukt",
@@ -3037,11 +3039,6 @@ class ReleaseDetailPage(QWidget):
             return
 
         self.update_checked_button(new_value)
-
-        # ----------------------------------------------------
-        # LIBRARY DIRECT VERNIEUWEN
-        # ----------------------------------------------------
-        self.back_requested.emit()
 
     # ========================================================
     # UPDATE KLAAR BUTTON
@@ -3065,7 +3062,7 @@ class ReleaseDetailPage(QWidget):
     # SAVE RELEASE
     # ========================================================
 
-    def save_release(self):
+    def save_release(self, checked_value=None):
 
         if self.release_id is None:
 
@@ -3201,6 +3198,23 @@ class ReleaseDetailPage(QWidget):
                 notes=notes
             )
 
+            if checked_value is not None:
+                from database.database import get_connection
+
+                connection = get_connection()
+
+                try:
+                    connection.execute(
+                        "UPDATE releases SET checked = ? WHERE id = ?",
+                        (
+                            int(checked_value),
+                            self.release_id
+                        )
+                    )
+                    connection.commit()
+                finally:
+                    connection.close()
+
         except Exception as exc:
 
             QMessageBox.critical(
@@ -3230,6 +3244,8 @@ class ReleaseDetailPage(QWidget):
         self.load_release(
             self.release_id
         )
+
+        return True
 
     # ========================================================
     # ADD TRACK
