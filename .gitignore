@@ -126,3 +126,10 @@ backup_*/
 gui_BROKEN_*/
 BEFORE_*
 
+
+data/daily_backups/
+
+
+!backup_now.py
+!backup_now.bat
+
