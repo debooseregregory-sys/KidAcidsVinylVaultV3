@@ -117,3 +117,12 @@ discogs_search.txt
 data/cd_covers/
 data/liveset_covers/
 data/livesets.json
+build/
+dist/
+release/
+__pycache__/
+*.pyc
+backup_*/
+gui_BROKEN_*/
+BEFORE_*
+
