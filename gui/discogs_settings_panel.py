@@ -307,7 +307,7 @@ class DiscogsSettingsPanel(QWidget):
 
     def _style(self):
         # Fully self-contained — does not rely on main_window palette for readability
-        self.setStyleSheet(paint_accent("""
+        self.setStyleSheet("""
             QWidget#DiscogsSettingsPanel, QScrollArea, QScrollArea > QWidget > QWidget {
                 background: #0b0b0f;
                 color: #f2f2f7;
@@ -411,4 +411,4 @@ class DiscogsSettingsPanel(QWidget):
                 background: #d84b91;
                 border: 2px solid #d84b91;
             }
-        """))
+        """)

@@ -107,7 +107,7 @@ class ReleaseBoardPage(QWidget):
         self.load_more_button.setVisible(False)
         layout.addWidget(self.load_more_button)
 
-        self.setStyleSheet(paint_accent("""
+        self.setStyleSheet("""
             QWidget {
                 background: #0b0b0f;
                 color: #f2f2f5;
@@ -239,7 +239,7 @@ class ReleaseBoardPage(QWidget):
                 color: #0e0e12;
                 border-color: #ff4fa3;
             }
-            """))
+            """)
 
     def load_releases(self):
         connection = None

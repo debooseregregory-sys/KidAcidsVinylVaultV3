@@ -74,7 +74,7 @@ class HelpPage(QWidget):
         self.scroll.setWidget(self.content)
         root.addWidget(self.scroll, 1)
 
-        self.setStyleSheet(paint_accent("""
+        self.setStyleSheet("""
             QWidget#helpHeader{background:transparent;}
             QLabel#helpKicker{color:#ffcf72;font-size:10px;font-weight:900;letter-spacing:2px;}
             QLabel#helpTitle{color:#ffffff;font-size:32px;font-weight:900;letter-spacing:0.5px;}
@@ -96,7 +96,7 @@ class HelpPage(QWidget):
             QScrollBar::handle:vertical{background:#34343e;border-radius:4px;min-height:35px;}
             QScrollBar::handle:vertical:hover{background:#454551;}
             QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0px;background:none;border:none;}
-        """))
+        """)
 
         self._sections = [
             ("Welkom", "Welkom bij MusicVault", "MusicVault is je persoonlijke muziekverzameling in één programma. Vinyl, CD's, MP3-bestanden en Livesets hebben elk hun eigen plaats, terwijl ze samen gebruikmaken van dezelfde centrale speler. De bedoeling is dat je collectie niet alleen netjes bewaard wordt, maar vooral snel terug te vinden, prettig te bekijken en eenvoudig af te spelen is.", [

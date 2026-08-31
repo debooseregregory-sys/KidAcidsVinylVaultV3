@@ -261,7 +261,7 @@ class MP3DuplicateCleaner(QDialog):
         root.setSpacing(10)
 
         title = QLabel("MP3 DUBBELE TRACKS")
-        title.setStyleSheet(paint_accent("font-size:24px;font-weight:900;color:#fff;"))
+        title.setStyleSheet("font-size:24px;font-weight:900;color:#fff;")
         root.addWidget(title)
 
         info = QLabel(
@@ -271,7 +271,7 @@ class MP3DuplicateCleaner(QDialog):
             "Remix, Club Mix, Rap Version, Instrumental en Live blijven als aparte titels bestaan."
         )
         info.setWordWrap(True)
-        info.setStyleSheet(paint_accent("color:#aaaab3;"))
+        info.setStyleSheet("color:#aaaab3;")
         root.addWidget(info)
 
         tools = QHBoxLayout()
@@ -285,7 +285,7 @@ class MP3DuplicateCleaner(QDialog):
         root.addWidget(self.progress)
 
         self.summary = QLabel("Nog niet gescand.")
-        self.summary.setStyleSheet(paint_accent("color:#d84b91;font-weight:bold;"))
+        self.summary.setStyleSheet("color:#d84b91;font-weight:bold;")
         root.addWidget(self.summary)
 
         self.list = QListWidget()
@@ -321,7 +321,7 @@ class MP3DuplicateCleaner(QDialog):
         self.list.itemDoubleClicked.connect(self._play_double_clicked)
         self.list.itemDoubleClicked.connect(self.play_double_clicked)
 
-        self.setStyleSheet(paint_accent("""
+        self.setStyleSheet("""
             QDialog { background:#0b0b0f; color:#f2f2f5; }
             QListWidget { background:#0f0f14; border:1px solid #25252d; }
             QListWidget::item { padding:10px; border-bottom:1px solid #24242d; }
@@ -331,7 +331,7 @@ class MP3DuplicateCleaner(QDialog):
             QCheckBox { color:#fff; padding:4px; }
             QProgressBar { border:1px solid #30303a; background:#18181f; height:12px; border-radius:5px; }
             QProgressBar::chunk { background:#d84b91; border-radius:5px; }
-            """))
+            """)
 
         self.scan()
 

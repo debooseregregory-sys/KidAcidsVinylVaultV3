@@ -871,11 +871,11 @@ class MP3ShowcasePage(QWidget):
         root.setSpacing(10)
         header = QHBoxLayout()
         title = QLabel("MP3 SHOWCASE")
-        title.setStyleSheet(paint_accent("font-size:25px;font-weight:900;color:#fff;"))
+        title.setStyleSheet("font-size:25px;font-weight:900;color:#fff;")
         header.addWidget(title)
         header.addStretch(1)
         self.status = QLabel("Laden...")
-        self.status.setStyleSheet(paint_accent("color:#9b9ba6;font-weight:700;"))
+        self.status.setStyleSheet("color:#9b9ba6;font-weight:700;")
         header.addWidget(self.status)
         root.addLayout(header)
         search = QHBoxLayout()
@@ -893,7 +893,7 @@ class MP3ShowcasePage(QWidget):
         ll = QVBoxLayout(left)
         ll.setContentsMargins(9, 9, 9, 9)
         lab = QLabel("MP3 LIBRARY")
-        lab.setStyleSheet(paint_accent("font-size:12px;font-weight:900;color:#d84b91;"))
+        lab.setStyleSheet("font-size:12px;font-weight:900;color:#d84b91;")
         ll.addWidget(lab)
         self.list = QTableWidget(0, 2)
         self.list.setHorizontalHeaderLabels(["ARTIEST", "TRACK"])
@@ -922,19 +922,19 @@ class MP3ShowcasePage(QWidget):
         rl.setContentsMargins(14, 14, 14, 14)
         rl.setSpacing(10)
         now = QLabel("NOW PLAYING")
-        now.setStyleSheet(paint_accent("font-size:12px;font-weight:900;color:#d84b91;"))
+        now.setStyleSheet("font-size:12px;font-weight:900;color:#d84b91;")
         rl.addWidget(now)
         self.cover = QLabel("GEEN COVER")
         self.cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.cover.setFixedHeight(145)
-        self.cover.setStyleSheet(paint_accent("background:#0a0b0e;border:1px solid #30323a;border-radius:8px;color:#666;"))
+        self.cover.setStyleSheet("background:#0a0b0e;border:1px solid #30323a;border-radius:8px;color:#666;")
         rl.addWidget(self.cover)
         self.info = QLabel("Geen track geselecteerd")
         self.info.setWordWrap(True)
         self.info.setMaximumHeight(58)
         rl.addWidget(self.info)
         tracks = QLabel("SELECTED TRACK")
-        tracks.setStyleSheet(paint_accent("font-size:10px;font-weight:900;color:#d84b91;"))
+        tracks.setStyleSheet("font-size:10px;font-weight:900;color:#d84b91;")
         tracks.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         tracks.setFixedHeight(16)
         rl.addWidget(tracks)
@@ -976,7 +976,7 @@ class MP3ShowcasePage(QWidget):
 
         # Connect the visualizer to the REAL central MP3 player.
         QTimer.singleShot(500, self._connect_visualizer_to_player)
-        self.setStyleSheet(paint_accent("""
+        self.setStyleSheet("""
             QWidget{background:#0b0b0f;color:#f2f2f5;}
             QFrame#column{background:#121318;border:1px solid #292b33;border-radius:10px;}
             QLineEdit,QPushButton{background:#18181f;color:#fff;border:1px solid #30303a;border-radius:6px;padding:7px 10px;}
@@ -989,7 +989,7 @@ class MP3ShowcasePage(QWidget):
             QListWidget{background:#101015;color:#f2f2f5;border:1px solid #2b2932;border-radius:7px;}
             QListWidget::item{padding:7px;border-bottom:1px solid #22222a;}
             QListWidget::item:selected{background:#3a1d31;}
-        """))
+        """)
     def _connect_visualizer_to_player(self):
         """Connect visualizer to the application's real MP3 player."""
         try:

@@ -124,7 +124,7 @@ class DatabaseSettingsPanel(QWidget):
         root.addWidget(backup)
         root.addStretch()
 
-        self.setStyleSheet(paint_accent("""
+        self.setStyleSheet("""
             QFrame#databaseHero, QFrame#settingsCard { background:#17171d; border:1px solid #2d2d36; border-radius:18px; }
             QLabel#sectionTitle { color:#fff; font-size:21px; font-weight:900; letter-spacing:1px; }
             QLabel#sectionSubtitle, QLabel#cardSubtitle { color:#90909b; font-size:12px; }
@@ -136,7 +136,7 @@ class DatabaseSettingsPanel(QWidget):
             QLabel#statusBadge { background:#17251e; border:1px solid #315f47; border-radius:12px; padding:6px 10px; color:#72d69a; font-size:9px; font-weight:900; letter-spacing:1px; }
             QPushButton#secondaryButton { background:#24242d; color:#f5f5f7; border:1px solid #3a3a45; border-radius:10px; padding:9px 16px; font-weight:700; }
             QPushButton#secondaryButton:hover { border-color:#d84b91; background:#2b2029; }
-        """))
+        """)
 
     def refresh(self):
         try:

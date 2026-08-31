@@ -235,7 +235,7 @@ class LivesetDetailPage(QWidget):
         self.visualizer = LivesetPlayerVisualizer()
         root.addWidget(self.visualizer, 1)
 
-        self.setStyleSheet(paint_accent("""
+        self.setStyleSheet("""
             QFrame#detailPanel{background:#121217;border:1px solid #292933;border-radius:12px;}
             QLabel#detailCover{background:#07070a;color:#666671;border:1px solid #2a2a33;border-radius:8px;}
             QLabel#detailKicker{color:#ffcf72;font-size:11px;font-weight:900;letter-spacing:1px;}
@@ -247,7 +247,7 @@ class LivesetDetailPage(QWidget):
             QPushButton#detailPlay{background:#2a1524;color:#ff4fa3;border:1px solid #5a2a48;border-radius:10px;font-size:13px;font-weight:900;}
             QPushButton#detailPlay:hover{background:#ff4fa3;color:#0e0e12;border-color:#ff4fa3;}
             QPushButton#detailPlay[playing="true"]{background:#3a1a30;color:#ff6bb5;border-color:#ff4fa3;}
-        """))
+        """)
 
     @staticmethod
     def _crop(path: str, size):
