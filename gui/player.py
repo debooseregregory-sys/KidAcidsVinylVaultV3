@@ -220,11 +220,12 @@ class MP3Player(QWidget):
             QMediaPlayer.MediaStatus.LoadedMedia,
             QMediaPlayer.MediaStatus.BufferedMedia,
         ):
+            print("DEBUG CHECK: pending=", self._pending_play, "pending_path=", self._pending_play_path, "current_path=", self.current_path)
             if self._pending_play and self._pending_play_path == self.current_path:
                 self._pending_play = False
                 self._pending_play_path = None
                 self.player.setPosition(0)
-                self.player.play()
+                print("DEBUG: play() aangeroepen vanuit _media_status, pad:", self.current_path); self.player.play()
                 self._sync_visualizer(True)
 
         try:
@@ -329,6 +330,12 @@ class MP3Player(QWidget):
             url = QUrl.fromLocalFile(self.current_path)
             print("MP3 URL:", url.toString())
             self.player.setSource(url)
+            current_status = self.player.mediaStatus()
+            if current_status in (
+                QMediaPlayer.MediaStatus.LoadedMedia,
+                QMediaPlayer.MediaStatus.BufferedMedia,
+            ):
+                self._media_status(current_status)
 
         self.play_started.emit(self.current_path)
         QTimer.singleShot(0, lambda: self._sync_visualizer(True))
@@ -344,7 +351,7 @@ class MP3Player(QWidget):
         elif self.current_path:
             self._pending_play = False
             self._pending_play_path = None
-            self.player.play()
+            print("DEBUG: play() aangeroepen vanuit toggle_play, pad:", self.current_path); self.player.play()
             self._sync_visualizer(True)
 
     def stop(self):

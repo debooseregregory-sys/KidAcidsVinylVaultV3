@@ -1315,9 +1315,13 @@ class VinylVaultWindow(QMainWindow):
         release_id,
         release_ids=None
     ):
-
+        if release_ids is None:
+            release_ids = self.library_page.visible_release_ids()
         self.detail_page.load_release(
             release_id
+        )
+        self.detail_page.set_navigation_ids(
+            release_ids
         )
 
         self.pages.setCurrentWidget(
@@ -1879,3 +1883,4 @@ def main():
 if __name__ == "__main__":
 
     main()
+

@@ -133,3 +133,7 @@ data/daily_backups/
 !backup_now.py
 !backup_now.bat
 
+
+*_BROKEN_*
+*_BEFORE_*
+backup_*/
