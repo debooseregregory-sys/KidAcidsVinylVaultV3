@@ -18,6 +18,7 @@ class MP3Player(QWidget):
         self._transition_timer = None
         self._transition_step = 0
         self._transition_callback = None
+        self._transition_target_volume = 1.0
 
         self.audio_output = QAudioOutput()
         self.audio_output.setVolume(1.0)
@@ -29,9 +30,6 @@ class MP3Player(QWidget):
         self.player.errorOccurred.connect(self._player_error)
         self.player.mediaStatusChanged.connect(self._media_status)
 
-        # A child MP3Player (for example the hidden Showcase player) may
-        # delegate to the application's real central player. The central
-        # player itself must NEVER delegate to another MP3Player.
         if parent is not None:
             self._delegate_player = self._find_parent_player(parent, exclude=self)
 
@@ -39,7 +37,6 @@ class MP3Player(QWidget):
 
     @staticmethod
     def _find_parent_player(parent, exclude=None):
-        """Find the application's real central MP3Player."""
         widget = parent
         while widget is not None:
             candidate = getattr(widget, "mp3_player", None)
@@ -65,8 +62,7 @@ class MP3Player(QWidget):
 
         try:
             players = [
-                widget
-                for widget in QApplication.allWidgets()
+                widget for widget in QApplication.allWidgets()
                 if isinstance(widget, MP3Player) and widget is not exclude
             ]
             for candidate in players:
@@ -79,15 +75,15 @@ class MP3Player(QWidget):
                 return players[0]
         except RuntimeError:
             pass
-
         return None
 
     def _resolve_delegate(self):
-        """Resolve the central player again when playback is requested."""
         if self._delegate_player is not None and self._delegate_player is not self:
             return self._delegate_player
         if self.parentWidget() is not None:
-            self._delegate_player = self._find_parent_player(self.parentWidget(), exclude=self)
+            self._delegate_player = self._find_parent_player(
+                self.parentWidget(), exclude=self
+            )
             if self._delegate_player is not None and self._delegate_player is not self:
                 return self._delegate_player
         return None
@@ -106,14 +102,11 @@ class MP3Player(QWidget):
             return None
 
     def _sync_visualizer(self, playing):
-        """Make the MP3 Showcase visualizer obey the Visualizer setting."""
         if not self._setting_bool("visualizer", True):
             playing = False
-
         window = self._active_window()
         if window is None:
             return
-
         showcase = getattr(window, "mp3_showcase_page", None)
         visualizer = getattr(showcase, "visualizer", None)
         if visualizer is not None and hasattr(visualizer, "set_playing"):
@@ -123,22 +116,17 @@ class MP3Player(QWidget):
                 pass
 
     def _next_track(self):
-        """Ask the active showcase/page for its next track."""
         window = self._active_window()
         if window is None:
             return False
-
         candidates = []
         try:
-            current = window.pages.currentWidget()
-            candidates.append(current)
+            candidates.append(window.pages.currentWidget())
         except Exception:
             pass
-
         showcase = getattr(window, "mp3_showcase_page", None)
         if showcase not in candidates:
             candidates.append(showcase)
-
         for page in candidates:
             callback = getattr(page, "next_track", None)
             if callable(callback):
@@ -147,7 +135,6 @@ class MP3Player(QWidget):
                     return True
                 except Exception as exc:
                     print("AUTOPLAY NEXT FAILED:", exc)
-
         return False
 
     def _finish_transition(self):
@@ -155,7 +142,6 @@ class MP3Player(QWidget):
             self._transition_timer.stop()
             self._transition_timer.deleteLater()
             self._transition_timer = None
-
         callback = self._transition_callback
         self._transition_callback = None
         self.audio_output.setVolume(self._transition_target_volume)
@@ -163,23 +149,22 @@ class MP3Player(QWidget):
             callback()
 
     def _smooth_next_track(self):
-        """Perform a short fade-out/fade-in around autoplay."""
         target = self.audio_output.volume()
         self._transition_target_volume = max(0.0, min(1.0, float(target)))
         self._transition_callback = self._next_track
         self._transition_step = 0
-
         if self._transition_timer is not None:
             self._transition_timer.stop()
             self._transition_timer.deleteLater()
-
         self._transition_timer = QTimer(self)
         self._transition_timer.setInterval(30)
 
         def step():
             self._transition_step += 1
             progress = min(1.0, self._transition_step / 5.0)
-            self.audio_output.setVolume(self._transition_target_volume * (1.0 - progress))
+            self.audio_output.setVolume(
+                self._transition_target_volume * (1.0 - progress)
+            )
             if progress >= 1.0:
                 self._finish_transition()
 
@@ -187,12 +172,9 @@ class MP3Player(QWidget):
         self._transition_timer.start()
 
     def _handle_end_of_media(self):
-        """Apply autoplay and smooth-transition settings when a track ends."""
         self._sync_visualizer(False)
-
         if not self._setting_bool("autoplay", True):
             return
-
         if self._setting_bool("smooth_transitions", False):
             self._smooth_next_track()
         else:
@@ -211,23 +193,19 @@ class MP3Player(QWidget):
 
     def _media_status(self, status):
         print("MP3 MEDIA STATUS:", status)
-
-        # QMediaPlayer can receive play() before the newly selected local
-        # file has finished loading. On some Windows/Qt multimedia backends
-        # that causes the first click to start briefly and then stop. Wait
-        # until the media is loaded/buffered, then start it exactly once.
         if status in (
             QMediaPlayer.MediaStatus.LoadedMedia,
             QMediaPlayer.MediaStatus.BufferedMedia,
         ):
-            print("DEBUG CHECK: pending=", self._pending_play, "pending_path=", self._pending_play_path, "current_path=", self.current_path)
-            if self._pending_play and self._pending_play_path == self.current_path:
+            if (
+                self._pending_play
+                and self._pending_play_path == self.current_path
+            ):
                 self._pending_play = False
                 self._pending_play_path = None
                 self.player.setPosition(0)
-                print("DEBUG: play() aangeroepen vanuit _media_status, pad:", self.current_path); self.player.play()
+                self.player.play()
                 self._sync_visualizer(True)
-
         try:
             if status == QMediaPlayer.MediaStatus.EndOfMedia:
                 self._handle_end_of_media()
@@ -239,7 +217,6 @@ class MP3Player(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(6)
-
         self.track_label = QLabel("Geen track geladen")
         self.track_label.setObjectName("playerTrack")
         layout.addWidget(self.track_label)
@@ -298,22 +275,9 @@ class MP3Player(QWidget):
 
         new_path = str(file_path)
 
-        if self.current_path and Path(self.current_path).resolve() == file_path:
-            delegate = self._resolve_delegate()
-            target = delegate if (delegate is not None and delegate is not self) else self
-            try:
-                state = target.player.playbackState()
-                if state == QMediaPlayer.PlaybackState.PlayingState:
-                    target.player.pause()
-                    target._sync_visualizer(False)
-                    return
-                if state == QMediaPlayer.PlaybackState.PausedState:
-                    target.player.play()
-                    QTimer.singleShot(0, lambda: target._sync_visualizer(True))
-                    return
-            except Exception:
-                pass
-
+        # FIX: clicking another track is ALWAYS a new selection.
+        # The old track's playing/paused state must never cause the new
+        # selection to be treated as a pause/resume operation.
         self.current_path = new_path
         self.track_label.setText(file_path.name)
 
@@ -323,13 +287,24 @@ class MP3Player(QWidget):
             delegate.play_file(self.current_path)
         else:
             print("MP3 PLAY:", self.current_path)
-            self._pending_play = True
-            self._pending_play_path = self.current_path
+
+            # Invalidate any pending request for the previous track.
+            self._pending_play = False
+            self._pending_play_path = None
+
+            # Stop the previous media before replacing its source.
             self.player.stop()
             self.player.setPosition(0)
+
+            # Set the new pending path BEFORE setSource(). This is important
+            # because setSource() can trigger mediaStatusChanged asynchronously.
+            self._pending_play_path = self.current_path
+            self._pending_play = True
+
             url = QUrl.fromLocalFile(self.current_path)
             print("MP3 URL:", url.toString())
             self.player.setSource(url)
+
             current_status = self.player.mediaStatus()
             if current_status in (
                 QMediaPlayer.MediaStatus.LoadedMedia,
@@ -351,7 +326,7 @@ class MP3Player(QWidget):
         elif self.current_path:
             self._pending_play = False
             self._pending_play_path = None
-            print("DEBUG: play() aangeroepen vanuit toggle_play, pad:", self.current_path); self.player.play()
+            self.player.play()
             self._sync_visualizer(True)
 
     def stop(self):

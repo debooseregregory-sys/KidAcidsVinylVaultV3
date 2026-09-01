@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 from gui.app_settings import paint_accent
 
 import json
@@ -19,7 +19,6 @@ class LivesetShowcaseCard(QFrame):
     def __init__(self, data, parent=None):
         super().__init__(parent)
         self.data = dict(data)
-        self.setFixedWidth(270)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._build()
 
@@ -42,7 +41,7 @@ class LivesetShowcaseCard(QFrame):
         title.setObjectName("liveTitle")
         title.setWordWrap(True)
         root.addWidget(title)
-        meta = " • ".join(x for x in [str(self.data.get("date") or ""), str(self.data.get("location") or "")] if x)
+        meta = " â€¢ ".join(x for x in [str(self.data.get("date") or ""), str(self.data.get("location") or "")] if x)
         meta_label = QLabel(meta or "Geen datum / locatie")
         meta_label.setObjectName("liveMeta")
         meta_label.setWordWrap(True)
@@ -51,7 +50,7 @@ class LivesetShowcaseCard(QFrame):
         row = QHBoxLayout()
         row.setContentsMargins(0, 1, 0, 0)
         row.addWidget(QLabel(str(self.data.get("duration") or "LIVESET")), 1)
-        play = QPushButton("▶")
+        play = QPushButton("\u25B6")
         play.setObjectName("cdTrackPlayButton")
         play.setFixedSize(42, 34)
         play.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -99,7 +98,7 @@ class LivesetsShowcasePage(QWidget):
         line.setFixedHeight(2)
         line.setMaximumWidth(150)
         root.addWidget(line)
-        root.addWidget(QLabel("Compacte liveset showcase — klik een kaart om te openen."))
+        root.addWidget(QLabel("Compacte liveset showcase â€” klik een kaart om te openen."))
 
         self.search = QLineEdit()
         self.search.setObjectName("showcaseSearch")
@@ -115,9 +114,11 @@ class LivesetsShowcasePage(QWidget):
         scroll.setStyleSheet("QScrollArea{border:0;background:transparent;}")
         self.content = QWidget()
         self.grid = QGridLayout(self.content)
-        self.grid.setContentsMargins(0, 14, 8, 20)
-        self.grid.setHorizontalSpacing(14)
+        self.grid.setContentsMargins(0, 14, 0, 20)
+        self.grid.setHorizontalSpacing(10)
         self.grid.setVerticalSpacing(14)
+        for column in range(8):
+            self.grid.setColumnStretch(column, 1)
         self.grid.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         scroll.setWidget(self.content)
         root.addWidget(scroll, 1)
@@ -172,10 +173,12 @@ class LivesetsShowcasePage(QWidget):
         for i, data in enumerate(items):
             card = LivesetShowcaseCard(data)
             card.open_requested.connect(self.open_requested.emit)
-            self.grid.addWidget(card, i // 4, i % 4)
+            self.grid.addWidget(card, i // 8, i % 8)
 
         if not items:
             empty = QLabel("Geen livesets gevonden.")
             empty.setObjectName("showcaseEmpty")
             empty.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
             self.grid.addWidget(empty, 0, 0)
+
+

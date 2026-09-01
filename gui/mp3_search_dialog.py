@@ -24,7 +24,7 @@ except ImportError:
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QSettings
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -74,6 +74,9 @@ class MP3SearchDialog(QDialog):
         self.results = []
 
         self.selected_database_row = None
+
+        settings = QSettings("Kid Acid", "MusicVault")
+        self.search_folder = settings.value("mp3_search_folder", "", type=str) or None
 
         self.build_ui()
 
@@ -390,6 +393,22 @@ class MP3SearchDialog(QDialog):
             self.file_button
         )
 
+        self.folder_button = QPushButton(
+            "Zoek in map..."
+        )
+
+        self.folder_button.setObjectName(
+            "fileButton"
+        )
+
+        self.folder_button.clicked.connect(
+            self.choose_search_folder
+        )
+
+        button_row.addWidget(
+            self.folder_button
+        )
+
         button_row.addStretch()
 
         # ----------------------------------------------------
@@ -476,6 +495,60 @@ class MP3SearchDialog(QDialog):
     # ========================================================
     # SEARCH
     # ========================================================
+
+    def choose_search_folder(self):
+        settings = QSettings("Kid Acid", "MusicVault")
+        start = self.search_folder or settings.value("mp3_search_folder", r"D:\01. MP3's", type=str)
+        if not Path(start).exists():
+            start = str(Path.home())
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Map kiezen om te doorzoeken",
+            start
+        )
+        if not folder:
+            return
+        self.search_folder = folder
+        settings.setValue("mp3_search_folder", folder)
+        self.search()
+
+    def _ensure_mp3_record(self, selected_path):
+        connection = get_connection()
+        try:
+            row = connection.execute(
+                "SELECT id FROM mp3_files WHERE path = ? LIMIT 1",
+                (str(selected_path),)
+            ).fetchone()
+        finally:
+            connection.close()
+        if row is not None:
+            return row["id"]
+        filename_stem = selected_path.stem
+        detected_artist = ""
+        detected_title = filename_stem
+        if " - " in filename_stem:
+            parts = filename_stem.split(" - ", 1)
+            detected_artist = parts[0].strip()
+            detected_title = parts[1].strip()
+        connection = get_connection()
+        try:
+            cursor = connection.execute(
+                "INSERT INTO mp3_files (artist, title, filename, path) VALUES (?, ?, ?, ?)",
+                (detected_artist, detected_title, selected_path.name, str(selected_path))
+            )
+            mp3_id = cursor.lastrowid
+            connection.commit()
+        except Exception as exc:
+            connection.rollback()
+            QMessageBox.critical(
+                self,
+                "MP3 toevoegen mislukt",
+                f"De MP3 kon niet aan de database worden toegevoegd.\n\n{exc}"
+            )
+            return None
+        finally:
+            connection.close()
+        return mp3_id
 
     def search(
         self
@@ -674,6 +747,35 @@ class MP3SearchDialog(QDialog):
                     )
                 )
 
+            folder_matched = 0
+            folder_scanned = 0
+        if self.search_folder and Path(self.search_folder).exists():
+            known_paths = set()
+            for extra_row in rows:
+                known_paths.add(str(extra_row["path"] or ""))
+            for file_path in Path(self.search_folder).rglob("*.mp3"):
+                folder_scanned += 1
+                path_str = str(file_path)
+                if path_str in known_paths:
+                    continue
+                fname_norm = self.normalize(file_path.stem)
+                folder_score = 0
+                if artist and title and artist in fname_norm and title in fname_norm:
+                    folder_score = 750
+                elif title and title in fname_norm:
+                    folder_score = 350
+                elif artist and artist in fname_norm:
+                    folder_score = 100
+                if folder_score > 0:
+                    folder_row = {
+                        "id": None,
+                        "artist": "",
+                        "title": "",
+                        "filename": file_path.name,
+                        "path": path_str,
+                    }
+                    folder_matched += 1
+                    scored.append((folder_score, folder_row))
         min_score = match_mp3_minimum_score()
         before = len(scored)
         scored = [s for s in scored if (s[0] if isinstance(s, (list, tuple)) else 0) >= min_score]
@@ -1200,7 +1302,11 @@ class MP3SearchDialog(QDialog):
 
         if not mp3_id:
 
-            return
+            if path:
+                mp3_id = self._ensure_mp3_record(Path(path))
+
+            if not mp3_id:
+                return
 
         row = None
 
