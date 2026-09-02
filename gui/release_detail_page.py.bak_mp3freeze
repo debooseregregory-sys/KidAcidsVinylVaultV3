@@ -1272,23 +1272,11 @@ class TrackCard(QFrame):
             self
         )
 
-        selected_mp3 = {}
-
-        def remember_mp3(mp3_id, path):
-            selected_mp3["mp3_id"] = mp3_id
-            selected_mp3["path"] = path
-
         dialog.mp3_selected.connect(
-            remember_mp3
+            self.link_selected_mp3
         )
 
         dialog.exec()
-
-        if selected_mp3:
-            self.link_selected_mp3(
-                selected_mp3["mp3_id"],
-                selected_mp3["path"]
-            )
 
     # ========================================================
     # LINK MP3

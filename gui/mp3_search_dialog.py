@@ -17,6 +17,7 @@ except ImportError:
             return 250
         return 450
 
+
 # ============================================================
 # KID ACID'S VINYLVAULT V3
 # MP3 SEARCH / LINK DIALOG
@@ -24,7 +25,15 @@ except ImportError:
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, QSettings
+from PySide6.QtCore import (
+    Qt,
+    Signal,
+    Slot,
+    QObject,
+    QThread,
+    QSettings,
+)
+
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -42,20 +51,441 @@ from database.database import get_connection
 
 
 # ============================================================
+# MP3 SEARCH WORKER
+# ============================================================
+
+class MP3SearchWorker(QObject):
+
+    finished = Signal(object, int, int)
+    error = Signal(str)
+
+    def __init__(
+        self,
+        artist,
+        title,
+        search_folder,
+    ):
+
+        super().__init__()
+
+        self.artist = artist
+        self.title = title
+        self.search_folder = search_folder
+
+        self.cancelled = False
+
+    def cancel(self):
+
+        self.cancelled = True
+
+    @staticmethod
+    def normalize(
+        value
+    ):
+
+        value = str(
+            value or ""
+        )
+
+        replacements = (
+            "_",
+            "-",
+            "(",
+            ")",
+            "[",
+            "]",
+            "{",
+            "}",
+        )
+
+        value = value.lower()
+
+        for char in replacements:
+
+            value = value.replace(
+                char,
+                " "
+            )
+
+        return " ".join(
+            value.split()
+        )
+
+    @Slot()
+    def run(self):
+
+        try:
+
+            connection = get_connection()
+
+            try:
+
+                rows = connection.execute(
+                    """
+                    SELECT
+                        id,
+                        artist,
+                        title,
+                        filename,
+                        path
+                    FROM mp3_files
+                    ORDER BY
+                        artist COLLATE NOCASE,
+                        title COLLATE NOCASE,
+                        filename COLLATE NOCASE
+                    """
+                ).fetchall()
+
+            finally:
+
+                connection.close()
+
+            if self.cancelled:
+
+                return
+
+            scored = []
+
+            # =================================================
+            # SEARCH DATABASE
+            # =================================================
+
+            for row in rows:
+
+                if self.cancelled:
+
+                    return
+
+                mp3_artist = self.normalize(
+                    row["artist"]
+                )
+
+                mp3_title = self.normalize(
+                    row["title"]
+                )
+
+                filename = self.normalize(
+                    row["filename"]
+                )
+
+                score = 0
+
+                # ---------------------------------------------
+                # EXACT ARTIST + TITLE
+                # ---------------------------------------------
+
+                if self.artist and self.title:
+
+                    if (
+                        mp3_artist == self.artist
+                        and mp3_title == self.title
+                    ):
+
+                        score = 1000
+
+                # ---------------------------------------------
+                # EXACT ARTIST + TITLE IN TITLE
+                # ---------------------------------------------
+
+                if (
+                    score == 0
+                    and self.artist
+                    and self.title
+                ):
+
+                    if (
+                        mp3_artist == self.artist
+                        and self.title in mp3_title
+                    ):
+
+                        score = 850
+
+                # ---------------------------------------------
+                # EXACT TITLE + ARTIST IN ARTIST
+                # ---------------------------------------------
+
+                if (
+                    score == 0
+                    and self.artist
+                    and self.title
+                ):
+
+                    if (
+                        mp3_title == self.title
+                        and self.artist in mp3_artist
+                    ):
+
+                        score = 825
+
+                # ---------------------------------------------
+                # ARTIST + TITLE IN FILENAME
+                # ---------------------------------------------
+
+                if (
+                    score == 0
+                    and self.artist
+                    and self.title
+                ):
+
+                    if (
+                        self.artist in filename
+                        and self.title in filename
+                    ):
+
+                        score = 750
+
+                # ---------------------------------------------
+                # EXACT TITLE
+                # ---------------------------------------------
+
+                if (
+                    score == 0
+                    and self.title
+                ):
+
+                    if mp3_title == self.title:
+
+                        score = 600
+
+                # ---------------------------------------------
+                # TITLE IN MP3 TITLE
+                # ---------------------------------------------
+
+                if (
+                    score == 0
+                    and self.title
+                ):
+
+                    if self.title in mp3_title:
+
+                        score = 450
+
+                # ---------------------------------------------
+                # TITLE IN FILENAME
+                # ---------------------------------------------
+
+                if (
+                    score == 0
+                    and self.title
+                ):
+
+                    if self.title in filename:
+
+                        score = 350
+
+                # ---------------------------------------------
+                # EXACT ARTIST
+                # ---------------------------------------------
+
+                if (
+                    score == 0
+                    and self.artist
+                ):
+
+                    if mp3_artist == self.artist:
+
+                        score = 250
+
+                # ---------------------------------------------
+                # ARTIST IN MP3 ARTIST
+                # ---------------------------------------------
+
+                if (
+                    score == 0
+                    and self.artist
+                ):
+
+                    if self.artist in mp3_artist:
+
+                        score = 150
+
+                # ---------------------------------------------
+                # ARTIST IN FILENAME
+                # ---------------------------------------------
+
+                if (
+                    score == 0
+                    and self.artist
+                ):
+
+                    if self.artist in filename:
+
+                        score = 100
+
+                if score > 0:
+
+                    scored.append(
+                        (
+                            score,
+                            row
+                        )
+                    )
+
+            # =================================================
+            # SEARCH FOLDER
+            # =================================================
+
+            folder_matched = 0
+            folder_scanned = 0
+
+            if (
+                self.search_folder
+                and Path(
+                    self.search_folder
+                ).exists()
+            ):
+
+                known_paths = set()
+
+                for extra_row in rows:
+
+                    known_paths.add(
+                        str(
+                            extra_row["path"]
+                            or ""
+                        )
+                    )
+
+                for file_path in Path(
+                    self.search_folder
+                ).rglob(
+                    "*.mp3"
+                ):
+
+                    if self.cancelled:
+
+                        return
+
+                    folder_scanned += 1
+
+                    path_str = str(
+                        file_path
+                    )
+
+                    if path_str in known_paths:
+
+                        continue
+
+                    fname_norm = self.normalize(
+                        file_path.stem
+                    )
+
+                    folder_score = 0
+
+                    if (
+                        self.artist
+                        and self.title
+                        and self.artist in fname_norm
+                        and self.title in fname_norm
+                    ):
+
+                        folder_score = 750
+
+                    elif (
+                        self.title
+                        and self.title in fname_norm
+                    ):
+
+                        folder_score = 350
+
+                    elif (
+                        self.artist
+                        and self.artist in fname_norm
+                    ):
+
+                        folder_score = 100
+
+                    if folder_score > 0:
+
+                        folder_row = {
+                            "id": None,
+                            "artist": "",
+                            "title": "",
+                            "filename": file_path.name,
+                            "path": path_str,
+                        }
+
+                        folder_matched += 1
+
+                        scored.append(
+                            (
+                                folder_score,
+                                folder_row
+                            )
+                        )
+
+            if self.cancelled:
+
+                return
+
+            min_score = match_mp3_minimum_score()
+
+            before = len(
+                scored
+            )
+
+            scored = [
+                item
+                for item in scored
+                if (
+                    item[0]
+                    if isinstance(
+                        item,
+                        (list, tuple)
+                    )
+                    else 0
+                ) >= min_score
+            ]
+
+            print(
+                f"Match mode={discogs_match_mode()} "
+                f"min_score={min_score} "
+                f"kept {len(scored)}/{before}"
+            )
+
+            scored.sort(
+                key=lambda x: (
+                    -x[0],
+                    str(
+                        x[1]["artist"]
+                        or ""
+                    ).lower(),
+                    str(
+                        x[1]["title"]
+                        or ""
+                    ).lower(),
+                    str(
+                        x[1]["filename"]
+                        or ""
+                    ).lower(),
+                )
+            )
+
+            limited = scored[:300]
+
+            results = [
+                row
+                for score, row in limited
+            ]
+
+            self.finished.emit(
+                limited,
+                folder_scanned,
+                folder_matched
+            )
+
+        except Exception as exc:
+
+            self.error.emit(
+                str(exc)
+            )
+
+
+# ============================================================
 # MP3 SEARCH DIALOG
 # ============================================================
 
 class MP3SearchDialog(QDialog):
-    """
-    Zoek een MP3 in de bestaande MP3-database.
-
-    Mogelijkheden:
-    - zoeken op artiest / titel
-    - bestaande MP3 uit database selecteren
-    - controleren of het opgeslagen bestand bestaat
-    - rechtstreeks een MP3-bestand op D: kiezen
-    - gekozen bestand aan de huidige vinyltrack koppelen
-    """
 
     mp3_selected = Signal(int, str)
 
@@ -75,8 +505,25 @@ class MP3SearchDialog(QDialog):
 
         self.selected_database_row = None
 
-        settings = QSettings("Kid Acid", "MusicVault")
-        self.search_folder = settings.value("mp3_search_folder", "", type=str) or None
+        self.search_folder = None
+
+        self.search_thread = None
+
+        self.search_worker = None
+
+        settings = QSettings(
+            "Kid Acid",
+            "MusicVault"
+        )
+
+        self.search_folder = (
+            settings.value(
+                "mp3_search_folder",
+                "",
+                type=str
+            )
+            or None
+        )
 
         self.build_ui()
 
@@ -241,10 +688,6 @@ class MP3SearchDialog(QDialog):
             8
         )
 
-        # ====================================================
-        # TITLE
-        # ====================================================
-
         title_label = QLabel(
             f"MP3 zoeken voor: "
             f"{self.track['position']} — "
@@ -259,10 +702,6 @@ class MP3SearchDialog(QDialog):
         layout.addWidget(
             title_label
         )
-
-        # ====================================================
-        # SEARCH ROW
-        # ====================================================
 
         search_row = QHBoxLayout()
 
@@ -282,11 +721,11 @@ class MP3SearchDialog(QDialog):
             "Titel"
         )
 
-        search_button = QPushButton(
+        self.search_button = QPushButton(
             "🔎 Zoeken"
         )
 
-        search_button.clicked.connect(
+        self.search_button.clicked.connect(
             self.search
         )
 
@@ -309,16 +748,12 @@ class MP3SearchDialog(QDialog):
         )
 
         search_row.addWidget(
-            search_button
+            self.search_button
         )
 
         layout.addLayout(
             search_row
         )
-
-        # ====================================================
-        # INFO
-        # ====================================================
 
         self.info_label = QLabel(
             "Zoeken in MP3-database..."
@@ -331,10 +766,6 @@ class MP3SearchDialog(QDialog):
         layout.addWidget(
             self.info_label
         )
-
-        # ====================================================
-        # RESULTS
-        # ====================================================
 
         self.results_list = QListWidget()
 
@@ -351,10 +782,6 @@ class MP3SearchDialog(QDialog):
             1
         )
 
-        # ====================================================
-        # STATUS
-        # ====================================================
-
         self.status_label = QLabel(
             ""
         )
@@ -367,18 +794,10 @@ class MP3SearchDialog(QDialog):
             self.status_label
         )
 
-        # ====================================================
-        # BUTTONS
-        # ====================================================
-
         button_row = QHBoxLayout()
 
-        # ----------------------------------------------------
-        # DIRECT FILE
-        # ----------------------------------------------------
-
         self.file_button = QPushButton(
-            "📁 MP3 BESTAND KIEZEN"
+            "ðŸ“ MP3 BESTAND KIEZEN"
         )
 
         self.file_button.setObjectName(
@@ -411,10 +830,6 @@ class MP3SearchDialog(QDialog):
 
         button_row.addStretch()
 
-        # ----------------------------------------------------
-        # CANCEL
-        # ----------------------------------------------------
-
         cancel_button = QPushButton(
             "Annuleren"
         )
@@ -426,10 +841,6 @@ class MP3SearchDialog(QDialog):
         button_row.addWidget(
             cancel_button
         )
-
-        # ----------------------------------------------------
-        # LINK
-        # ----------------------------------------------------
 
         self.link_button = QPushButton(
             "✓ MP3 KOPPELEN"
@@ -493,66 +904,68 @@ class MP3SearchDialog(QDialog):
         )
 
     # ========================================================
-    # SEARCH
+    # CHOOSE SEARCH FOLDER
     # ========================================================
 
-    def choose_search_folder(self):
-        settings = QSettings("Kid Acid", "MusicVault")
-        start = self.search_folder or settings.value("mp3_search_folder", r"D:\01. MP3's", type=str)
-        if not Path(start).exists():
-            start = str(Path.home())
+    def choose_search_folder(
+        self
+    ):
+
+        settings = QSettings(
+            "Kid Acid",
+            "MusicVault"
+        )
+
+        start = (
+            self.search_folder
+            or settings.value(
+                "mp3_search_folder",
+                r"D:\01. MP3's",
+                type=str
+            )
+        )
+
+        if not Path(
+            start
+        ).exists():
+
+            start = str(
+                Path.home()
+            )
+
         folder = QFileDialog.getExistingDirectory(
             self,
             "Map kiezen om te doorzoeken",
             start
         )
+
         if not folder:
+
             return
+
         self.search_folder = folder
-        settings.setValue("mp3_search_folder", folder)
+
+        settings.setValue(
+            "mp3_search_folder",
+            folder
+        )
+
         self.search()
 
-    def _ensure_mp3_record(self, selected_path):
-        connection = get_connection()
-        try:
-            row = connection.execute(
-                "SELECT id FROM mp3_files WHERE path = ? LIMIT 1",
-                (str(selected_path),)
-            ).fetchone()
-        finally:
-            connection.close()
-        if row is not None:
-            return row["id"]
-        filename_stem = selected_path.stem
-        detected_artist = ""
-        detected_title = filename_stem
-        if " - " in filename_stem:
-            parts = filename_stem.split(" - ", 1)
-            detected_artist = parts[0].strip()
-            detected_title = parts[1].strip()
-        connection = get_connection()
-        try:
-            cursor = connection.execute(
-                "INSERT INTO mp3_files (artist, title, filename, path) VALUES (?, ?, ?, ?)",
-                (detected_artist, detected_title, selected_path.name, str(selected_path))
-            )
-            mp3_id = cursor.lastrowid
-            connection.commit()
-        except Exception as exc:
-            connection.rollback()
-            QMessageBox.critical(
-                self,
-                "MP3 toevoegen mislukt",
-                f"De MP3 kon niet aan de database worden toegevoegd.\n\n{exc}"
-            )
-            return None
-        finally:
-            connection.close()
-        return mp3_id
+    # ========================================================
+    # SEARCH
+    # ========================================================
 
     def search(
         self
     ):
+
+        if (
+            self.search_thread is not None
+            and self.search_thread.isRunning()
+        ):
+
+            return
 
         artist = self.normalize(
             self.artist_edit.text()
@@ -584,227 +997,91 @@ class MP3SearchDialog(QDialog):
 
             return
 
-        connection = get_connection()
-
-        try:
-
-            rows = connection.execute(
-                """
-                SELECT
-                    id,
-                    artist,
-                    title,
-                    filename,
-                    path
-                FROM mp3_files
-                ORDER BY
-                    artist COLLATE NOCASE,
-                    title COLLATE NOCASE,
-                    filename COLLATE NOCASE
-                """
-            ).fetchall()
-
-        finally:
-
-            connection.close()
-
-        scored = []
-
-        for row in rows:
-
-            mp3_artist = self.normalize(
-                row["artist"]
-            )
-
-            mp3_title = self.normalize(
-                row["title"]
-            )
-
-            filename = self.normalize(
-                row["filename"]
-            )
-
-            score = 0
-
-            # ------------------------------------------------
-            # EXACT ARTIST + TITLE
-            # ------------------------------------------------
-
-            if artist and title:
-
-                if (
-                    mp3_artist == artist
-                    and mp3_title == title
-                ):
-
-                    score = 1000
-
-            # ------------------------------------------------
-            # EXACT ARTIST + TITLE IN TITLE
-            # ------------------------------------------------
-
-            if score == 0 and artist and title:
-
-                if (
-                    mp3_artist == artist
-                    and title in mp3_title
-                ):
-
-                    score = 850
-
-            # ------------------------------------------------
-            # EXACT TITLE + ARTIST IN ARTIST
-            # ------------------------------------------------
-
-            if score == 0 and artist and title:
-
-                if (
-                    mp3_title == title
-                    and artist in mp3_artist
-                ):
-
-                    score = 825
-
-            # ------------------------------------------------
-            # ARTIST + TITLE IN FILENAME
-            # ------------------------------------------------
-
-            if score == 0 and artist and title:
-
-                if (
-                    artist in filename
-                    and title in filename
-                ):
-
-                    score = 750
-
-            # ------------------------------------------------
-            # EXACT TITLE
-            # ------------------------------------------------
-
-            if score == 0 and title:
-
-                if mp3_title == title:
-
-                    score = 600
-
-            # ------------------------------------------------
-            # TITLE IN MP3 TITLE
-            # ------------------------------------------------
-
-            if score == 0 and title:
-
-                if title in mp3_title:
-
-                    score = 450
-
-            # ------------------------------------------------
-            # TITLE IN FILENAME
-            # ------------------------------------------------
-
-            if score == 0 and title:
-
-                if title in filename:
-
-                    score = 350
-
-            # ------------------------------------------------
-            # EXACT ARTIST
-            # ------------------------------------------------
-
-            if score == 0 and artist:
-
-                if mp3_artist == artist:
-
-                    score = 250
-
-            # ------------------------------------------------
-            # ARTIST IN MP3 ARTIST
-            # ------------------------------------------------
-
-            if score == 0 and artist:
-
-                if artist in mp3_artist:
-
-                    score = 150
-
-            # ------------------------------------------------
-            # ARTIST IN FILENAME
-            # ------------------------------------------------
-
-            if score == 0 and artist:
-
-                if artist in filename:
-
-                    score = 100
-
-            if score > 0:
-
-                scored.append(
-                    (
-                        score,
-                        row
-                    )
-                )
-
-            folder_matched = 0
-            folder_scanned = 0
-        if self.search_folder and Path(self.search_folder).exists():
-            known_paths = set()
-            for extra_row in rows:
-                known_paths.add(str(extra_row["path"] or ""))
-            for file_path in Path(self.search_folder).rglob("*.mp3"):
-                folder_scanned += 1
-                path_str = str(file_path)
-                if path_str in known_paths:
-                    continue
-                fname_norm = self.normalize(file_path.stem)
-                folder_score = 0
-                if artist and title and artist in fname_norm and title in fname_norm:
-                    folder_score = 750
-                elif title and title in fname_norm:
-                    folder_score = 350
-                elif artist and artist in fname_norm:
-                    folder_score = 100
-                if folder_score > 0:
-                    folder_row = {
-                        "id": None,
-                        "artist": "",
-                        "title": "",
-                        "filename": file_path.name,
-                        "path": path_str,
-                    }
-                    folder_matched += 1
-                    scored.append((folder_score, folder_row))
-        min_score = match_mp3_minimum_score()
-        before = len(scored)
-        scored = [s for s in scored if (s[0] if isinstance(s, (list, tuple)) else 0) >= min_score]
-        print(f"Match mode={discogs_match_mode()} min_score={min_score} kept {len(scored)}/{before}")
-        scored.sort(
-            key=lambda x: (
-                -x[0],
-                str(
-                    x[1]["artist"] or ""
-                ).lower(),
-                str(
-                    x[1]["title"] or ""
-                ).lower(),
-                str(
-                    x[1]["filename"] or ""
-                ).lower(),
-            )
+        self.info_label.setText(
+            "MP3's zoeken..."
         )
 
-        limited = scored[:300]
+        self.status_label.setText(
+            "Bezig met zoeken — de interface blijft beschikbaar."
+        )
+
+        self.search_button.setText(
+            "⏳ Bezig..."
+        )
+        self.search_button.setEnabled(
+            False
+        )
+
+        self.folder_button.setEnabled(
+            False
+        )
+
+        self.file_button.setEnabled(
+            False
+        )
+
+        self.search_thread = QThread()
+
+        self.search_worker = MP3SearchWorker(
+            artist,
+            title,
+            self.search_folder
+        )
+
+        self.search_worker.moveToThread(
+            self.search_thread
+        )
+
+        self.search_thread.started.connect(
+            self.search_worker.run
+        )
+
+        self.search_worker.finished.connect(
+            self.search_finished
+        )
+
+        self.search_worker.error.connect(
+            self.search_error
+        )
+
+        self.search_worker.finished.connect(
+            self.search_thread.quit
+        )
+
+        self.search_worker.error.connect(
+            self.search_thread.quit
+        )
+
+        self.search_thread.finished.connect(
+            self.worker_finished
+        )
+
+        self.search_thread.finished.connect(
+            self.search_worker.deleteLater
+        )
+
+        self.search_thread.finished.connect(
+            self.search_thread.deleteLater
+        )
+
+        self.search_thread.start()
+
+    # ========================================================
+    # SEARCH FINISHED
+    # ========================================================
+
+    @Slot(object, int, int)
+    def search_finished(
+        self,
+        limited,
+        folder_scanned,
+        folder_matched
+    ):
 
         self.results = [
             row
             for score, row in limited
         ]
-
-        # ====================================================
-        # SHOW RESULTS
-        # ====================================================
 
         for score, row in limited:
 
@@ -889,8 +1166,67 @@ class MP3SearchDialog(QDialog):
         )
 
         self.status_label.setText(
-            "Selecteer de juiste MP3."
+            (
+                f"Zoeken klaar. "
+                f"{folder_scanned} MP3-bestanden in map gecontroleerd."
+            )
         )
+
+    # ========================================================
+    # SEARCH ERROR
+    # ========================================================
+
+    @Slot(str)
+    def search_error(
+        self,
+        message
+    ):
+
+        self.info_label.setText(
+            "Zoeken mislukt."
+        )
+
+        self.status_label.setText(
+            message
+        )
+
+        QMessageBox.critical(
+            self,
+            "MP3 zoeken mislukt",
+            (
+                "Er is een fout opgetreden tijdens "
+                "het zoeken naar MP3-bestanden.\n\n"
+                f"{message}"
+            )
+        )
+
+    # ========================================================
+    # WORKER FINISHED
+    # ========================================================
+
+    @Slot()
+    def worker_finished(
+        self
+    ):
+
+        self.search_button.setText(
+            "🔎 Zoeken"
+        )
+        self.search_button.setEnabled(
+            True
+        )
+
+        self.folder_button.setEnabled(
+            True
+        )
+
+        self.file_button.setEnabled(
+            True
+        )
+
+        self.search_worker = None
+
+        self.search_thread = None
 
     # ========================================================
     # SELECTION CHANGED
@@ -1024,10 +1360,6 @@ class MP3SearchDialog(QDialog):
 
                 return
 
-        # ====================================================
-        # TRY TO FIND EXISTING DATABASE RECORD
-        # ====================================================
-
         connection = get_connection()
 
         try:
@@ -1072,18 +1404,9 @@ class MP3SearchDialog(QDialog):
 
             connection.close()
 
-        # ====================================================
-        # EXISTING RECORD
-        # ====================================================
-
         if row is not None:
 
             mp3_id = row["id"]
-
-            # ------------------------------------------------
-            # IMPORTANT:
-            # Update old path when same file was moved.
-            # ------------------------------------------------
 
             old_path = row["path"] or ""
 
@@ -1154,10 +1477,6 @@ class MP3SearchDialog(QDialog):
 
             return
 
-        # ====================================================
-        # NO DATABASE RECORD
-        # ====================================================
-
         answer = QMessageBox.question(
             self,
             "Nieuwe MP3",
@@ -1176,10 +1495,6 @@ class MP3SearchDialog(QDialog):
 
             return
 
-        # ====================================================
-        # READ BASIC INFORMATION FROM FILENAME
-        # ====================================================
-
         filename_stem = selected_path.stem
 
         detected_artist = ""
@@ -1195,10 +1510,6 @@ class MP3SearchDialog(QDialog):
             detected_artist = parts[0].strip()
 
             detected_title = parts[1].strip()
-
-        # ====================================================
-        # INSERT NEW MP3 RECORD
-        # ====================================================
 
         connection = get_connection()
 
@@ -1265,6 +1576,99 @@ class MP3SearchDialog(QDialog):
         self.accept()
 
     # ========================================================
+    # ENSURE MP3 RECORD
+    # ========================================================
+
+    def _ensure_mp3_record(
+        self,
+        selected_path
+    ):
+
+        connection = get_connection()
+
+        try:
+
+            row = connection.execute(
+                "SELECT id FROM mp3_files WHERE path = ? LIMIT 1",
+                (
+                    str(selected_path),
+                )
+            ).fetchone()
+
+        finally:
+
+            connection.close()
+
+        if row is not None:
+
+            return row["id"]
+
+        filename_stem = selected_path.stem
+
+        detected_artist = ""
+        detected_title = filename_stem
+
+        if " - " in filename_stem:
+
+            parts = filename_stem.split(
+                " - ",
+                1
+            )
+
+            detected_artist = parts[0].strip()
+
+            detected_title = parts[1].strip()
+
+        connection = get_connection()
+
+        try:
+
+            cursor = connection.execute(
+                """
+                INSERT INTO mp3_files
+                (
+                    artist,
+                    title,
+                    filename,
+                    path
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    detected_artist,
+                    detected_title,
+                    selected_path.name,
+                    str(selected_path)
+                )
+            )
+
+            mp3_id = cursor.lastrowid
+
+            connection.commit()
+
+        except Exception as exc:
+
+            connection.rollback()
+
+            QMessageBox.critical(
+                self,
+                "MP3 toevoegen mislukt",
+                (
+                    "De MP3 kon niet aan de database "
+                    "worden toegevoegd.\n\n"
+                    f"{exc}"
+                )
+            )
+
+            return None
+
+        finally:
+
+            connection.close()
+
+        return mp3_id
+
+    # ========================================================
     # SELECT RESULT
     # ========================================================
 
@@ -1272,11 +1676,6 @@ class MP3SearchDialog(QDialog):
         self,
         item=None
     ):
-
-        # ----------------------------------------------------
-        # QPushButton.clicked geeft een bool door.
-        # Daarom controleren we of item werkelijk een item is.
-        # ----------------------------------------------------
 
         if (
             item is None
@@ -1303,9 +1702,13 @@ class MP3SearchDialog(QDialog):
         if not mp3_id:
 
             if path:
-                mp3_id = self._ensure_mp3_record(Path(path))
+
+                mp3_id = self._ensure_mp3_record(
+                    Path(path)
+                )
 
             if not mp3_id:
+
                 return
 
         row = None
@@ -1344,10 +1747,6 @@ class MP3SearchDialog(QDialog):
                 or ""
             )
 
-        # ====================================================
-        # CHECK FILE
-        # ====================================================
-
         file_exists = False
 
         if path:
@@ -1361,10 +1760,6 @@ class MP3SearchDialog(QDialog):
             except Exception:
 
                 file_exists = False
-
-        # ====================================================
-        # FILE EXISTS
-        # ====================================================
 
         if file_exists:
 
@@ -1389,10 +1784,6 @@ class MP3SearchDialog(QDialog):
                 | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No
             )
-
-        # ====================================================
-        # FILE DOES NOT EXIST
-        # ====================================================
 
         else:
 
@@ -1426,3 +1817,26 @@ class MP3SearchDialog(QDialog):
         )
 
         self.accept()
+
+    # ========================================================
+    # CLOSE
+    # ========================================================
+
+    def closeEvent(
+        self,
+        event
+    ):
+
+        if (
+            self.search_worker is not None
+            and self.search_thread is not None
+            and self.search_thread.isRunning()
+        ):
+
+            self.search_worker.cancel()
+
+            self.search_thread.quit()
+
+            self.search_thread.wait()
+
+        event.accept()
