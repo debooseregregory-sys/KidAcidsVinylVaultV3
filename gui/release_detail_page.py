@@ -1,4 +1,4 @@
-﻿from gui.app_settings import confirm_delete, notify
+from gui.app_settings import confirm_delete, notify
 import urllib.request
 import os
 
@@ -1472,6 +1472,8 @@ class ReleaseDetailPage(QWidget):
 
     back_requested = Signal()
 
+    release_deleted = Signal()
+
     play_mp3 = Signal(str)
 
     def __init__(
@@ -1484,6 +1486,8 @@ class ReleaseDetailPage(QWidget):
         )
 
         self.release_id = None
+
+        self.current_release = None
 
         self.navigation_ids = []
         self.navigation_index = -1
@@ -1767,6 +1771,40 @@ class ReleaseDetailPage(QWidget):
             self.edit_button
         )
 
+        self.delete_release_button = QPushButton(
+            "[ RELEASE VERWIJDEREN ]"
+        )
+
+        self.delete_release_button.setMinimumHeight(
+            38
+        )
+
+        self.delete_release_button.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #2a1418;
+                border: 1px solid #7a2530;
+            }
+
+            QPushButton:hover {
+                background-color: #5c1c24;
+                border: 1px solid #ff4d5e;
+            }
+
+            QPushButton:pressed {
+                background-color: #ff4d5e;
+                color: #ffffff;
+            }
+            """
+        )
+
+        self.delete_release_button.clicked.connect(
+            self.delete_release
+        )
+
+        top.addWidget(
+            self.delete_release_button
+        )
         main_layout.addLayout(
             top
         )
@@ -2309,6 +2347,8 @@ class ReleaseDetailPage(QWidget):
 
         if not data:
 
+            self.current_release = None
+
             self.artist_label.setText(
                 "Release niet gevonden"
             )
@@ -2326,6 +2366,8 @@ class ReleaseDetailPage(QWidget):
             return
 
         release = data["release"]
+
+        self.current_release = release
 
         self.artist_label.setText(
             str(
@@ -2798,6 +2840,116 @@ class ReleaseDetailPage(QWidget):
                 "[ BEWERKEN ]"
             )
 
+    # ========================================================
+    # DELETE RELEASE
+    # ========================================================
+
+    def delete_release(self):
+
+        if self.release_id is None:
+
+            return
+
+        release = self.current_release
+
+        if release is not None:
+
+            artist = str(release["artist"] or "")
+            title = str(release["title"] or "")
+
+        else:
+
+            artist = ""
+            title = ""
+
+        if not confirm_delete(
+            self,
+            "Release verwijderen",
+            (
+                f"Weet je zeker dat je deze release volledig wilt verwijderen?\n\n"
+                f"{artist} - {title}\n\n"
+                "Alle tracks en MP3-koppelingen van deze release worden ook verwijderd.\n\n"
+                "Dit kan niet ongedaan worden gemaakt."
+            ),
+        ):
+            return
+
+        release_id = self.release_id
+
+        from database.database import get_connection
+
+        connection = get_connection()
+
+        try:
+
+            connection.execute(
+                """
+                DELETE FROM track_mp3
+                WHERE track_id IN (
+                    SELECT id FROM tracks WHERE release_id = ?
+                )
+                """,
+                (release_id,)
+            )
+
+            connection.execute(
+                """
+                DELETE FROM tracks
+                WHERE release_id = ?
+                """,
+                (release_id,)
+            )
+
+            connection.execute(
+                """
+                DELETE FROM favorites
+                WHERE release_id = ?
+                """,
+                (release_id,)
+            )
+
+            deleted = connection.execute(
+                """
+                DELETE FROM releases
+                WHERE id = ?
+                """,
+                (release_id,)
+            ).rowcount
+
+            connection.commit()
+
+        except Exception as exc:
+
+            connection.rollback()
+
+            QMessageBox.critical(
+                self,
+                "Release verwijderen mislukt",
+                (
+                    "De release kon niet worden verwijderd.\n\n"
+                    f"{exc}"
+                )
+            )
+
+            return
+
+        finally:
+
+            connection.close()
+
+        if not deleted:
+
+            QMessageBox.warning(
+                self,
+                "Release niet gevonden",
+                "Deze release bestond niet meer in de database."
+            )
+
+        self.release_id = None
+        self.current_release = None
+
+        self.release_deleted.emit()
+        self.back_requested.emit()
     # ========================================================
     # CANCEL
     # ========================================================

@@ -193,6 +193,64 @@ def find_release(
 # INSERT RELEASE
 # ============================================================
 
+def get_release_genre(release):
+
+    genres = release.get("genres", []) or []
+    styles = release.get("styles", []) or []
+
+    values = []
+
+    for value in genres + styles:
+        if value and value not in values:
+            values.append(value)
+
+    return ", ".join(values)
+
+
+def update_release_genre_if_empty(
+    conn,
+    release_id,
+    genre
+):
+
+    if not genre:
+        return
+
+    conn.execute(
+        """
+        UPDATE releases
+        SET genre = ?
+        WHERE id = ?
+        AND (genre IS NULL OR genre = '')
+        """,
+        (genre, release_id)
+    )
+
+    conn.commit()
+
+
+def update_track_genre_if_empty(
+    conn,
+    track_id,
+    genre
+):
+
+    if not genre:
+        return
+
+    conn.execute(
+        """
+        UPDATE tracks
+        SET genre = ?
+        WHERE id = ?
+        AND (genre IS NULL OR genre = '')
+        """,
+        (genre, track_id)
+    )
+
+    conn.commit()
+
+
 def insert_release(
     conn,
     release
@@ -241,6 +299,8 @@ def insert_release(
         "year"
     )
 
+    genre = get_release_genre(release)
+
     discogs_id = release.get(
         "id"
     )
@@ -267,7 +327,7 @@ def insert_release(
             label,
             catalog_number,
             year,
-            "",
+            genre,
             str(discogs_id),
             f"https://www.discogs.com/release/{discogs_id}",
             "",
@@ -356,7 +416,8 @@ def insert_track(
     position,
     artist,
     title,
-    duration
+    duration,
+    genre=""
 ):
 
     cursor = conn.execute(
@@ -366,16 +427,18 @@ def insert_track(
             position,
             artist,
             title,
-            duration
+            duration,
+            genre
         )
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
         (
             release_id,
             position,
             artist,
             title,
-            duration
+            duration,
+            genre
         )
     )
 
@@ -568,6 +631,8 @@ def import_release(
         []
     )
 
+    release_genre = get_release_genre(release)
+
     print()
     print("=" * 80)
     print("DISCOGS")
@@ -607,6 +672,17 @@ def import_release(
         print()
         print(
             "V3 RELEASE BESTAAT AL"
+        )
+
+        update_release_genre_if_empty(
+            conn,
+            release_row["id"],
+            get_release_genre(release)
+        )
+
+        release_row = find_release(
+            conn,
+            discogs_id
         )
 
     else:
@@ -734,6 +810,12 @@ def import_release(
                 or ""
             )
 
+            update_track_genre_if_empty(
+                conn,
+                track_id,
+                release_genre
+            )
+
             print(
                 f"{existing_position:4} | "
                 f"{track_artist} | "
@@ -748,7 +830,8 @@ def import_release(
                 position,
                 track_artist,
                 track_title,
-                duration
+                duration,
+                release_genre
             )
 
             new_tracks += 1

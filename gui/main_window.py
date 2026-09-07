@@ -8,6 +8,7 @@
 import sys
 
 from gui.app_settings import paint_accent
+from database.database import get_connection
 from PySide6.QtCore import Qt, QSettings
 from PySide6.QtWidgets import (
     QApplication,
@@ -638,6 +639,10 @@ class VinylVaultWindow(QMainWindow):
             self.show_library
         )
 
+        self.detail_page.release_deleted.connect(
+            self.library_page.load_releases
+        )
+
         self.detail_page.play_mp3.connect(
             self.player_bar_play
         )
@@ -1107,6 +1112,142 @@ class VinylVaultWindow(QMainWindow):
         )
 
         # ====================================================
+        # MAIN ACTIONS - ROW 2
+        # ====================================================
+        action_layout_2 = QHBoxLayout()
+        action_layout_2.setSpacing(
+            14
+        )
+        cd_section = DashboardSection(
+            "CD Library",
+            "Beheer je CD-collectie: releases, tracks, hoezen en MP3-koppelingen op dezelfde manier als vinyl.",
+            "OPEN CD LIBRARY",
+            self.show_cd_library
+        )
+        action_layout_2.addWidget(
+            cd_section,
+            1
+        )
+        mp3_section = DashboardSection(
+            "MP3 Library",
+            "Doorzoek en beheer alle digitale audiobestanden die aan je collectie gekoppeld kunnen worden.",
+            "OPEN MP3 LIBRARY",
+            self.show_mp3_library
+        )
+        action_layout_2.addWidget(
+            mp3_section,
+            1
+        )
+        livesets_section = DashboardSection(
+            "Livesets",
+            "Bekijk en beheer je verzameling livesets, los van je vinyl- en CD-collectie.",
+            "OPEN LIVESETS",
+            lambda: self.show_livesets_showcase()
+        )
+        action_layout_2.addWidget(
+            livesets_section,
+            1
+        )
+        layout.addLayout(
+            action_layout_2
+        )
+        # ====================================================
+        # COLLECTION HEALTH
+        # ====================================================
+        try:
+            health_connection = get_connection()
+            missing_mp3 = health_connection.execute(
+                "SELECT COUNT(*) FROM tracks WHERE id NOT IN (SELECT track_id FROM track_mp3)"
+            ).fetchone()[0]
+            missing_cover = health_connection.execute(
+                "SELECT COUNT(*) FROM releases WHERE cover IS NULL OR cover = \'\'"
+            ).fetchone()[0]
+            missing_discogs = health_connection.execute(
+                "SELECT COUNT(*) FROM releases WHERE discogs IS NULL OR discogs = \'\'"
+            ).fetchone()[0]
+            health_connection.close()
+        except Exception:
+            missing_mp3 = 0
+            missing_cover = 0
+            missing_discogs = 0
+        health_panel = QFrame()
+        health_panel.setObjectName(
+            "healthPanel"
+        )
+        health_outer = QVBoxLayout(
+            health_panel
+        )
+        health_outer.setContentsMargins(
+            20, 18, 20, 18
+        )
+        health_outer.setSpacing(
+            10
+        )
+        health_title = QLabel(
+            "COLLECTIE-GEZONDHEID"
+        )
+        health_title.setObjectName(
+            "healthTitle"
+        )
+        health_outer.addWidget(
+            health_title
+        )
+        health_row = QHBoxLayout()
+        health_row.setSpacing(
+            12
+        )
+        health_mp3_button = QPushButton(
+            f"{missing_mp3}  Tracks zonder MP3-koppeling"
+        )
+        health_mp3_button.setObjectName(
+            "healthTile"
+        )
+        health_mp3_button.clicked.connect(
+            self.show_library
+        )
+        health_row.addWidget(
+            health_mp3_button
+        )
+        health_cover_button = QPushButton(
+            f"{missing_cover}  Releases zonder cover"
+        )
+        health_cover_button.setObjectName(
+            "healthTile"
+        )
+        health_cover_button.clicked.connect(
+            self.show_library
+        )
+        health_row.addWidget(
+            health_cover_button
+        )
+        health_discogs_button = QPushButton(
+            f"{missing_discogs}  Releases zonder Discogs-koppeling"
+        )
+        health_discogs_button.setObjectName(
+            "healthTile"
+        )
+        health_discogs_button.clicked.connect(
+            self.show_library
+        )
+        health_row.addWidget(
+            health_discogs_button
+        )
+        health_outer.addLayout(
+            health_row
+        )
+        health_panel.setStyleSheet(
+            paint_accent(
+                "QFrame#healthPanel { background: #121217; border: 1px solid #292933; border-radius: 12px; } "
+                "QLabel#healthTitle { color: #9b9ba6; font-size: 12px; font-weight: 900; letter-spacing: 2px; } "
+                "QPushButton#healthTile { background: #18181f; color: #f2f2f5; border: 1px solid #30303a; "
+                "border-radius: 8px; padding: 12px 14px; font-size: 12px; font-weight: 700; text-align: left; } "
+                "QPushButton#healthTile:hover { background: #24242c; border-color: #d84b91; color: #d84b91; }"
+            )
+        )
+        layout.addWidget(
+            health_panel
+        )
+        # ====================================================
         # STATUS
         # ====================================================
 
@@ -1154,7 +1295,7 @@ class VinylVaultWindow(QMainWindow):
         status_layout.addStretch()
 
         database_text = QLabel(
-            "Lokale collectie • Database verbonden"
+            "Lokale collectie - Database verbonden"
         )
 
         database_text.setObjectName(
@@ -1170,6 +1311,101 @@ class VinylVaultWindow(QMainWindow):
         )
 
         layout.addStretch()
+        # ====================================================
+        # DECORATIVE FOOTER
+        # ====================================================
+        gradient_band = QFrame()
+        gradient_band.setFixedHeight(
+            4
+        )
+        gradient_band.setStyleSheet(
+            paint_accent(
+                "QFrame { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
+                "stop:0 transparent, stop:0.5 #d84b91, stop:1 transparent); "
+                "border: none; }"
+            )
+        )
+        layout.addWidget(
+            gradient_band
+        )
+        footer = QFrame()
+        footer.setObjectName(
+            "dashboardFooter"
+        )
+        footer_layout = QHBoxLayout(
+            footer
+        )
+        footer_layout.setContentsMargins(
+            20, 18, 20, 18
+        )
+        footer_layout.setSpacing(
+            14
+        )
+        vinyl_deco = QLabel()
+        vinyl_deco.setObjectName(
+            "vinylDeco"
+        )
+        vinyl_deco.setFixedSize(
+            52,
+            52
+        )
+        vinyl_deco.setStyleSheet(
+            paint_accent(
+                "QLabel#vinylDeco { "
+                "border-radius: 26px; "
+                "background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5, "
+                "stop:0 #d84b91, stop:0.18 #d84b91, stop:0.19 #0e0e12, stop:0.32 #0e0e12, "
+                "stop:0.33 #1c1c22, stop:0.55 #1c1c22, stop:0.56 #0e0e12, stop:1 #0e0e12); "
+                "border: 2px solid #2a2a33; }"
+            )
+        )
+        footer_layout.addWidget(
+            vinyl_deco
+        )
+        footer_text_layout = QVBoxLayout()
+        footer_text_layout.setSpacing(
+            2
+        )
+        footer_title = QLabel(
+            "KID ACIDS MUSICVAULT"
+        )
+        footer_title.setObjectName(
+            "footerTitle"
+        )
+        footer_text_layout.addWidget(
+            footer_title
+        )
+        footer_tagline = QLabel(
+            "Handgemaakt voor een serieuze vinyl-, CD- en MP3-collectie."
+        )
+        footer_tagline.setObjectName(
+            "footerTagline"
+        )
+        footer_text_layout.addWidget(
+            footer_tagline
+        )
+        footer_layout.addLayout(
+            footer_text_layout
+        )
+        footer_layout.addStretch()
+        footer_version = QLabel(
+            "V3"
+        )
+        footer_version.setObjectName(
+            "footerVersion"
+        )
+        footer_layout.addWidget(
+            footer_version
+        )
+        footer.setStyleSheet(
+            "QFrame#dashboardFooter { background: #0e0e12; border-top: 1px solid #22222a; } "
+            "QLabel#footerTitle { color: #9b9ba6; font-size: 12px; font-weight: 900; letter-spacing: 2px; } "
+            "QLabel#footerTagline { color: #5c5c66; font-size: 11px; } "
+            "QLabel#footerVersion { color: #d84b91; font-size: 20px; font-weight: 900; letter-spacing: 1px; }"
+        )
+        layout.addWidget(
+            footer
+        )
 
         return page
 
