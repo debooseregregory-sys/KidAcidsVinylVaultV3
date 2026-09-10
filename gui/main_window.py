@@ -35,6 +35,9 @@ from gui.mp3_showcase_page import MP3ShowcasePage
 from gui.player_bar import PlayerBar
 from gui.mp3_showcase_playback_bridge import install_mp3_showcase_playback_bridge
 from gui.settings_page import SettingsPage
+from gui.mp3_cutter_dialog import MP3CutterDialog
+from gui.mp3_converter_dialog import MP3ConverterDialog
+from gui.bpm_analyzer_dialog import BPMAnalyzerDialog
 
 
 # ============================================================
@@ -424,6 +427,18 @@ class VinylVaultWindow(QMainWindow):
         self.settings_button = self.create_nav_button("⚙", "Settings")
         self.settings_button.clicked.connect(self.show_settings)
         sidebar_layout.addWidget(self.settings_button)
+
+        self.mp3_cutter_button = self.create_nav_button("✂", "MP3 Cutter")
+        self.mp3_cutter_button.clicked.connect(self.open_mp3_cutter_standalone)
+        sidebar_layout.addWidget(self.mp3_cutter_button)
+
+        self.mp3_converter_button = self.create_nav_button("⇄", "MP3 Converter")
+        self.mp3_converter_button.clicked.connect(self.open_mp3_converter_standalone)
+        sidebar_layout.addWidget(self.mp3_converter_button)
+
+        self.bpm_analyzer_button = self.create_nav_button("♫", "BPM Analysator")
+        self.bpm_analyzer_button.clicked.connect(self.open_bpm_analyzer_standalone)
+        sidebar_layout.addWidget(self.bpm_analyzer_button)
 
         # ====================================================
         # SIDEBAR FOOTER
@@ -1152,6 +1167,26 @@ class VinylVaultWindow(QMainWindow):
             action_layout_2
         )
         # ====================================================
+        # MAIN ACTIONS - ROW 3
+        # ====================================================
+        action_layout_3 = QHBoxLayout()
+        action_layout_3.setSpacing(
+            14
+        )
+        bpm_section = DashboardSection(
+            "BPM Analysator",
+            "Loopt de hele collectie af en analyseert automatisch het BPM van elke track met een gekoppelde MP3, en zet het resultaat ook in de Notities.",
+            "OPEN BPM ANALYSATOR",
+            self.open_bpm_analyzer_standalone
+        )
+        action_layout_3.addWidget(
+            bpm_section,
+            1
+        )
+        layout.addLayout(
+            action_layout_3
+        )
+        # ====================================================
         # COLLECTION HEALTH
         # ====================================================
         try:
@@ -1571,6 +1606,44 @@ class VinylVaultWindow(QMainWindow):
         self.set_active_nav(
             self.library_button
         )
+
+    # ========================================================
+    # MP3 CUTTER (STANDALONE)
+    # ========================================================
+
+    def open_mp3_cutter_standalone(self):
+
+        dialog = MP3CutterDialog(
+            initial_path=None,
+            parent=self
+        )
+
+        dialog.exec()
+
+    # ========================================================
+    # MP3 CONVERTER (STANDALONE)
+    # ========================================================
+
+    def open_mp3_converter_standalone(self):
+
+        dialog = MP3ConverterDialog(
+            initial_folder=None,
+            parent=self
+        )
+
+        dialog.exec()
+
+    # ========================================================
+    # BPM ANALYSATOR (STANDALONE)
+    # ========================================================
+
+    def open_bpm_analyzer_standalone(self):
+
+        dialog = BPMAnalyzerDialog(
+            parent=self
+        )
+
+        dialog.exec()
 
     # ========================================================
     # RELEASE SHOWCASE

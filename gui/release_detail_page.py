@@ -1,4 +1,3 @@
-from gui.app_settings import confirm_delete, notify
 import urllib.request
 import os
 
@@ -37,6 +36,7 @@ from database.database import (
 )
 
 from gui.mp3_search_dialog import MP3SearchDialog
+from gui.mp3_cutter_dialog import MP3CutterDialog
 
 
 # ============================================================
@@ -696,7 +696,7 @@ class TrackCard(QFrame):
                 )
 
         # ----------------------------------------------------
-        # TRACK ACTIONS
+        # TRACK EDIT
         # ----------------------------------------------------
 
         edit_button = QPushButton(
@@ -704,45 +704,40 @@ class TrackCard(QFrame):
         )
 
         edit_button.setMinimumWidth(
-            150
+            175
         )
 
         edit_button.clicked.connect(
             self.edit_track
         )
 
+        header.addWidget(
+            edit_button
+        )
+
+        # ----------------------------------------------------
+        # TRACK DELETE
+        # ----------------------------------------------------
+
         delete_button = QPushButton(
             "[ TRACK VERWIJDEREN ]"
         )
 
         delete_button.setMinimumWidth(
-            160
+            190
         )
 
         delete_button.clicked.connect(
             self.delete_track
         )
 
-        actions = QHBoxLayout()
-        actions.setSpacing(7)
-        actions.addStretch()
-        actions.addWidget(edit_button)
-        actions.addWidget(delete_button)
+        header.addWidget(
+            delete_button
+        )
 
         layout.addLayout(
             header
         )
-
-        self._track_header = header
-        self._track_actions = actions
-        self._edit_button = edit_button
-        self._delete_button = delete_button
-
-        layout.addLayout(
-            actions
-        )
-
-        self._responsive_small = False
 
         # ----------------------------------------------------
         # ARTIST
@@ -787,21 +782,6 @@ class TrackCard(QFrame):
     # ========================================================
     # EDIT TRACK
     # ========================================================
-
-    def resizeEvent(self, event):
-
-        super().resizeEvent(event)
-
-        # The action row stays below the metadata row. This means
-        # the track title keeps usable width at any window size.
-        # Keep the actions right-aligned for a clean desktop layout.
-        self._track_actions.setAlignment(
-            Qt.AlignmentFlag.AlignRight
-        )
-
-    # --------------------------------------------------------
-    # TRACK EDIT
-    # --------------------------------------------------------
 
     def edit_track(self):
 
@@ -888,7 +868,22 @@ class TrackCard(QFrame):
             or ""
         )
 
-        if not confirm_delete(self, "Track verwijderen", "Deze track verwijderen?"):
+        answer = QMessageBox.question(
+            self,
+            "Track verwijderen",
+            (
+                "Weet je zeker dat je deze track wilt verwijderen?\n\n"
+                f"{position} - {title}\n\n"
+                "De MP3-koppelingen van deze track worden "
+                "ook verwijderd."
+            ),
+            QMessageBox.StandardButton.Yes
+            | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if answer != QMessageBox.StandardButton.Yes:
+
             return
 
         from database.database import get_connection
@@ -1125,6 +1120,26 @@ class TrackCard(QFrame):
             play_button
         )
 
+        cutter_button = QPushButton(
+            "[ ✂ KNIPPEN ]"
+        )
+
+        cutter_button.setMinimumWidth(
+            110
+        )
+
+        cutter_button.clicked.connect(
+            lambda checked=False,
+            path=mp3["path"]:
+            self.open_mp3_cutter(
+                path
+            )
+        )
+
+        row.addWidget(
+            cutter_button
+        )
+
         preferred_button = QPushButton(
             "[ VOORKEUR ]"
         )
@@ -1272,23 +1287,27 @@ class TrackCard(QFrame):
             self
         )
 
-        selected_mp3 = {}
-
-        def remember_mp3(mp3_id, path):
-            selected_mp3["mp3_id"] = mp3_id
-            selected_mp3["path"] = path
-
         dialog.mp3_selected.connect(
-            remember_mp3
+            self.link_selected_mp3
         )
 
         dialog.exec()
 
-        if selected_mp3:
-            self.link_selected_mp3(
-                selected_mp3["mp3_id"],
-                selected_mp3["path"]
-            )
+    # ========================================================
+    # OPEN MP3 CUTTER
+    # ========================================================
+
+    def open_mp3_cutter(
+        self,
+        path
+    ):
+
+        dialog = MP3CutterDialog(
+            initial_path=path,
+            parent=self
+        )
+
+        dialog.exec()
 
     # ========================================================
     # LINK MP3
@@ -2023,7 +2042,7 @@ class ReleaseDetailPage(QWidget):
         )
 
         self.cover_button.setMinimumWidth(
-            140
+            180
         )
 
         self.cover_button.clicked.connect(
@@ -2168,7 +2187,7 @@ class ReleaseDetailPage(QWidget):
         )
 
         self.checked_button.setMinimumWidth(
-            120
+            140
         )
 
         self.checked_button.setStyleSheet(
@@ -2262,7 +2281,7 @@ class ReleaseDetailPage(QWidget):
         )
 
         self.add_track_button.setMinimumWidth(
-            160
+            190
         )
 
         self.add_track_button.clicked.connect(
@@ -2442,17 +2461,6 @@ class ReleaseDetailPage(QWidget):
         self.fill_editor(
             release
         )
-
-        # ----------------------------------------------------
-        # KLAAR-STATUS CORRECT ZETTEN
-        # ----------------------------------------------------
-
-        try:
-            checked_value = int(release["checked"] or 0)
-        except Exception:
-            checked_value = 0
-
-        self.update_checked_button(checked_value)
 
         # ----------------------------------------------------
         # TRACKS
@@ -2862,16 +2870,22 @@ class ReleaseDetailPage(QWidget):
             artist = ""
             title = ""
 
-        if not confirm_delete(
+        answer = QMessageBox.question(
             self,
             "Release verwijderen",
             (
-                f"Weet je zeker dat je deze release volledig wilt verwijderen?\n\n"
+                "Weet je zeker dat je deze release volledig wilt verwijderen?\n\n"
                 f"{artist} - {title}\n\n"
                 "Alle tracks en MP3-koppelingen van deze release worden ook verwijderd.\n\n"
                 "Dit kan niet ongedaan worden gemaakt."
             ),
-        ):
+            QMessageBox.StandardButton.Yes
+            | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if answer != QMessageBox.StandardButton.Yes:
+
             return
 
         release_id = self.release_id
@@ -3169,29 +3183,38 @@ class ReleaseDetailPage(QWidget):
             return
 
         try:
+
             from database.database import get_connection
 
             connection = get_connection()
 
             try:
+
                 row = connection.execute(
                     "SELECT checked FROM releases WHERE id = ?",
                     (self.release_id,)
                 ).fetchone()
 
                 current = int(row[0] or 0) if row else 0
+
                 new_value = 0 if current else 1
 
                 connection.execute(
                     "UPDATE releases SET checked = ? WHERE id = ?",
-                    (new_value, self.release_id)
+                    (
+                        new_value,
+                        self.release_id
+                    )
                 )
+
                 connection.commit()
 
             finally:
+
                 connection.close()
 
         except Exception as error:
+
             QMessageBox.critical(
                 self,
                 "KLAAR opslaan mislukt",
@@ -3226,7 +3249,7 @@ class ReleaseDetailPage(QWidget):
     # SAVE RELEASE
     # ========================================================
 
-    def save_release(self, checked_value=None):
+    def save_release(self):
 
         if self.release_id is None:
 
@@ -3362,23 +3385,6 @@ class ReleaseDetailPage(QWidget):
                 notes=notes
             )
 
-            if checked_value is not None:
-                from database.database import get_connection
-
-                connection = get_connection()
-
-                try:
-                    connection.execute(
-                        "UPDATE releases SET checked = ? WHERE id = ?",
-                        (
-                            int(checked_value),
-                            self.release_id
-                        )
-                    )
-                    connection.commit()
-                finally:
-                    connection.close()
-
         except Exception as exc:
 
             QMessageBox.critical(
@@ -3408,8 +3414,6 @@ class ReleaseDetailPage(QWidget):
         self.load_release(
             self.release_id
         )
-
-        return True
 
     # ========================================================
     # ADD TRACK
@@ -3620,11 +3624,20 @@ class ReleaseDetailPage(QWidget):
         link_id
     ):
 
-        if not confirm_delete(
+        answer = QMessageBox.question(
             self,
             "MP3 ontkoppelen",
-            "Deze MP3-koppeling verwijderen?\n\nHet MP3-bestand zelf wordt NIET verwijderd.",
-        ):
+            (
+                "Deze MP3-koppeling verwijderen?\n\n"
+                "Het MP3-bestand zelf wordt NIET verwijderd."
+            ),
+            QMessageBox.StandardButton.Yes
+            | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if answer != QMessageBox.StandardButton.Yes:
+
             return
 
         try:
